@@ -15,6 +15,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import mongoose from 'mongoose';
 import morgan from 'morgan';
+import mongoSanitize from 'express-mongo-sanitize';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
@@ -25,6 +26,7 @@ import scanRouter from './routes/scans.js';
 import reportRouter from './routes/reports.js';
 import { authMiddleware } from './middleware/auth.js';
 import { errorHandler } from './middleware/error.js';
+import { xssSanitizerMiddleware } from './middleware/xss.js';
 import { configureBull, setJobQueueApp } from './queue/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -48,9 +50,26 @@ if (!fs.existsSync(reportsPath)) {
 }
 
 const app = express();
+app.disable('x-powered-by');
 
-// Security headers via Helmet with basic CSP
-app.use(helmet({
+const isProduction = NODE_ENV === 'production';
+
+// Security headers via Helmet.
+// HSTS is enabled only in production to avoid forcing HTTPS on localhost.
+const helmetOptions = {
+  strictTransportSecurity: isProduction
+    ? { maxAge: 31536000, includeSubDomains: true, preload: true }
+    : false,
+  xFrameOptions: { action: 'deny' },
+  xXssProtection: false,
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+  permissionsPolicy: {
+    policy: {
+      geolocation: [],
+      camera: [],
+      microphone: [],
+    },
+  },
   contentSecurityPolicy: {
     useDefaults: true,
     directives: {
@@ -58,28 +77,46 @@ app.use(helmet({
       scriptSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", 'data:', 'blob:'],
+      fontSrc: ["'self'"],
       connectSrc: ["'self'", ...(CORS_ORIGINS ? CORS_ORIGINS.split(',') : [])],
+      frameAncestors: ["'none'"],
+      ...(isProduction ? { 'upgrade-insecure-requests': [] } : {}),
     },
   },
   crossOriginResourcePolicy: { policy: 'same-site' },
-}));
+};
 
-// CORS for frontend
-const allowedOrigins = CORS_ORIGINS ? CORS_ORIGINS.split(',').map(o => o.trim()) : [];
+app.use(helmet(helmetOptions));
+
+// CORS for frontend (tighter defaults in production)
+const allowedOriginsRaw = CORS_ORIGINS ? CORS_ORIGINS.split(',').map(o => o.trim()).filter(Boolean) : [];
+const allowedOrigins = allowedOriginsRaw.length
+  ? allowedOriginsRaw
+  : (isProduction ? [] : ['http://localhost:5173', 'http://localhost:3000']);
+
 app.use(cors({
   origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('CORS not allowed'));
-    }
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+
+    const err = new Error('CORS not allowed');
+    err.status = 403;
+    callback(err);
   },
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  optionsSuccessStatus: 204,
 }));
 
 app.use(morgan('combined'));
 app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ limit: '1mb', extended: false }));
 app.use(cookieParser());
+
+// Input hardening
+app.use(mongoSanitize({ replaceWith: '_' }));
+app.use(xssSanitizerMiddleware);
 
 // Serve generated reports over HTTP (fixes file:// blocked downloads)
 app.use('/static/reports', express.static(reportsPath));
@@ -103,7 +140,7 @@ sseInit(app);
 app.use('/api/auth', authRouter);
 app.use('/api/scans', authMiddleware, scanRouter);
 app.use('/api/reports', authMiddleware, reportRouter);
-app.use('/api/sse', sseRouter);
+app.use('/api/sse', authMiddleware, sseRouter);
 
 // Health check – simple JSON status for scripts and uptime checks.
 // For now this reports node environment and basic MongoDB connectivity.

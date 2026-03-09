@@ -2,6 +2,7 @@ import express from 'express';
 import Joi from 'joi';
 import Scan from '../models/Scan.js';
 import { scanQueue } from '../queue/index.js';
+import { isValidObjectId } from '../utils/objectId.js';
 
 const router = express.Router();
 
@@ -63,6 +64,10 @@ router.post('/', async (req, res, next) => {
 
 router.get('/:id', async (req, res, next) => {
   try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ error: 'Invalid scan id.' });
+    }
+
     const scan = await Scan.findOne({ _id: req.params.id, userId: req.user.id });
     if (!scan) return res.status(404).json({ error: 'I could not find that scan.' });
     res.json(scan);

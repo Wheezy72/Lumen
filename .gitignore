@@ -8,8 +8,6 @@ yarn-error.log*
 dist/
 build/
 .vite/
-scripts/
-docs/
 
 # Python
 __pycache__/

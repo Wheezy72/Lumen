@@ -3,6 +3,10 @@ import Joi from 'joi';
 import bcrypt from 'bcryptjs';
 import User from '../models/User.js';
 import { signToken, setAuthCookie, clearAuthCookie, authMiddleware } from '../middleware/auth.js';
+import { loginIpLimiter, loginUsernameLimiter, registerIpLimiter } from '../middleware/rateLimiter.js';
+import { getLoginLockoutStatus, recordFailedLoginAttempt, resetLoginLockout } from '../services/lockout.js';
+import { validatePassword } from '../services/passwordValidator.js';
+import { logger } from '../utils/logger.js';
 
 const router = express.Router();
 
@@ -12,7 +16,7 @@ const registerSchema = Joi.object({
   username: Joi.string().alphanum().min(3).max(50).required(),
   // Removed .email() completely. It will now accept any string, or nothing at all.
   email: Joi.string().allow('', null).optional(),
-  password: Joi.string().min(8).max(128).required(),
+  password: Joi.string().max(128).required(),
   name: Joi.string().max(100).allow('', null).optional(),
 });
 
@@ -22,9 +26,17 @@ const loginSchema = Joi.object({
   password: Joi.string().required(),
 });
 
-router.post('/register', async (req, res, next) => {
+router.post('/register', registerIpLimiter, async (req, res, next) => {
   try {
     const { username, email, password, name } = await registerSchema.validateAsync(req.body, { stripUnknown: true });
+
+    const pw = await validatePassword(password);
+    if (!pw.ok) {
+      return res.status(400).json({
+        error: 'Password does not meet security requirements.',
+        details: pw.errors,
+      });
+    }
 
     // Build the query dynamically so we don't search for empty emails
     const query = [{ username }];
@@ -54,14 +66,49 @@ router.post('/register', async (req, res, next) => {
   }
 });
 
-router.post('/login', async (req, res, next) => {
+router.post('/login', loginIpLimiter, loginUsernameLimiter, async (req, res, next) => {
   try {
     const { username, password } = await loginSchema.validateAsync(req.body, { stripUnknown: true });
+
+    const userAgent = req.get('user-agent');
+
+    const lockout = await getLoginLockoutStatus(username);
+    if (lockout.locked) {
+      logger.warn('Login blocked due to active lockout', {
+        username,
+        ip: req.ip,
+        userAgent,
+        retryAfterSeconds: lockout.retryAfterSeconds,
+      });
+
+      if (lockout.retryAfterSeconds) {
+        res.set('Retry-After', String(lockout.retryAfterSeconds));
+      }
+
+      return res.status(423).json({ error: 'Account temporarily locked. Please try again later.' });
+    }
+
     const user = await User.findOne({ username });
-    if (!user) return res.status(401).json({ error: 'Invalid username or password.' });
+    if (!user) {
+      const result = await recordFailedLoginAttempt({ username, ip: req.ip, userAgent });
+      if (result.locked) {
+        res.set('Retry-After', String(result.retryAfterSeconds));
+        return res.status(423).json({ error: 'Account temporarily locked. Please try again later.' });
+      }
+      return res.status(401).json({ error: 'Invalid username or password.' });
+    }
 
     const ok = await bcrypt.compare(password, user.passwordHash);
-    if (!ok) return res.status(401).json({ error: 'Invalid username or password.' });
+    if (!ok) {
+      const result = await recordFailedLoginAttempt({ username, ip: req.ip, userAgent });
+      if (result.locked) {
+        res.set('Retry-After', String(result.retryAfterSeconds));
+        return res.status(423).json({ error: 'Account temporarily locked. Please try again later.' });
+      }
+      return res.status(401).json({ error: 'Invalid username or password.' });
+    }
+
+    await resetLoginLockout({ username, ip: req.ip, userAgent });
 
     const token = signToken({ id: user._id, username: user.username });
     setAuthCookie(res, token);

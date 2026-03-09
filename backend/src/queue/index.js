@@ -44,7 +44,7 @@ export const configureBull = () => {
     scan.progress = 5;
     await scan.save();
 
-    publishScanUpdate(jobQueueApp(), { type: 'progress', scanId, progress: 5 });
+    publishScanUpdate(jobQueueApp(), { type: 'progress', scanId, progress: 5, userId: scan.userId.toString() });
 
     // Send job to Python worker with scan profile (selected modules)
     await pub.publish(JOB_CHANNEL, JSON.stringify({
@@ -108,6 +108,7 @@ export const configureBull = () => {
       scanId,
       status: scan?.status,
       progress: scan?.progress,
+      userId: scan?.userId?.toString(),
     });
   });
 
@@ -136,7 +137,7 @@ export const configureBull = () => {
       }
     }
 
-    publishScanUpdate(jobQueueApp(), { type: 'failed', scanId, error: err.message });
+    publishScanUpdate(jobQueueApp(), { type: 'failed', scanId, error: err.message, userId: scan?.userId?.toString() });
   });
 };
 
@@ -161,6 +162,7 @@ async function handleResults(scan, data) {
     type: 'progress',
     scanId: scan._id.toString(),
     progress: 100,
+    userId: scan.userId.toString(),
   });
 
   return true;

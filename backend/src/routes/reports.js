@@ -6,6 +6,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { createObjectCsvWriter } from 'csv-writer';
 import Scan from '../models/Scan.js';
+import { isValidObjectId } from '../utils/objectId.js';
 
 const router = express.Router();
 
@@ -103,12 +104,18 @@ function mitigationAdvice(vuln = {}) {
 // Serve: GET /api/reports/file/:name (sets content-disposition)
 router.get('/file/:name', async (req, res, next) => {
   try {
+    const reportDir = ensureReportDir();
     const name = req.params.name;
-    const abs = path.join(ensureReportDir(), name);
-    if (!abs.startsWith(ensureReportDir())) return res.status(400).end(); // path safety
+
+    if (path.basename(name) !== name) return res.status(400).end();
+
+    const abs = path.resolve(reportDir, name);
+    const base = path.resolve(reportDir) + path.sep;
+    if (!abs.startsWith(base)) return res.status(400).end(); // path safety
     if (!fs.existsSync(abs)) return res.status(404).end();
 
-    const downloadName = req.query.download || name;
+    const rawDownloadName = typeof req.query.download === 'string' ? req.query.download : name;
+    const downloadName = sanitizeName(rawDownloadName);
     res.setHeader('Content-Disposition', `attachment; filename="${downloadName}"`);
     res.sendFile(abs);
   } catch (e) { next(e); }
@@ -117,6 +124,10 @@ router.get('/file/:name', async (req, res, next) => {
 router.post('/pdf', async (req, res, next) => {
   try {
     const { scanId } = await reportSchema.validateAsync(req.body, { stripUnknown: true });
+    if (!isValidObjectId(scanId)) {
+      return res.status(400).json({ error: 'Invalid scan id.' });
+    }
+
     const scan = await Scan.findOne({ _id: scanId, userId: req.user.id });
     if (!scan) return res.status(404).json({ error: 'I could not find that scan for this account.' });
 
@@ -253,6 +264,10 @@ router.post('/pdf', async (req, res, next) => {
 router.post('/csv', async (req, res, next) => {
   try {
     const { scanId } = await reportSchema.validateAsync(req.body, { stripUnknown: true });
+    if (!isValidObjectId(scanId)) {
+      return res.status(400).json({ error: 'Invalid scan id.' });
+    }
+
     const scan = await Scan.findOne({ _id: scanId, userId: req.user.id });
     if (!scan) return res.status(404).json({ error: 'I could not find that scan for this account.' });
 

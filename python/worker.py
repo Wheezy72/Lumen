@@ -1,5 +1,6 @@
 import os
 import json
+import logging
 import ssl
 import socket
 import urllib.parse
@@ -7,8 +8,14 @@ from typing import List, Dict, Optional
 
 import dns.resolver
 import redis
-import requests
 from bs4 import BeautifulSoup
+
+from utils.safe_request import get as safe_get
+from utils.url_validator import (
+    ExternalTargetNotAllowedError,
+    URLValidationError,
+    validate_url_for_request,
+)
 
 """
 Python worker for Lumen.
@@ -24,6 +31,12 @@ exactly what is happening and extend it later if needed.
 REDIS_URL = os.getenv("REDIS_URL", "redis://127.0.0.1:6379")
 # Only allow external/public scans when explicitly enabled.
 ALLOW_EXTERNAL = os.getenv("ALLOW_EXTERNAL", "false").lower() in ("1", "true", "yes")
+
+# Whether private targets (RFC1918, ULA) are allowed. Default: false.
+# Set true only for self-hosted deployments that intentionally scan internal networks.
+ALLOW_PRIVATE_TARGETS = os.getenv("ALLOW_PRIVATE_TARGETS", "false").lower() in ("1", "true", "yes")
+
+logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO").upper())
 
 JOB_CHANNEL = "scan_jobs"
 RESULT_CHANNEL = "scan_results"
@@ -92,7 +105,7 @@ def check_http_headers(url: str) -> List[Dict]:
     """
     issues: List[Dict] = []
     try:
-        resp = requests.get(url, timeout=10)
+        resp = safe_get(url, allow_external=ALLOW_EXTERNAL, allow_private=ALLOW_PRIVATE_TARGETS, timeout=10, allow_redirects=True)
         required = [
             ("Content-Security-Policy", "high"),
             ("X-Frame-Options", "medium"),
@@ -136,7 +149,7 @@ def check_xss(url: str) -> List[Dict]:
         new_qs = urllib.parse.urlencode(qs, doseq=True)
         test_url = urllib.parse.urlunparse(parsed._replace(query=new_qs))
 
-        resp = requests.get(test_url, timeout=10)
+        resp = safe_get(test_url, allow_external=ALLOW_EXTERNAL, allow_private=ALLOW_PRIVATE_TARGETS, timeout=10, allow_redirects=True)
         if payload in resp.text:
             issues.append(
                 {
@@ -174,7 +187,7 @@ def check_sql_injection(url: str) -> List[Dict]:
         new_qs = urllib.parse.urlencode(qs, doseq=True)
         test_url = urllib.parse.urlunparse(parsed._replace(query=new_qs))
 
-        resp = requests.get(test_url, timeout=10)
+        resp = safe_get(test_url, allow_external=ALLOW_EXTERNAL, allow_private=ALLOW_PRIVATE_TARGETS, timeout=10, allow_redirects=True)
         soup = BeautifulSoup(resp.text, "lxml")
         text = soup.text.lower()
         if "sql" in text or "syntax" in text:
@@ -211,7 +224,7 @@ def check_directory_traversal(url: str) -> List[Dict]:
         test_url = urllib.parse.urlunparse(
             parsed._replace(query=urllib.parse.urlencode(qs, doseq=True))
         )
-        resp = requests.get(test_url, timeout=10)
+        resp = safe_get(test_url, allow_external=ALLOW_EXTERNAL, allow_private=ALLOW_PRIVATE_TARGETS, timeout=10, allow_redirects=True)
         if "root:x:" in resp.text:
             issues.append(
                 {
@@ -275,7 +288,7 @@ def check_cookie_flags(url: str) -> List[Dict]:
     """
     issues: List[Dict] = []
     try:
-        resp = requests.get(url, timeout=10)
+        resp = safe_get(url, allow_external=ALLOW_EXTERNAL, allow_private=ALLOW_PRIVATE_TARGETS, timeout=10, allow_redirects=True)
         set_cookie = resp.headers.get("Set-Cookie")
         if not set_cookie:
             return issues
@@ -316,7 +329,7 @@ def check_error_leakage(url: str) -> List[Dict]:
         test_url = urllib.parse.urlunparse(
             parsed._replace(query=urllib.parse.urlencode(qs, doseq=True))
         )
-        resp = requests.get(test_url, timeout=10)
+        resp = safe_get(test_url, allow_external=ALLOW_EXTERNAL, allow_private=ALLOW_PRIVATE_TARGETS, timeout=10, allow_redirects=True)
         text = resp.text
 
         if resp.status_code >= 500 or any(
@@ -368,8 +381,8 @@ def check_broken_access_control(url: str) -> List[Dict]:
         url1 = urllib.parse.urlunparse(parsed._replace(path=path_original))
         url2 = urllib.parse.urlunparse(parsed._replace(path=path_other))
 
-        resp1 = requests.get(url1, timeout=10)
-        resp2 = requests.get(url2, timeout=10)
+        resp1 = safe_get(url1, allow_external=ALLOW_EXTERNAL, allow_private=ALLOW_PRIVATE_TARGETS, timeout=10, allow_redirects=True)
+        resp2 = safe_get(url2, allow_external=ALLOW_EXTERNAL, allow_private=ALLOW_PRIVATE_TARGETS, timeout=10, allow_redirects=True)
 
         if resp1.status_code == 200 and resp2.status_code == 200 and resp1.text != resp2.text:
             issues.append(
@@ -403,7 +416,7 @@ def check_rate_limiting(url: str) -> List[Dict]:
     try:
         responses = []
         for _ in range(5):
-            resp = requests.get(url, timeout=5)
+            resp = safe_get(url, allow_external=ALLOW_EXTERNAL, allow_private=ALLOW_PRIVATE_TARGETS, timeout=5, allow_redirects=True)
             responses.append(resp)
 
         limited = any(
@@ -461,39 +474,35 @@ def run_scan(target_url: str, profile: Optional[List[str]] = None) -> List[Dict]
         return issues
 
     try:
-        resolved = socket.gethostbyname(hostname)
-    except Exception as e:
-        issues.append(
-            {
-                "title": "DNS resolution failed",
-                "severity": "low",
-                "description": f"Could not resolve hostname {hostname}: {e}",
-                "category": "network",
-            }
-        )
-        return issues
-
-    def is_private_ip(ip: str) -> bool:
-        try:
-            parts = [int(p) for p in ip.split(".")]
-            if parts[0] == 10:
-                return True
-            if parts[0] == 127:
-                return True
-            if parts[0] == 192 and parts[1] == 168:
-                return True
-            if parts[0] == 172 and 16 <= parts[1] <= 31:
-                return True
-        except Exception:
-            return False
-        return False
-
-    if not ALLOW_EXTERNAL and not is_private_ip(resolved):
+        validate_url_for_request(target_url, allow_external=ALLOW_EXTERNAL)
+    except ExternalTargetNotAllowedError as e:
         issues.append(
             {
                 "title": "External scans disabled",
                 "severity": "low",
-                "description": f"Scanning external host {hostname} ({resolved}) is disabled in the worker configuration.",
+                "description": f"Scanning external host {hostname} is disabled in the worker configuration.",
+                "category": "policy",
+            }
+        )
+        return issues
+    except URLValidationError as e:
+        description = str(e)
+        if description.startswith("DNS resolution failed"):
+            issues.append(
+                {
+                    "title": "DNS resolution failed",
+                    "severity": "low",
+                    "description": description,
+                    "category": "network",
+                }
+            )
+            return issues
+
+        issues.append(
+            {
+                "title": "Target blocked",
+                "severity": "low",
+                "description": description,
                 "category": "policy",
             }
         )

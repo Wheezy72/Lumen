@@ -1,6 +1,24 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import axios from 'axios';
 import { Link, useNavigate } from 'react-router-dom';
+
+const MIN_PASSWORD_LENGTH = 12;
+
+function evaluatePassword(password) {
+  const checks = {
+    length: (password || '').length >= MIN_PASSWORD_LENGTH,
+    lowercase: /[a-z]/.test(password || ''),
+    uppercase: /[A-Z]/.test(password || ''),
+    number: /\d/.test(password || ''),
+    special: /[^a-zA-Z0-9]/.test(password || ''),
+  };
+
+  const passed = Object.values(checks).filter(Boolean).length;
+  // Score 0..5
+  const score = passed;
+
+  return { checks, score };
+}
 
 export default function Register({ onRegister }) {
   const navigate = useNavigate();
@@ -12,7 +30,10 @@ export default function Register({ onRegister }) {
     name: ''
   });
   const [error, setError] = useState('');
+  const [errorDetails, setErrorDetails] = useState([]);
   const [loading, setLoading] = useState(false);
+
+  const pwEval = useMemo(() => evaluatePassword(form.password), [form.password]);
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -21,14 +42,20 @@ export default function Register({ onRegister }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setErrorDetails([]);
 
     if (form.password !== form.confirmPassword) {
       setError('Passwords do not match');
       return;
     }
 
-    if (form.password.length < 8) {
-      setError('Password must be at least 8 characters');
+    const { checks } = pwEval;
+    const unmet = Object.entries(checks)
+      .filter(([, ok]) => !ok)
+      .map(([key]) => key);
+
+    if (unmet.length) {
+      setError('Password does not meet security requirements');
       return;
     }
 
@@ -41,16 +68,18 @@ export default function Register({ onRegister }) {
         email: form.email || undefined,
         name: form.name || undefined
       });
-      
+
       // Pass the user data back up to App.jsx to unlock the dashboard
       if (onRegister) {
         onRegister(response.data);
       }
-      
+
       navigate('/dashboard');
     } catch (err) {
       const message = err.response?.data?.error || 'Registration failed. Please try again.';
+      const details = Array.isArray(err.response?.data?.details) ? err.response.data.details : [];
       setError(message);
+      setErrorDetails(details);
     } finally {
       setLoading(false);
     }
@@ -73,6 +102,13 @@ export default function Register({ onRegister }) {
           {error && (
             <div className="mb-6 p-4 bg-red-900/30 border border-red-500/30 rounded-lg">
               <p className="text-red-400 text-sm text-center">{error}</p>
+              {errorDetails.length > 0 && (
+                <ul className="mt-3 text-red-300 text-xs list-disc list-inside space-y-1">
+                  {errorDetails.map((d) => (
+                    <li key={d}>{d}</li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
 
@@ -157,10 +193,52 @@ export default function Register({ onRegister }) {
                   value={form.password}
                   onChange={handleChange}
                   className="input pl-10"
-                  placeholder="At least 8 characters"
+                  placeholder={`At least ${MIN_PASSWORD_LENGTH} characters`}
                   required
-                  minLength={8}
+                  minLength={MIN_PASSWORD_LENGTH}
                 />
+              </div>
+
+              {/* Strength meter */}
+              <div className="mt-3">
+                <div className="flex items-center justify-between text-xs text-gray-400 mb-2">
+                  <span>Password strength</span>
+                  <span>{pwEval.score}/5</span>
+                </div>
+                <div className="h-2 w-full bg-slate-800 rounded">
+                  <div
+                    className={`h-2 rounded transition-all ${
+                      pwEval.score <= 2
+                        ? 'bg-red-600'
+                        : pwEval.score === 3
+                          ? 'bg-yellow-500'
+                          : 'bg-green-500'
+                    }`}
+                    style={{ width: `${(pwEval.score / 5) * 100}%` }}
+                  />
+                </div>
+
+                <ul className="mt-3 text-xs space-y-1">
+                  <li className={pwEval.checks.length ? 'text-green-400' : 'text-gray-500'}>
+                    {pwEval.checks.length ? '✓' : '•'} {MIN_PASSWORD_LENGTH}+ characters
+                  </li>
+                  <li className={pwEval.checks.lowercase ? 'text-green-400' : 'text-gray-500'}>
+                    {pwEval.checks.lowercase ? '✓' : '•'} Lowercase letter
+                  </li>
+                  <li className={pwEval.checks.uppercase ? 'text-green-400' : 'text-gray-500'}>
+                    {pwEval.checks.uppercase ? '✓' : '•'} Uppercase letter
+                  </li>
+                  <li className={pwEval.checks.number ? 'text-green-400' : 'text-gray-500'}>
+                    {pwEval.checks.number ? '✓' : '•'} Number
+                  </li>
+                  <li className={pwEval.checks.special ? 'text-green-400' : 'text-gray-500'}>
+                    {pwEval.checks.special ? '✓' : '•'} Special character
+                  </li>
+                </ul>
+
+                <p className="mt-3 text-[11px] text-gray-500">
+                  We also check passwords against known breached passwords (HaveIBeenPwned).
+                </p>
               </div>
             </div>
 
@@ -182,7 +260,7 @@ export default function Register({ onRegister }) {
                   className="input pl-10"
                   placeholder="Confirm your password"
                   required
-                  minLength={8}
+                  minLength={MIN_PASSWORD_LENGTH}
                 />
               </div>
             </div>

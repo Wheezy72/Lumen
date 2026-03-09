@@ -11,6 +11,8 @@ export const sseInit = (app) => {
 export const sseRouter = express.Router();
 
 sseRouter.get('/events', (req, res) => {
+  const userId = req.user?.id;
+
   res.set({
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
@@ -19,6 +21,7 @@ sseRouter.get('/events', (req, res) => {
   res.flushHeaders();
 
   const onEvent = (data) => {
+    if (userId && data?.userId && data.userId !== userId) return;
     res.write(`data: ${JSON.stringify(data)}\n\n`);
   };
 
