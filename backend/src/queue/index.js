@@ -75,7 +75,13 @@ export const configureBull = () => {
         // Handle final results
         clearTimeout(timeout);
         redis.removeListener('message', onMessage); // Replaced .off() with .removeListener()
-        resolve(handleResults(scan, data));
+        // IMPORTANT: await handleResults to ensure DB save completes BEFORE job resolves
+        try {
+          await handleResults(scan, data);
+          resolve(true);
+        } catch (e) {
+          reject(e);
+        }
       };
 
       redis.on('message', onMessage);
