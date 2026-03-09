@@ -2,6 +2,14 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Link, useParams } from 'react-router-dom';
 
+const SEV = {
+  critical: { bg: 'bg-purple-500/15 text-purple-400 border border-purple-500/30', dot: 'bg-purple-400' },
+  high:     { bg: 'bg-red-500/15 text-red-400 border border-red-500/30',           dot: 'bg-red-400' },
+  medium:   { bg: 'bg-amber-500/15 text-amber-400 border border-amber-500/30',     dot: 'bg-amber-400' },
+  low:      { bg: 'bg-blue-500/15 text-blue-400 border border-blue-500/30',        dot: 'bg-blue-400' },
+  info:     { bg: 'bg-slate-500/15 text-slate-400 border border-slate-500/30',     dot: 'bg-slate-400' },
+};
+
 export default function ReportView() {
   const { scanId } = useParams();
   const [scan, setScan] = useState(null);
@@ -17,7 +25,7 @@ export default function ReportView() {
       const { data } = await axios.get('/api/scans/' + scanId);
       setScan(data);
       setSelectedIndex(0);
-    } catch (err) {
+    } catch {
       setError('Failed to load scan results');
     } finally {
       setLoading(false);
@@ -29,11 +37,8 @@ export default function ReportView() {
       setPdfLoading(true);
       const { data } = await axios.post('/api/reports/pdf', { scanId });
       window.open(data.url, '_blank');
-    } catch (err) {
-      alert('Failed to generate PDF');
-    } finally {
-      setPdfLoading(false);
-    }
+    } catch { alert('Failed to generate PDF'); }
+    finally { setPdfLoading(false); }
   };
 
   const generateCsv = async () => {
@@ -41,21 +46,19 @@ export default function ReportView() {
       setCsvLoading(true);
       const { data } = await axios.post('/api/reports/csv', { scanId });
       window.open(data.url, '_blank');
-    } catch (err) {
-      alert('Failed to generate CSV');
-    } finally {
-      setCsvLoading(false);
-    }
+    } catch { alert('Failed to generate CSV'); }
+    finally { setCsvLoading(false); }
   };
 
   useEffect(() => {
     loadScan();
     const es = new EventSource('/api/sse/events');
     es.onmessage = (e) => {
-      const msg = JSON.parse(e.data);
-      if (msg.scanId === scanId) {
-        loadScan();
-      }
+      try {
+        const msg = JSON.parse(e.data);
+        // Only re-fetch when this specific scan updates
+        if (msg.scanId === scanId && msg.type === 'completed') loadScan();
+      } catch {}
     };
     return () => es.close();
   }, [scanId]);
@@ -64,8 +67,8 @@ export default function ReportView() {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
-          <div className="animate-spin w-8 h-8 mx-auto border-4 border-blue-600 border-t-transparent rounded-full mb-4"></div>
-          <p className="text-gray-600">Loading scan results...</p>
+          <div className="animate-spin w-8 h-8 mx-auto border-2 border-primary-500 border-t-transparent rounded-full mb-4" />
+          <p className="text-gray-500 text-sm">Loading scan results…</p>
         </div>
       </div>
     );
@@ -73,174 +76,183 @@ export default function ReportView() {
 
   if (error) {
     return (
-      <div className="text-center py-12">
-        <div className="text-red-500 mb-4">{error}</div>
-        <button onClick={loadScan} className="text-blue-600 hover:underline">Try again</button>
+      <div className="text-center py-16">
+        <p className="text-red-400 mb-4">{error}</p>
+        <button onClick={loadScan} className="text-primary-500 hover:underline text-sm">Try again</button>
       </div>
     );
   }
 
-  const selectedVuln = scan?.results?.[selectedIndex];
   const findings = scan?.results || [];
+  const selectedVuln = findings[selectedIndex];
 
-  const severityCounts = findings.reduce((acc, f) => {
-    acc[f.severity] = (acc[f.severity] || 0) + 1;
+  const sevCounts = findings.reduce((acc, f) => {
+    const s = (f.severity || 'info').toLowerCase();
+    acc[s] = (acc[s] || 0) + 1;
     return acc;
   }, {});
 
+  const statusColor = scan?.status === 'completed' ? 'text-emerald-400'
+    : scan?.status === 'running' ? 'text-blue-400'
+    : scan?.status === 'failed' ? 'text-red-400'
+    : 'text-gray-400';
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <div className="space-y-5">
+
+      {/* ── Header ─────────────────────────────────────────────── */}
+      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Scan Report</h1>
-          <p className="text-gray-600 mt-1 break-all">{scan?.targetUrl}</p>
+          <h1 className="text-2xl font-bold text-white">Scan Report</h1>
+          <p className="text-gray-500 mt-1 break-all text-sm">{scan?.targetUrl}</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 shrink-0">
           <button
             onClick={generatePdf}
             disabled={pdfLoading}
-            className="px-4 py-2 bg-gray-800 hover:bg-gray-900 text-white rounded-lg text-sm font-medium disabled:opacity-50"
+            className="px-4 py-2 rounded-lg text-sm font-medium bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 disabled:opacity-50 transition"
           >
-            {pdfLoading ? 'Generating...' : 'Download PDF'}
+            {pdfLoading ? 'Generating…' : 'Download PDF'}
           </button>
           <button
             onClick={generateCsv}
             disabled={csvLoading}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium disabled:opacity-50"
+            className="px-4 py-2 rounded-lg text-sm font-medium btn btn-primary disabled:opacity-50"
           >
-            {csvLoading ? 'Generating...' : 'Download CSV'}
+            {csvLoading ? 'Generating…' : 'Download CSV'}
           </button>
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {/* ── Meta bar ───────────────────────────────────────────── */}
+      <div className="rounded-xl border border-slate-800 bg-dark-200 p-5">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
           <div>
-            <p className="text-sm text-gray-500">Status</p>
-            <p className="font-semibold capitalize">{scan?.status}</p>
+            <p className="text-xs text-gray-600 mb-1">Status</p>
+            <p className={`font-semibold capitalize ${statusColor}`}>{scan?.status}</p>
           </div>
           <div>
-            <p className="text-sm text-gray-500">Progress</p>
-            <p className="font-semibold">{scan?.progress}%</p>
+            <p className="text-xs text-gray-600 mb-1">Progress</p>
+            <p className="font-semibold text-white">{scan?.progress ?? 0}%</p>
           </div>
           <div>
-            <p className="text-sm text-gray-500">Started</p>
-            <p className="font-semibold">{scan?.startedAt ? new Date(scan.startedAt).toLocaleString() : '-'}</p>
+            <p className="text-xs text-gray-600 mb-1">Started</p>
+            <p className="font-semibold text-white">
+              {scan?.startedAt ? new Date(scan.startedAt).toLocaleString() : '—'}
+            </p>
           </div>
           <div>
-            <p className="text-sm text-gray-500">Completed</p>
-            <p className="font-semibold">{scan?.completedAt ? new Date(scan.completedAt).toLocaleString() : '-'}</p>
+            <p className="text-xs text-gray-600 mb-1">Completed</p>
+            <p className="font-semibold text-white">
+              {scan?.completedAt ? new Date(scan.completedAt).toLocaleString() : '—'}
+            </p>
           </div>
         </div>
 
         {findings.length > 0 && (
-          <div className="mt-4 pt-4 border-t border-gray-100 flex flex-wrap gap-3">
-            {severityCounts.critical > 0 && (
-              <span className="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-sm font-medium">
-                {severityCounts.critical} Critical
-              </span>
-            )}
-            {severityCounts.high > 0 && (
-              <span className="px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm font-medium">
-                {severityCounts.high} High
-              </span>
-            )}
-            {severityCounts.medium > 0 && (
-              <span className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm font-medium">
-                {severityCounts.medium} Medium
-              </span>
-            )}
-            {severityCounts.low > 0 && (
-              <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
-                {severityCounts.low} Low
-              </span>
+          <div className="mt-4 pt-4 border-t border-slate-800 flex flex-wrap gap-2">
+            {['critical','high','medium','low','info'].map((s) =>
+              sevCounts[s] ? (
+                <span key={s} className={`px-3 py-1 rounded-full text-xs font-medium ${SEV[s]?.bg}`}>
+                  {sevCounts[s]} {s.charAt(0).toUpperCase() + s.slice(1)}
+                </span>
+              ) : null
             )}
           </div>
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <h2 className="font-semibold text-gray-900 mb-4">Findings ({findings.length})</h2>
-          
+      {/* ── Findings + Detail ──────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+        {/* Findings list */}
+        <div className="rounded-xl border border-slate-800 bg-dark-200 p-4">
+          <h2 className="font-semibold text-white mb-3 text-sm">
+            Findings <span className="text-gray-600 font-normal">({findings.length})</span>
+          </h2>
+
           {findings.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              <p>No vulnerabilities found</p>
-            </div>
+            <div className="py-10 text-center text-gray-600 text-sm">No vulnerabilities found.</div>
           ) : (
-            <ul className="space-y-2 max-h-[500px] overflow-y-auto">
-              {findings.map((finding, index) => (
-                <li
-                  key={index}
-                  onClick={() => setSelectedIndex(index)}
-                  className={'p-3 rounded-lg cursor-pointer transition ' + (index === selectedIndex ? 'bg-blue-50 border border-blue-200' : 'hover:bg-gray-50 border border-transparent')}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="font-medium text-sm text-gray-900">{finding.title}</span>
-                    <SeverityBadge severity={finding.severity} />
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1">{finding.category}</p>
-                </li>
-              ))}
+            <ul className="space-y-1.5 max-h-[520px] overflow-y-auto pr-1">
+              {findings.map((f, i) => {
+                const sev = (f.severity || 'info').toLowerCase();
+                const active = i === selectedIndex;
+                return (
+                  <li
+                    key={i}
+                    onClick={() => setSelectedIndex(i)}
+                    className={`p-3 rounded-lg cursor-pointer transition border ${
+                      active
+                        ? 'bg-primary-900/30 border-primary-700/50'
+                        : 'border-transparent hover:bg-slate-800/50'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="text-sm text-gray-200 font-medium leading-snug">{f.title}</span>
+                      <SeverityBadge severity={sev} />
+                    </div>
+                    <p className="text-xs text-gray-600 mt-1">{f.category}</p>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>
 
-        <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 p-6">
-          <h2 className="font-semibold text-gray-900 mb-4">Finding Details</h2>
-          
+        {/* Detail panel */}
+        <div className="lg:col-span-2 rounded-xl border border-slate-800 bg-dark-200 p-5">
+          <h2 className="font-semibold text-white mb-4 text-sm">Finding Details</h2>
+
           {!selectedVuln ? (
-            <div className="text-center py-12 text-gray-500">
-              <p>Select a finding from the list</p>
-            </div>
+            <div className="py-16 text-center text-gray-600 text-sm">Select a finding from the list.</div>
           ) : (
-            <div className="space-y-6">
-              <div>
-                <div className="flex items-start justify-between gap-4">
-                  <h3 className="text-lg font-semibold text-gray-900">{selectedVuln.title}</h3>
-                  <SeverityBadge severity={selectedVuln.severity} />
+            <div className="space-y-5">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-white">{selectedVuln.title}</h3>
+                  <p className="text-xs text-gray-500 mt-1">Category: {selectedVuln.category}</p>
                 </div>
-                <p className="text-sm text-gray-500 mt-1">Category: {selectedVuln.category}</p>
+                <SeverityBadge severity={(selectedVuln.severity || 'info').toLowerCase()} />
               </div>
 
               {selectedVuln.description && (
                 <div>
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">Description</h4>
-                  <p className="text-gray-600">{selectedVuln.description}</p>
+                  <h4 className="text-xs font-semibold text-primary-500 uppercase tracking-wide mb-2">Description</h4>
+                  <p className="text-gray-300 text-sm leading-relaxed">{selectedVuln.description}</p>
                 </div>
               )}
 
               {selectedVuln.evidence && (
                 <div>
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">Evidence</h4>
-                  <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-700 font-mono break-all">
+                  <h4 className="text-xs font-semibold text-primary-500 uppercase tracking-wide mb-2">Evidence</h4>
+                  <div className="rounded-lg bg-black/50 border border-slate-800 p-3 text-xs text-gray-300 font-mono break-all">
                     {selectedVuln.evidence}
                   </div>
                 </div>
               )}
 
               <div>
-                <h4 className="text-sm font-medium text-gray-700 mb-2">How it was detected</h4>
-                <p className="text-gray-600 text-sm">{getDetectionMethod(selectedVuln.category)}</p>
+                <h4 className="text-xs font-semibold text-primary-500 uppercase tracking-wide mb-2">How it was detected</h4>
+                <p className="text-gray-400 text-sm">{getDetectionMethod(selectedVuln.category)}</p>
               </div>
 
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                <h4 className="text-sm font-medium text-green-800 mb-2">How to Fix</h4>
-                <p className="text-green-700 text-sm mb-3">{getRemediationAdvice(selectedVuln.category)}</p>
-                
+              <div className="rounded-lg border border-emerald-800/40 bg-emerald-900/10 p-4">
+                <h4 className="text-xs font-semibold text-emerald-400 uppercase tracking-wide mb-2">How to Fix</h4>
+                <p className="text-emerald-300/80 text-sm mb-3">{getRemediationAdvice(selectedVuln.category)}</p>
                 {getCodeExample(selectedVuln.category) && (
-                  <pre className="mt-3 bg-gray-800 rounded-lg p-3 overflow-x-auto text-sm text-green-400 whitespace-pre">
+                  <pre className="mt-2 rounded-lg bg-black/60 border border-slate-800 p-3 text-xs text-emerald-400 font-mono overflow-x-auto whitespace-pre">
                     {getCodeExample(selectedVuln.category)}
                   </pre>
                 )}
               </div>
 
-              <div className="pt-4 border-t border-gray-100">
+              <div className="pt-4 border-t border-slate-800">
                 <Link
                   to={'/learn#' + selectedVuln.category}
-                  className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+                  className="text-primary-500 hover:text-primary-400 text-sm font-medium transition"
                 >
-                  Learn more about this vulnerability type
+                  Learn more about this vulnerability type →
                 </Link>
               </div>
             </div>
@@ -252,14 +264,9 @@ export default function ReportView() {
 }
 
 function SeverityBadge({ severity }) {
-  const colors = {
-    critical: 'bg-purple-100 text-purple-800',
-    high: 'bg-red-100 text-red-800',
-    medium: 'bg-yellow-100 text-yellow-800',
-    low: 'bg-blue-100 text-blue-800',
-  };
+  const style = SEV[severity] || SEV.info;
   return (
-    <span className={'px-2 py-1 rounded text-xs font-medium uppercase ' + (colors[severity] || colors.low)}>
+    <span className={`shrink-0 px-2 py-0.5 rounded-full text-xs font-medium uppercase ${style.bg}`}>
       {severity}
     </span>
   );

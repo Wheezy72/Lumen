@@ -1,5 +1,6 @@
 export default {
   content: ["./index.html", "./src/**/*.{js,jsx,ts,tsx}"],
+  darkMode: 'class',
   theme: {
     extend: {
       colors: {
@@ -64,10 +65,10 @@ export default {
           900: '#0c4a6e',
         },
         dark: {
-          50: '#f8fafc',
-          100: '#f1f5f9',
-          200: '#e2e8f0',
-          300: '#cbd5e1',
+          50:  '#f8fafc',
+          100: '#18181b',
+          200: '#111113',
+          300: '#09090b',
           400: '#94a3b8',
           500: '#64748b',
           600: '#475569',

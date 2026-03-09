@@ -61,20 +61,20 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white/80 backdrop-blur-lg border-b border-gray-200 sticky top-0 z-50">
+    <div className="min-h-screen bg-dark-300 text-white">
+      <header className="bg-dark-200/80 backdrop-blur-lg border-b border-slate-800 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-3">
               <div className="placeholder-logo cyber-glow"></div>
-              <Link 
-                to="/" 
-                className="text-xl font-bold bg-gradient-to-r from-primary-600 to-primary-800 bg-clip-text text-transparent"
+              <Link
+                to="/"
+                className="text-xl font-bold bg-gradient-to-r from-primary-400 to-primary-600 bg-clip-text text-transparent"
               >
                 Lumen Scanner
               </Link>
             </div>
-            
+
             <nav className="hidden md:flex items-center space-x-1">
               <NavLink to="/learn" isActive={isActiveRoute('/learn')}>
                 Learn
@@ -82,23 +82,23 @@ export default function App() {
               {user ? (
                 <>
                   <NavLink to="/dashboard" isActive={isActiveRoute('/dashboard')}>
-                    <DashboardIcon className="w-4 h-4 mr-2" />
+                    <DashboardIcon className="w-4 h-4 mr-1.5" />
                     Dashboard
                   </NavLink>
                   <NavLink to="/scans" isActive={isActiveRoute('/scans')}>
-                    <ScanIcon className="w-4 h-4 mr-2" />
+                    <ScanIcon className="w-4 h-4 mr-1.5" />
                     Scans
                   </NavLink>
                   <NavLink to="/new" isActive={isActiveRoute('/new')}>
-                    <PlusIcon className="w-4 h-4 mr-2" />
+                    <PlusIcon className="w-4 h-4 mr-1.5" />
                     New Scan
                   </NavLink>
-                  <div className="ml-4 pl-4 border-l border-gray-300">
-                    <button 
-                      onClick={logout} 
-                      className="btn-danger text-sm"
+                  <div className="ml-4 pl-4 border-l border-slate-700">
+                    <button
+                      onClick={logout}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-red-400 border border-red-900/50 hover:bg-red-900/30 hover:border-red-700 transition whitespace-nowrap"
                     >
-                      <LogoutIcon className="w-4 h-4 mr-2" />
+                      <LogoutIcon className="w-4 h-4" />
                       Logout
                     </button>
                   </div>
@@ -108,7 +108,7 @@ export default function App() {
                   <NavLink to="/login" isActive={isActiveRoute('/login')}>
                     Login
                   </NavLink>
-                  <Link to="/register" className="btn-primary ml-2">
+                  <Link to="/register" className="ml-2 px-4 py-1.5 rounded-lg text-sm font-semibold btn btn-primary">
                     Get Started
                   </Link>
                 </>
@@ -117,7 +117,7 @@ export default function App() {
 
             {/* Mobile menu button */}
             <div className="md:hidden">
-              <button className="p-2 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gray-100">
+              <button className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-slate-800">
                 <MenuIcon className="w-6 h-6" />
               </button>
             </div>
@@ -154,16 +154,14 @@ export default function App() {
         </div>
       </main>
 
-      <footer className="bg-white border-t border-gray-200 mt-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <footer className="border-t border-slate-800 mt-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
           <div className="text-center text-gray-600">
-            <div className="flex items-center justify-center space-x-2 mb-4">
+            <div className="flex items-center justify-center space-x-2 mb-3">
               <div className="placeholder-logo"></div>
-              <span className="font-semibold">Lumen Vulnerability Scanner</span>
+              <span className="font-semibold text-gray-400">Lumen Vulnerability Scanner</span>
             </div>
-            <p className="text-sm">
-              Secure your applications with comprehensive vulnerability scanning
-            </p>
+            <p className="text-sm">Secure your applications with comprehensive vulnerability scanning.</p>
           </div>
         </div>
       </footer>
@@ -178,8 +176,8 @@ function NavLink({ to, children, isActive }) {
       to={to}
       className={`px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center ${
         isActive
-          ? 'bg-primary-100 text-primary-700 shadow-soft'
-          : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+          ? 'bg-primary-900/50 text-primary-400'
+          : 'text-gray-400 hover:text-white hover:bg-slate-800'
       }`}
     >
       {children}

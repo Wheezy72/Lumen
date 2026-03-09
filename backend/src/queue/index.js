@@ -8,8 +8,7 @@ import { sendScanSummaryEmail, sendScanFailureEmail } from '../services/email.js
 
 /**
  * Queue wiring for scan jobs.
- * 
- * This module connects Express, Bull (job queue), and the Python worker:
+ * * This module connects Express, Bull (job queue), and the Python worker:
  * 1. Receives scan requests from the API
  * 2. Publishes jobs to Redis for the Python worker
  * 3. Waits for results and updates the database
@@ -64,9 +63,18 @@ export const configureBull = () => {
         
         const data = JSON.parse(message);
         if (data.scanId !== scanId) return;
+
+        // Handle live progress updates from the Python worker
+        if (data.type === 'progress') {
+          scan.progress = data.progress;
+          await scan.save();
+          publishScanUpdate(jobQueueApp(), { type: 'progress', scanId, progress: data.progress });
+          return; // Continue waiting for final results
+        }
         
+        // Handle final results
         clearTimeout(timeout);
-        redis.off('message', onMessage);
+        redis.removeListener('message', onMessage); // Replaced .off() with .removeListener()
         resolve(handleResults(scan, data));
       };
 
@@ -80,7 +88,7 @@ export const configureBull = () => {
     const { scanId, webhookUrl } = job.data;
     const scan = await Scan.findById(scanId);
     
-    // Send email notification (skip for scheduled scans - they have their own handler)
+    // Send email notification (skip for scheduled scans)
     if (scan && !scan.scheduled) {
       await sendScanSummaryEmail(scan);
     }
@@ -115,28 +123,29 @@ export const configureBull = () => {
   scanQueue.on('failed', async (job, err) => {
     const { scanId, webhookUrl } = job.data;
     const scan = await Scan.findById(scanId);
-    
-    if (scan) {
+
+    // Don't overwrite a scan that already completed successfully
+    if (scan && scan.status !== 'completed') {
       scan.status = 'failed';
       scan.error = err.message;
-      scan.progress = 0;
+      // Keep whatever progress was reached — don't reset to 0
       await scan.save();
       await sendScanFailureEmail(scan, err.message);
-    }
 
-    if (webhookUrl) {
-      try {
-        await fetch(webhookUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: 'failed', scanId, error: err.message }),
-        });
-      } catch (e) {
-        logger.warn('Webhook failure notification failed', { webhookUrl, error: e.message });
+      publishScanUpdate(jobQueueApp(), { type: 'failed', scanId, error: err.message });
+
+      if (webhookUrl) {
+        try {
+          await fetch(webhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: 'failed', scanId, error: err.message }),
+          });
+        } catch (e) {
+          logger.warn('Webhook failure notification failed', { webhookUrl, error: e.message });
+        }
       }
     }
-
-    publishScanUpdate(jobQueueApp(), { type: 'failed', scanId, error: err.message });
   });
 };
 
@@ -150,7 +159,7 @@ const jobQueueApp = () => _app;
  */
 async function handleResults(scan, data) {
   const results = data.results || [];
-  
+
   scan.results = results;
   scan.progress = 100;
   scan.status = 'completed';
@@ -158,9 +167,10 @@ async function handleResults(scan, data) {
   await scan.save();
 
   publishScanUpdate(jobQueueApp(), {
-    type: 'progress',
+    type: 'completed',
     scanId: scan._id.toString(),
     progress: 100,
+    status: 'completed',
   });
 
   return true;

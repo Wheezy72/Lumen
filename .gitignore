@@ -43,6 +43,8 @@ Thumbs.db
 # Logs
 logs/
 *.log
+lumen-panel.*
+variable_change.txt
 
 # Testing
 coverage/

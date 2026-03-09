@@ -5,85 +5,100 @@ import { scanQueue } from '../queue/index.js';
 
 const router = express.Router();
 
-// Validation schema for creating a scan
-const scanCreateSchema = Joi.object({
+// Validation schema
+const scanSchema = Joi.object({
   targetUrl: Joi.string().uri({ allowRelative: false }).required(),
   scanProfile: Joi.array().items(Joi.string()).optional(),
   scheduledFor: Joi.date().iso().optional(),
 });
 
+// Get all scans for current user
 router.get('/', async (req, res, next) => {
   try {
-    const scans = await Scan.find({ userId: req.user.id }).sort({ createdAt: -1 }).limit(100);
+    const scans = await Scan.find({ userId: req.user.id })
+      .sort({ createdAt: -1 })
+      .limit(100);
     res.json(scans);
-  } catch (e) { next(e); }
+  } catch (err) {
+    next(err);
+  }
 });
 
+// Create a new scan
 router.post('/', async (req, res, next) => {
   try {
-    const payload = await scanCreateSchema.validateAsync(req.body, { stripUnknown: true });
+    const data = await scanSchema.validateAsync(req.body, { stripUnknown: true });
     
-    // Determine initial status based on scheduling
-    const isScheduled = payload.scheduledFor && new Date(payload.scheduledFor) > new Date();
-    const status = isScheduled ? 'scheduled' : 'queued';
+    // Check if scan is scheduled for later
+    const scheduledTime = data.scheduledFor ? new Date(data.scheduledFor) : null;
+    const isScheduled = scheduledTime && scheduledTime > new Date();
     
+    // Create scan record
     const scan = await Scan.create({
-      ...payload,
+      targetUrl: data.targetUrl,
+      scanProfile: data.scanProfile || [],
+      scheduledFor: scheduledTime,
       userId: req.user.id,
-      status,
-      progress: 0,
+      status: isScheduled ? 'scheduled' : 'queued',
       scheduled: isScheduled,
+      progress: 0,
     });
 
-    // Only queue immediately if not scheduled for later
-    if (!isScheduled) {
-      await scanQueue.add('start', {
-        scanId: scan._id.toString(),
-        scanProfile: payload.scanProfile,
-      }, {
-        attempts: 3,
-        backoff: { type: 'exponential', delay: 5000 },
-      });
-    } else {
-      // Schedule the job for later using Bull's delay feature
-      const delayMs = new Date(payload.scheduledFor).getTime() - Date.now();
-      await scanQueue.add('start', {
-        scanId: scan._id.toString(),
-        scanProfile: payload.scanProfile,
-      }, {
-        delay: delayMs,
-        attempts: 3,
-        backoff: { type: 'exponential', delay: 5000 },
-      });
+    // Add job to queue (with delay if scheduled)
+    const jobOptions = {
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 5000 },
+    };
+    
+    if (isScheduled) {
+      jobOptions.delay = scheduledTime.getTime() - Date.now();
     }
 
+    await scanQueue.add('start', {
+      scanId: scan._id.toString(),
+      scanProfile: data.scanProfile,
+    }, jobOptions);
+
     res.status(201).json(scan);
-  } catch (e) { next(e); }
+  } catch (err) {
+    next(err);
+  }
 });
 
+// Get single scan
 router.get('/:id', async (req, res, next) => {
   try {
-    const scan = await Scan.findOne({ _id: req.params.id, userId: req.user.id });
-    if (!scan) return res.status(404).json({ error: 'I could not find that scan.' });
+    const scan = await Scan.findOne({ 
+      _id: req.params.id, 
+      userId: req.user.id 
+    });
+    
+    if (!scan) {
+      return res.status(404).json({ error: 'Scan not found' });
+    }
+    
     res.json(scan);
-  } catch (e) { next(e); }
+  } catch (err) {
+    next(err);
+  }
 });
 
-router.put('/:id', async (req, res, next) => {
-  try {
-    const payload = await scanCreateSchema.validateAsync(req.body, { stripUnknown: true });
-    const scan = await Scan.findOneAndUpdate({ _id: req.params.id, userId: req.user.id }, payload, { new: true });
-    if (!scan) return res.status(404).json({ error: 'I could not find that scan.' });
-    res.json(scan);
-  } catch (e) { next(e); }
-});
-
+// Delete scan
 router.delete('/:id', async (req, res, next) => {
   try {
-    const scan = await Scan.findOneAndDelete({ _id: req.params.id, userId: req.user.id });
-    if (!scan) return res.status(404).json({ error: 'I could not find that scan.' });
-    res.json({ ok: true });
-  } catch (e) { next(e); }
+    const scan = await Scan.findOneAndDelete({ 
+      _id: req.params.id, 
+      userId: req.user.id 
+    });
+    
+    if (!scan) {
+      return res.status(404).json({ error: 'Scan not found' });
+    }
+    
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
 });
 
 export default router;
