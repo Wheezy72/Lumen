@@ -11,7 +11,7 @@ It gives you:
 The stack:
 
 - **Frontend**: React + Vite + Tailwind CSS
-- **Backend**: Node.js (Express), MongoDB, Redis + Bull, SSE
+- **Backend**: Node.js (Express), MongoDB, Redis + Bull, SSE (behind auth)
 - **Worker**: Python (requests, BeautifulSoup, dnspython, redis)
 
 ---
@@ -24,6 +24,14 @@ The stack:
 - **Black Lotus Labs Threat Intelligence** integration (conceptual)
 - **Automated security assessment** with detailed risk scoring
 
+### 🔐 **Authentication & App Security**
+- **Refresh-token sessions** (short-lived access token + refresh token)
+- **Session management** (logout-all + per-session revoke)
+- **CSRF protection** for authenticated state-changing requests
+- **2FA (TOTP)** support with encrypted secrets at rest
+- **Audit logging** for auth and scan actions
+- **SSE behind authentication** (authenticated event stream)
+
 ### 📊 **Advanced Reporting**
 - **PDF & CSV export** functionality
 - **Interactive charts** with Chart.js integration
@@ -34,7 +42,6 @@ The stack:
 - **Redis Bull Queue** for background job processing
 - **Server-Sent Events (SSE)** for real-time updates
 - **MongoDB** for efficient data storage
-- **JWT authentication** with secure session management
 
 ### UI/UX
 - **React 18** with a small set of page components
@@ -60,12 +67,16 @@ Python worker (scan engine)
 
 The usual flow for a scan is:
 
-1. User logs in (username + password) and submits a target URL.
-2. Backend creates a `Scan` in MongoDB and pushes a job onto a Bull queue.
-3. Queue handler publishes `{ scanId, targetUrl }` to Redis for the Python worker.
-4. Worker runs 10 small checks and publishes `{ scanId, results }` back.
-5. Backend enriches results (EPSS/threat intel), saves them, and updates the UI via SSE.
-6. Users can:
+1. User logs in (username/password, optional TOTP 2FA) and receives:
+   - A short-lived access token cookie
+   - A refresh token cookie
+   - A CSRF token cookie (must be echoed via `x-csrf-token` for state-changing requests)
+2. User submits a target URL.
+3. Backend creates a `Scan` in MongoDB and pushes a job onto a Bull queue.
+4. Queue handler publishes `{ scanId, targetUrl, scanProfile }` to Redis for the Python worker.
+5. Worker runs the selected checks and publishes `{ scanId, results }` back.
+6. Backend enriches results (EPSS/threat intel), saves them, and updates the UI via authenticated SSE.
+7. Users can:
    - View findings in the browser.
    - Export PDF or CSV reports.
    - Receive an email summary (if SMTP is configured).
@@ -78,6 +89,8 @@ The usual flow for a scan is:
 - **Node.js** (v18+)
 - **MongoDB** (v5+)
 - **Redis** (v6+)
+
+Run each service in its own terminal. Commands below assume you start from the repo root (`Lumen/`).
 
 ### 1️⃣ Clone & Setup
 ```bash
@@ -94,17 +107,25 @@ cp .env.example .env
 npm run dev
 ```
 
-### 3️⃣ Frontend Setup
+### 3️⃣ Python Worker Setup
+In a second terminal:
+
 ```bash
-cd ../frontend
-npm install
-npm run dev
+cd python
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+
+# Optional: allow scanning public targets (default is false)
+# export ALLOW_EXTERNAL=true
+
+python worker.py
 ```
 
-### 4️⃣ Start Queue Worker (Optional)
+### 4️⃣ Frontend Setup
 ```bash
-cd backend
-npm run worker
+cd frontend
+npm install
+npm run dev
 ```
 
 ### 5️⃣ Helper scripts
@@ -130,10 +151,30 @@ Copy `backend/.env.example` to `backend/.env` and configure:
 | `MONGODB_URI` | MongoDB connection string | `mongodb://localhost:27017/lumen_scanner` |
 | `REDIS_URL` | Redis connection URL | `redis://127.0.0.1:6379` |
 | `JWT_SECRET` | JWT signing secret | **(required)** |
+| `ACCESS_TOKEN_TTL` | Access token lifetime (JWT + cookie) | `15m` |
+| `COOKIE_SECURE` | Set `true` when served over HTTPS | `false` |
+| `COOKIE_DOMAIN` | Cookie domain; leave empty for host-only cookies (recommended) | *(empty)* |
+| `SESSION_COOKIE_NAME` | Access token cookie name | `session` |
+| `REFRESH_COOKIE_NAME` | Refresh token cookie name | `refresh` |
+| `CSRF_COOKIE_NAME` | CSRF token cookie name | `csrf` |
+| `TOTP_ENCRYPTION_KEY` | 32-byte base64 key used to encrypt 2FA secrets at rest | *(empty)* |
+| `TOTP_ISSUER` | Label shown in authenticator apps | `Lumen Scanner` |
+| `ALLOW_PRIVATE_TARGETS` | Allow scanning targets resolving to private/local IP ranges | `false` |
 | `PORT` | Backend server port | `4000` |
-| `CORS_ORIGINS` | Allowed frontend origins | `http://localhost:5173` |
+| `CORS_ORIGINS` | Allowed frontend origins (comma-separated) | `http://localhost:5173` |
 | `BLACKLOTUS_API_KEY` | Threat intelligence API key | *(optional)* |
 | `LOG_LEVEL` | Logging verbosity | `info` |
+
+See `backend/.env.example` for the full list.
+
+### Scan policy toggles (SSRF guardrails)
+
+Lumen is opinionated about what it will scan by default:
+
+- **Backend**: `ALLOW_PRIVATE_TARGETS` (default `false`) rejects targets that resolve to private/local ranges.
+- **Python worker**: `ALLOW_EXTERNAL` (default `false`) blocks scanning public/external targets unless explicitly enabled.
+
+For most local dev, you will either scan a local app (keep `ALLOW_EXTERNAL=false`) or enable external scanning with `ALLOW_EXTERNAL=true` in the Python worker environment.
 
 ---
 
@@ -145,14 +186,18 @@ Lumen/
 │   ├── src/
 │   │   ├── index.js         # Main server entry
 │   │   ├── routes/          # Auth, scans, reports, SSE
-│   │   ├── models/          # User and Scan Mongoose schemas
-│   │   ├── middleware/      # Auth and error handling
+│   │   ├── models/          # User, Session, Scan, AuditLog schemas
+│   │   ├── middleware/      # Auth, CSRF, audit logging, input hardening
 │   │   ├── queue/           # Bull queue + Redis bridge to worker
 │   │   ├── services/        # Email, threat intel helpers
 │   │   └── utils/           # Logger and small utilities
 │   ├── scripts/
+│   │   ├── e2e.js                   # Simple end-to-end runner
+│   │   ├── export.js                # Export reports/results to zip
+│   │   ├── generate-doc.js          # Generate API docs
+│   │   ├── generate-dev-guide-pdf.js# Builds docs/dev_guide.md → reports/dev_guide.pdf
 │   │   ├── health-check.js          # Calls /health and exits 0/1
-│   │   └── generate-dev-guide-pdf.js# Builds docs/dev_guide.md → reports/dev_guide.pdf
+│   │   └── scheduled-scans.js       # Scheduled scan runner
 ├── frontend/                # React client (Vite + Tailwind)
 │   ├── src/
 │   │   ├── App.jsx          # Shell + routing + layout
@@ -169,6 +214,7 @@ Lumen/
 │   └── public/
 ├── python/
 │   ├── worker.py            # Python scan engine listening on Redis
+│   ├── utils/               # SSRF-safe HTTP client + URL validation
 │   └── requirements.txt
 └── docs/
     └── dev_guide.md         # “Lumen Bible” developer guide
@@ -182,11 +228,16 @@ Lumen/
 
 #### Backend
 ```bash
-npm run dev      # Start development server
-npm run start    # Start production server
-npm run worker   # Start queue worker
-npm run test:e2e # Run E2E tests
-npm run docs     # Generate API docs
+npm run dev        # Start development server
+npm run start      # Start production server
+npm test           # Run Jest test suite
+npm run test:e2e   # Run E2E script
+npm run docs       # Generate API docs
+npm run export:zip # Export reports/results as a zip
+npm run scheduler  # Run scheduled scan runner (if enabled)
+npm run health     # Hit /health and exit 0/1
+npm run devguide:pdf # Render docs/dev_guide.md as a PDF
+npm run lint        # Currently a placeholder
 ```
 
 #### Frontend
@@ -194,6 +245,20 @@ npm run docs     # Generate API docs
 npm run dev      # Start dev server (http://localhost:5173)
 npm run build    # Build for production
 npm run preview  # Preview production build
+```
+
+### Testing
+
+#### Backend
+```bash
+cd backend
+npm test
+```
+
+#### Frontend
+```bash
+cd frontend
+npm run build
 ```
 
 ### 🔍 Code Quality
@@ -206,9 +271,12 @@ npm run preview  # Preview production build
 
 ## 🔐 Security Features
 
-- **🛡️ Helmet.js** - Security headers
-- **🔐 JWT Authentication** - Secure token-based auth
-- **🍪 HTTP-only Cookies** - XSS protection
+- **🛡️ Helmet.js + CSP** - Security headers
+- **🍪 Cookie-based auth** - Short-lived access token + refresh token cookies
+- **🧾 Session management** - Logout-all + per-session revoke
+- **🧬 CSRF protection** - `x-csrf-token` header matched against CSRF cookie
+- **🔐 2FA (TOTP)** - Optional second factor with encrypted secrets at rest
+- **🧾 Audit logging** - Records auth and scan actions
 - **🌐 CORS Configuration** - Cross-origin request control
 - **📝 Input Validation** - Joi schema validation
 - **🔒 Password Hashing** - bcrypt implementation
@@ -219,10 +287,10 @@ npm run preview  # Preview production build
 ## 📈 Performance
 
 - **⚡ Vite** - Sub-second HMR
-- **🚀 Redis Caching** - Lightning-fast data access
+- **🚀 Redis (Bull + pub/sub)** - Queueing and worker messaging
 - **📦 Code Splitting** - Optimized bundle sizes
-- **🔄 Background Jobs** - Non-blocking operations
-- **📡 SSE** - Real-time updates without polling
+- **🔄 Background Jobs** - Non-blocking scan execution
+- **📡 SSE (authenticated)** - Real-time updates without polling
 
 ---
 

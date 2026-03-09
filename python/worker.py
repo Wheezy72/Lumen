@@ -474,7 +474,7 @@ def run_scan(target_url: str, profile: Optional[List[str]] = None) -> List[Dict]
         return issues
 
     try:
-        validate_url_for_request(target_url, allow_external=ALLOW_EXTERNAL)
+        validate_url_for_request(target_url, allow_external=ALLOW_EXTERNAL, allow_private=ALLOW_PRIVATE_TARGETS)
     except ExternalTargetNotAllowedError as e:
         issues.append(
             {

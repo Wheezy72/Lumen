@@ -49,7 +49,7 @@ export default function ErrorPage({ error, onRetry }) {
         <p className="text-gray-500 mb-6">{description}</p>
 
         {/* Error details (development only) */}
-        {error?.message && process.env.NODE_ENV === 'development' && (
+        {error?.message && import.meta.env.DEV && (
           <div className="mb-6 p-3 bg-gray-100 rounded-lg text-left">
             <p className="text-xs text-gray-500 font-mono break-all">{error.message}</p>
           </div>
