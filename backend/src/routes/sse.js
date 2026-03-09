@@ -11,8 +11,6 @@ export const sseInit = (app) => {
 export const sseRouter = express.Router();
 
 sseRouter.get('/events', (req, res) => {
-  const userId = req.user?.id;
-
   res.set({
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
@@ -20,19 +18,27 @@ sseRouter.get('/events', (req, res) => {
   });
   res.flushHeaders();
 
+  const userId = req.user?.id?.toString();
+
   const onEvent = (data) => {
-    if (userId && data?.userId && data.userId !== userId) return;
+    if (!userId) return;
+    if (data?.userId && data.userId.toString() !== userId) return;
     res.write(`data: ${JSON.stringify(data)}\n\n`);
   };
+
+  const heartbeat = setInterval(() => {
+    res.write(`event: ping\ndata: {}\n\n`);
+  }, 25000);
 
   emitter.on('scan-update', onEvent);
 
   req.on('close', () => {
+    clearInterval(heartbeat);
     emitter.removeListener('scan-update', onEvent);
   });
 });
 
 export const publishScanUpdate = (app, data) => {
-  const em = app.get('sseEmitter') || emitter;
+  const em = app?.get('sseEmitter') || emitter;
   em.emit('scan-update', data);
 };

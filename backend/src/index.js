@@ -15,10 +15,10 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import mongoose from 'mongoose';
 import morgan from 'morgan';
-import mongoSanitize from 'express-mongo-sanitize';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
+import mongoSanitize from 'express-mongo-sanitize';
 import { logger } from './utils/logger.js';
 import { sseRouter, sseInit } from './routes/sse.js';
 import authRouter from './routes/auth.js';
@@ -26,8 +26,9 @@ import scanRouter from './routes/scans.js';
 import reportRouter from './routes/reports.js';
 import { authMiddleware } from './middleware/auth.js';
 import { errorHandler } from './middleware/error.js';
-import { xssSanitizerMiddleware } from './middleware/xss.js';
 import { configureBull, setJobQueueApp } from './queue/index.js';
+import { xssSanitizerMiddleware } from './middleware/xss.js';
+import { csrfProtection, ensureCsrfCookie } from './middleware/csrf.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -52,24 +53,12 @@ if (!fs.existsSync(reportsPath)) {
 const app = express();
 app.disable('x-powered-by');
 
+export { app };
+
 const isProduction = NODE_ENV === 'production';
 
-// Security headers via Helmet.
-// HSTS is enabled only in production to avoid forcing HTTPS on localhost.
-const helmetOptions = {
-  strictTransportSecurity: isProduction
-    ? { maxAge: 31536000, includeSubDomains: true, preload: true }
-    : false,
-  xFrameOptions: { action: 'deny' },
-  xXssProtection: false,
-  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
-  permissionsPolicy: {
-    policy: {
-      geolocation: [],
-      camera: [],
-      microphone: [],
-    },
-  },
+// Security headers via Helmet with CSP
+app.use(helmet({
   contentSecurityPolicy: {
     useDefaults: true,
     directives: {
@@ -77,36 +66,45 @@ const helmetOptions = {
       scriptSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", 'data:', 'blob:'],
-      fontSrc: ["'self'"],
       connectSrc: ["'self'", ...(CORS_ORIGINS ? CORS_ORIGINS.split(',') : [])],
       frameAncestors: ["'none'"],
       ...(isProduction ? { 'upgrade-insecure-requests': [] } : {}),
     },
   },
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+  // Modern browsers ignore X-XSS-Protection; don't send legacy headers.
+  xssFilter: false,
+  permissionsPolicy: {
+    features: {
+      geolocation: [],
+      camera: [],
+      microphone: [],
+    },
+  },
   crossOriginResourcePolicy: { policy: 'same-site' },
-};
+}));
 
-app.use(helmet(helmetOptions));
+if (isProduction) {
+  app.use(helmet.hsts({
+    maxAge: 31536000,
+    includeSubDomains: true,
+    preload: true,
+  }));
+}
 
-// CORS for frontend (tighter defaults in production)
-const allowedOriginsRaw = CORS_ORIGINS ? CORS_ORIGINS.split(',').map(o => o.trim()).filter(Boolean) : [];
-const allowedOrigins = allowedOriginsRaw.length
-  ? allowedOriginsRaw
-  : (isProduction ? [] : ['http://localhost:5173', 'http://localhost:3000']);
-
+// CORS for frontend
+const allowedOrigins = CORS_ORIGINS ? CORS_ORIGINS.split(',').map(o => o.trim()).filter(Boolean) : [];
 app.use(cors({
   origin: function (origin, callback) {
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) return callback(null, true);
-
-    const err = new Error('CORS not allowed');
-    err.status = 403;
-    callback(err);
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      const err = new Error('CORS not allowed');
+      err.status = 403;
+      callback(err);
+    }
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  optionsSuccessStatus: 204,
 }));
 
 app.use(morgan('combined'));
@@ -117,6 +115,10 @@ app.use(cookieParser());
 // Input hardening
 app.use(mongoSanitize({ replaceWith: '_' }));
 app.use(xssSanitizerMiddleware);
+
+// CSRF
+app.use(ensureCsrfCookie);
+app.use(csrfProtection);
 
 // Serve generated reports over HTTP (fixes file:// blocked downloads)
 app.use('/static/reports', express.static(reportsPath));
@@ -130,8 +132,10 @@ mongoose.connect(MONGODB_URI, { autoIndex: true })
   });
 
 // Initialize Bull queues and worker delegation
-configureBull();
-setJobQueueApp(app);
+if (process.env.NODE_ENV !== 'test') {
+  configureBull();
+  setJobQueueApp(app);
+}
 
 // SSE setup
 sseInit(app);
@@ -154,6 +158,8 @@ app.get('/health', (req, res) => {
 app.use(errorHandler);
 
 // Start server
-app.listen(PORT, () => {
-  logger.info(`Backend server running on port ${PORT}`);
-});
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(PORT, () => {
+    logger.info(`Backend server running on port ${PORT}`);
+  });
+}

@@ -8,6 +8,7 @@
     "dev": "node src/index.js",
     "start": "node src/index.js",
     "worker": "node src/queue/index.js",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "test:e2e": "node scripts/e2e.js",
     "export:zip": "node scripts/export.js",
     "docs": "node scripts/generate-doc.js",
@@ -35,9 +36,16 @@
     "morgan": "^1.10.1",
     "node-fetch": "^3.3.2",
     "nodemailer": "^6.9.15",
+    "otplib": "^13.3.0",
     "pdfkit": "^0.13.0",
+    "qrcode": "^1.5.4",
     "rate-limit-redis": "^4.3.1",
     "winston": "^3.13.0",
     "xss": "^1.0.15"
+  },
+  "devDependencies": {
+    "jest": "^30.0.0",
+    "mongodb-memory-server": "^10.2.0",
+    "supertest": "^7.1.1"
   }
 }

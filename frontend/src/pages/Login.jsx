@@ -5,6 +5,9 @@ import { Link, useNavigate } from 'react-router-dom';
 export default function Login({ onLogin, message }) {
   const navigate = useNavigate();
   const [form, setForm] = useState({ username: '', password: '' });
+  const [totpCode, setTotpCode] = useState('');
+  const [tempToken, setTempToken] = useState('');
+  const [needs2fa, setNeeds2fa] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -18,13 +21,32 @@ export default function Login({ onLogin, message }) {
     setLoading(true);
 
     try {
-      const response = await axios.post('/api/auth/login', form);
-      
-      // Pass the user data back up to App.jsx to unlock the dashboard
+      if (!needs2fa) {
+        const response = await axios.post('/api/auth/login', form);
+
+        if (response.data?.requiresTwoFactor) {
+          setNeeds2fa(true);
+          setTempToken(response.data.tempToken);
+          return;
+        }
+
+        if (onLogin) {
+          onLogin(response.data);
+        }
+
+        navigate('/dashboard');
+        return;
+      }
+
+      const response = await axios.post('/api/auth/login/2fa', {
+        tempToken,
+        code: totpCode,
+      });
+
       if (onLogin) {
         onLogin(response.data);
       }
-      
+
       navigate('/dashboard');
     } catch (err) {
       const errMessage = err.response?.data?.error || 'Login failed. Please try again.';
@@ -62,56 +84,83 @@ export default function Login({ onLogin, message }) {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Username
-              </label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  </svg>
-                </span>
-                <input
-                  type="text"
-                  name="username"
-                  value={form.username}
-                  onChange={handleChange}
-                  className="input pl-10"
-                  placeholder="Enter your username"
-                  required
-                />
-              </div>
-            </div>
+            {!needs2fa ? (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Username
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      </svg>
+                    </span>
+                    <input
+                      type="text"
+                      name="username"
+                      value={form.username}
+                      onChange={handleChange}
+                      className="input pl-10"
+                      placeholder="Enter your username"
+                      required
+                    />
+                  </div>
+                </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Password
-              </label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                  </svg>
-                </span>
-                <input
-                  type="password"
-                  name="password"
-                  value={form.password}
-                  onChange={handleChange}
-                  className="input pl-10"
-                  placeholder="Enter your password"
-                  required
-                />
-              </div>
-            </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Password
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                      </svg>
+                    </span>
+                    <input
+                      type="password"
+                      name="password"
+                      value={form.password}
+                      onChange={handleChange}
+                      className="input pl-10"
+                      placeholder="Enter your password"
+                      required
+                    />
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="mb-2 p-4 bg-primary-900/30 border border-primary-500/30 rounded-lg">
+                  <p className="text-primary-400 text-sm text-center">
+                    Two-factor authentication is enabled on this account. Enter your authenticator code.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Authenticator code
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={totpCode}
+                    onChange={(e) => setTotpCode(e.target.value)}
+                    className="input"
+                    placeholder="123456"
+                    required
+                  />
+                </div>
+              </>
+            )}
 
             <button
               type="submit"
               disabled={loading}
               className="w-full py-3 btn-primary transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Authenticating...' : 'Sign In'}
+              {loading ? 'Authenticating...' : (needs2fa ? 'Verify' : 'Sign In')}
             </button>
           </form>
 

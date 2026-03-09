@@ -44,8 +44,8 @@ export default function Register({ onRegister }) {
     setError('');
     setErrorDetails([]);
 
-    if (form.password !== form.confirmPassword) {
-      setError('Passwords do not match');
+    if (form.password.length < 12) {
+      setError('Password must be at least 12 characters');
       return;
     }
 

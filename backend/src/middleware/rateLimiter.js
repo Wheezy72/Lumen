@@ -3,17 +3,23 @@ import { RedisStore } from 'rate-limit-redis';
 import Redis from 'ioredis';
 import { logger } from '../utils/logger.js';
 
+const isTest = process.env.NODE_ENV === 'test';
 const REDIS_URL = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
 
-const redis = new Redis(REDIS_URL);
-redis.on('error', (err) => {
-  logger.error('Redis error (rate limiter)', { error: err.message });
-});
+const redis = isTest ? null : new Redis(REDIS_URL);
+if (redis) {
+  redis.on('error', (err) => {
+    logger.error('Redis error (rate limiter)', { error: err.message });
+  });
+}
 
-const createStore = (prefix) => new RedisStore({
-  sendCommand: (command, ...args) => redis.call(command, ...args),
-  prefix,
-});
+const createStore = (prefix) => {
+  if (isTest) return undefined;
+  return new RedisStore({
+    sendCommand: (command, ...args) => redis.call(command, ...args),
+    prefix,
+  });
+};
 
 const rateLimitHandler = (label) => (req, res, next, options) => {
   logger.warn('Rate limit exceeded', {

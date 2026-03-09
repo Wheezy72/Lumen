@@ -9,6 +9,10 @@ const userSchema = new mongoose.Schema({
   passwordHash: { type: String, required: true },
   name: { type: String, required: false, default: '' },
   roles: { type: [String], default: ['user'] },
+
+  totpEnabled: { type: Boolean, default: false },
+  totpSecret: { type: String, default: '' },
+  totpTempSecret: { type: String, default: '' },
 }, { timestamps: true });
 
 export default mongoose.model('User', userSchema);

@@ -14,6 +14,26 @@ import ErrorPage from './pages/ErrorPage.jsx';
 
 axios.defaults.withCredentials = true;
 
+function getCookie(name) {
+  const cookies = document.cookie ? document.cookie.split(';') : [];
+  for (const raw of cookies) {
+    const [k, ...rest] = raw.trim().split('=');
+    if (k === name) {
+      return decodeURIComponent(rest.join('='));
+    }
+  }
+  return null;
+}
+
+axios.interceptors.request.use((config) => {
+  const csrf = getCookie('csrf');
+  if (csrf) {
+    config.headers = config.headers || {};
+    config.headers['x-csrf-token'] = csrf;
+  }
+  return config;
+});
+
 export default function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
