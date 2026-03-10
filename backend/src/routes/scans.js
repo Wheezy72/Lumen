@@ -56,18 +56,15 @@ router.get('/', async (req, res, next) => {
   }
 });
 
-// List scans that introduced new issues vs their previous scan.
-router.get('/regressions', async (req, res, next) => {
+// List completed scans that have a previous scan to compare against.
+const listChanges = async (req, res, next) => {
   try {
     const scans = await Scan.find({
       userId: req.user.id,
       status: 'completed',
-      $or: [
-        { 'diffSummary.newCount': { $gt: 0 } },
-        { 'policy.status': 'fail' },
-      ],
+      'diffSummary.compareScanId': { $ne: null },
     })
-      .select('_id targetUrl targetHost status createdAt completedAt policy diffSummary')
+      .select('_id targetUrl targetHost status createdAt completedAt diffSummary')
       .sort({ createdAt: -1 })
       .limit(100);
 
@@ -75,7 +72,10 @@ router.get('/regressions', async (req, res, next) => {
   } catch (err) {
     next(err);
   }
-});
+};
+
+router.get('/regressions', listChanges);
+router.get('/changes', listChanges);
 
 // Create a new scan
 router.post('/', async (req, res, next) => {

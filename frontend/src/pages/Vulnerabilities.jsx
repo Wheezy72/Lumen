@@ -1,10 +1,26 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
 export default function Vulnerabilities() {
   const [expandedCard, setExpandedCard] = useState(null);
   const [activeTab, setActiveTab] = useState('vulnerabilities');
+  const [missingImages, setMissingImages] = useState(() => new Set());
   const location = useLocation();
+
+  const headerArt = useMemo(
+    () => ({
+      sqli: { from: 'from-red-500/25', to: 'to-amber-500/10' },
+      xss: { from: 'from-amber-500/25', to: 'to-purple-500/10' },
+      access_control: { from: 'from-purple-500/25', to: 'to-blue-500/10' },
+      headers: { from: 'from-blue-500/25', to: 'to-emerald-500/10' },
+      cookies: { from: 'from-emerald-500/25', to: 'to-blue-500/10' },
+      error: { from: 'from-slate-500/25', to: 'to-red-500/10' },
+      rate_limit: { from: 'from-blue-500/20', to: 'to-slate-500/10' },
+      subdomain: { from: 'from-emerald-500/20', to: 'to-slate-500/10' },
+      logging: { from: 'from-slate-500/25', to: 'to-slate-500/10' },
+    }),
+    []
+  );
 
   const vulnerabilities = [
     {
@@ -20,7 +36,7 @@ export default function Vulnerabilities() {
         'input' +
         '\' AND password = \'' +
         'input' +
-        '\'` instead of using parameters. The payload \' OR 1=1 -- logs in as the first user.',
+        '\'` instead of using parameters. The input \' OR 1=1 -- logs in as the first user.',
       prevention:
         'Use parameterised queries / prepared statements, never concatenate user input into SQL, and apply server-side input validation.'
     },
@@ -83,7 +99,7 @@ export default function Vulnerabilities() {
       severity: 'Medium',
       shortDesc: 'Stack traces and internal details are shown to end users.',
       humanDesc:
-        'Detailed error messages can reveal framework versions, file paths and SQL fragments. Attackers use this information to fine-tune payloads and exploit chains.',
+        'Detailed error messages can reveal framework versions, file paths and SQL fragments. Attackers use this information to fine-tune their inputs and build exploit chains.',
       realExample:
         'A bad request causes the application to render a full stack trace including internal function names and SQL queries on the public site.',
       prevention:
@@ -157,7 +173,7 @@ export default function Vulnerabilities() {
     }
   ];
 
-  const toggleCard = (id) => setExpandedCard(expandedCard === id ? null : id);
+  const toggleCard = (id) => setExpandedCard((prev) => (prev === id ? null : id));
 
   useEffect(() => {
     if (!location.hash) return;
@@ -179,14 +195,30 @@ export default function Vulnerabilities() {
     return `${base} bg-slate-500/15 text-slate-400 border-slate-500/25`;
   };
 
+  const markImageMissing = (slug) => {
+    setMissingImages((prev) => {
+      if (prev.has(slug)) return prev;
+      const next = new Set(prev);
+      next.add(slug);
+      return next;
+    });
+  };
+
   return (
     <div className="max-w-6xl mx-auto">
-      <div className="rounded-2xl border border-slate-800 bg-dark-200 p-6 sm:p-8">
-        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-5">
+      <div className="rounded-2xl border border-slate-800 bg-dark-200 p-6 sm:p-8 overflow-hidden relative">
+        <div className="absolute inset-0 bg-gradient-to-r from-primary-500/15 to-secondary-500/10 dark:from-primary-500/20 dark:to-secondary-500/15" />
+        <div className="absolute -top-24 -right-24 w-[340px] h-[340px] rounded-full bg-primary-500/10 blur-3xl" />
+        <div className="absolute -bottom-28 -left-28 w-[360px] h-[360px] rounded-full bg-secondary-500/10 blur-3xl" />
+
+        <div className="relative flex flex-col md:flex-row md:items-end md:justify-between gap-5">
           <div>
             <h1 className="text-3xl font-bold bg-gradient-to-r from-primary-400 to-secondary-400 bg-clip-text text-transparent">Learning centre</h1>
             <p className="text-sm text-gray-500 mt-2 max-w-2xl">
-              Practical explanations of common web vulnerabilities and a few high-level case studies. Use this to justify your design choices in the final report.
+              Short, practical notes on common web issues and a few real-world incidents.
+            </p>
+            <p className="text-xs text-gray-500 mt-2 max-w-2xl">
+              Tip: you can add your own header images by dropping files into <span className="font-mono">frontend/public/learn</span> (for example <span className="font-mono">sqli.jpg</span>).
             </p>
           </div>
 
@@ -195,10 +227,10 @@ export default function Vulnerabilities() {
               Vulnerabilities
             </TabButton>
             <TabButton active={activeTab === 'breaches'} onClick={() => setActiveTab('breaches')}>
-              Historic breaches
+              Incidents
             </TabButton>
             <Link to="/new" className="btn btn-primary text-sm px-4 py-2">
-              Start a scan
+              New scan
             </Link>
           </div>
         </div>
@@ -209,46 +241,72 @@ export default function Vulnerabilities() {
           <div className="rounded-xl border border-slate-800 bg-dark-200 p-5">
             <h2 className="text-sm font-semibold text-gray-200">Common web vulnerabilities</h2>
             <p className="text-sm text-gray-500 mt-2">
-              Click a card to expand: how the issue happens, what it looks like in real systems, and the mitigation you can mention in your dissertation.
+              Click a card to expand: what it is, what it looks like, and how to reduce the risk.
             </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {vulnerabilities.map((v) => (
-              <article
-                key={v.id}
-                id={v.slug}
-                className="rounded-xl border border-slate-800 bg-dark-200 overflow-hidden transition hover:border-primary-500/30"
-              >
-                <button
-                  type="button"
-                  onClick={() => toggleCard(v.id)}
-                  className="w-full text-left p-5 flex items-start justify-between gap-4"
+            {vulnerabilities.map((v) => {
+              const art = headerArt[v.slug] || { from: 'from-primary-500/20', to: 'to-secondary-500/10' };
+              const imageUrl = `/learn/${v.slug}.jpg`;
+              const showImage = !missingImages.has(v.slug);
+
+              return (
+                <article
+                  key={v.id}
+                  id={v.slug}
+                  className="rounded-xl border border-slate-800 bg-dark-200 overflow-hidden transition hover:border-primary-500/30"
                 >
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-200">{v.name}</h3>
-                    <p className="mt-1 text-xs text-gray-500">{v.shortDesc}</p>
+                  <div className="relative h-20 sm:h-24 w-full overflow-hidden border-b border-slate-800">
+                    {showImage && (
+                      <img
+                        src={imageUrl}
+                        alt=""
+                        className="absolute inset-0 h-full w-full object-cover opacity-80"
+                        onError={() => markImageMissing(v.slug)}
+                        loading="lazy"
+                      />
+                    )}
+                    <div className={`absolute inset-0 bg-gradient-to-r ${art.from} ${art.to}`} />
+                    <div
+                      className="absolute inset-0 opacity-80 dark:opacity-60"
+                      style={{
+                        backgroundImage:
+                          'radial-gradient(circle at 15% 10%, rgba(255,255,255,0.14), transparent 50%), radial-gradient(circle at 85% 0%, rgba(255,255,255,0.10), transparent 55%)',
+                      }}
+                    />
                   </div>
-                  <span className={severityBadge(v.severity)}>{v.severity}</span>
-                </button>
 
-                {expandedCard === v.id && (
-                  <div className="px-5 pb-5 border-t border-slate-800 animate-slide-up">
-                    <div className="pt-4 space-y-4">
-                      <LearnSection title="How it works">{v.humanDesc}</LearnSection>
-
-                      <LearnSection title="Real example">
-                        <div className="rounded-lg bg-black/55 border border-slate-800 p-3 text-xs text-gray-300 font-mono whitespace-pre-wrap">
-                          {v.realExample}
-                        </div>
-                      </LearnSection>
-
-                      <LearnSection title="How to reduce the risk">{v.prevention}</LearnSection>
+                  <button
+                    type="button"
+                    onClick={() => toggleCard(v.id)}
+                    className="w-full text-left p-5 flex items-start justify-between gap-4"
+                  >
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-200">{v.name}</h3>
+                      <p className="mt-1 text-xs text-gray-500">{v.shortDesc}</p>
                     </div>
-                  </div>
-                )}
-              </article>
-            ))}
+                    <span className={severityBadge(v.severity)}>{v.severity}</span>
+                  </button>
+
+                  {expandedCard === v.id && (
+                    <div className="px-5 pb-5 border-t border-slate-800 animate-slide-up">
+                      <div className="pt-4 space-y-4">
+                        <LearnSection title="How it works">{v.humanDesc}</LearnSection>
+
+                        <LearnSection title="Real example">
+                          <div className="rounded-lg bg-black/5 dark:bg-black/55 border border-slate-800 p-3 text-xs text-gray-300 font-mono whitespace-pre-wrap">
+                            {v.realExample}
+                          </div>
+                        </LearnSection>
+
+                        <LearnSection title="How to reduce the risk">{v.prevention}</LearnSection>
+                      </div>
+                    </div>
+                  )}
+                </article>
+              );
+            })}
           </div>
         </div>
       )}
@@ -258,7 +316,7 @@ export default function Vulnerabilities() {
           <div className="rounded-xl border border-slate-800 bg-dark-200 p-5">
             <h2 className="text-sm font-semibold text-gray-200">Security incidents in the real world</h2>
             <p className="text-sm text-gray-500 mt-2">
-              These examples help you connect your scanner’s findings to real consequences (good for the “why this matters” section).
+              These examples help you connect scan findings to real consequences.
             </p>
           </div>
 

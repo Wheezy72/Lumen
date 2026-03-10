@@ -1,7 +1,7 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-// Main Express application for the Lumen backend.
+// Main Express application for the backend.
 //
 // This file wires together:
 // - Security middleware (Helmet, CORS, cookies)

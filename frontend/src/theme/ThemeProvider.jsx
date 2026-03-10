@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 
-const STORAGE_KEY = "lumen-theme";
+const STORAGE_KEY = "app-theme";
 
 function getInitialTheme() {
   if (typeof window === "undefined") return "dark";

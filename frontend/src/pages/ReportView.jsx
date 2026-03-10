@@ -12,12 +12,7 @@ const SEV = {
   info:     { bg: 'bg-slate-500/15 text-slate-400 border border-slate-500/30',     dot: 'bg-slate-400' },
 };
 
-const POLICY = {
-  pass:   { label: 'Pass', cls: 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' },
-  fail:   { label: 'Fail', cls: 'bg-red-500/15 text-red-400 border border-red-500/30' },
-  skipped:{ label: 'Off',  cls: 'bg-slate-500/10 text-gray-400 border border-slate-800' },
-  unknown:{ label: '—',    cls: 'bg-slate-500/10 text-gray-400 border border-slate-800' },
-};
+
 
 export default function ReportView() {
   const { scanId } = useParams();
@@ -289,20 +284,25 @@ export default function ReportView() {
           </div>
 
           <div className="mt-4 space-y-3">
-            <div className="rounded-lg border border-slate-800 bg-black/30 p-3">
-              <p className="text-xs text-gray-600">Policy gate</p>
-              <div className="mt-1 flex items-center justify-between gap-2">
-                <PolicyBadge status={scan?.policy?.status || 'unknown'} />
-                {scan?.diffSummary?.newBlockedCount != null && scan?.policy?.status !== 'unknown' && (
-                  <span className="text-xs text-gray-600 tabular-nums">New high/critical: {scan.diffSummary.newBlockedCount}</span>
-                )}
-              </div>
+            <div className="rounded-lg border border-slate-800 bg-black/5 dark:bg-black/30 p-3">
+              <p className="text-xs text-gray-600">Attention</p>
+              {diffData?.compareScanId ? (
+                (scan?.diffSummary?.newBlockedCount || 0) > 0 ? (
+                  <p className="text-sm text-red-400 mt-1">
+                    New high/critical issues: <span className="font-semibold tabular-nums">{scan.diffSummary.newBlockedCount}</span>
+                  </p>
+                ) : (
+                  <p className="text-sm text-emerald-400 mt-1">No new high-risk issues compared to the last scan.</p>
+                )
+              ) : (
+                <p className="text-sm text-gray-600 mt-1">Run another scan for this site to see what changed.</p>
+              )}
             </div>
 
-            <div className="rounded-lg border border-slate-800 bg-black/30 p-3">
-              <p className="text-xs text-gray-600">Diff</p>
+            <div className="rounded-lg border border-slate-800 bg-black/5 dark:bg-black/30 p-3">
+              <p className="text-xs text-gray-600">Changes</p>
               {diffLoading ? (
-                <p className="text-sm text-gray-500 mt-1">Loading diff…</p>
+                <p className="text-sm text-gray-500 mt-1">Loading…</p>
               ) : diffData?.compareScanId ? (
                 <div className="mt-2 space-y-2">
                   <p className="text-sm text-gray-200">Compared to {formatLocalDateTime(diffData.compareCreatedAt)}</p>
@@ -310,19 +310,19 @@ export default function ReportView() {
                     <div className="grid grid-cols-3 gap-2 text-xs">
                       <Stat label="New" value={diffData.diff.newIssues?.length || 0} className="text-red-400" />
                       <Stat label="Fixed" value={diffData.diff.fixedIssues?.length || 0} className="text-emerald-400" />
-                      <Stat label="Persist" value={diffData.diff.persisting?.length || 0} className="text-gray-300" />
+                      <Stat label="Still present" value={diffData.diff.persisting?.length || 0} className="text-gray-300" />
                     </div>
                   ) : (
-                    <p className="text-sm text-gray-600">No diff available yet.</p>
+                    <p className="text-sm text-gray-600">No comparison available yet.</p>
                   )}
                 </div>
               ) : (
-                <p className="text-sm text-gray-600 mt-1">No previous scan for this host yet. Run another scan to see what changed.</p>
+                <p className="text-sm text-gray-600 mt-1">No previous scan for this site yet.</p>
               )}
             </div>
 
             <p className="text-xs text-gray-600 leading-relaxed">
-              <span className="text-gray-400">New</span> = not present last scan • <span className="text-gray-400">Fixed</span> = gone since last scan • <span className="text-gray-400">Persist</span> = still present.
+              <span className="text-gray-400">New</span> = not present last scan • <span className="text-gray-400">Fixed</span> = gone since last scan • <span className="text-gray-400">Still present</span> = seen in both scans.
             </p>
           </div>
         </div>
@@ -441,7 +441,7 @@ export default function ReportView() {
                     onClick={() => setSelectedIndex(i)}
                     className={`p-3 rounded-lg cursor-pointer transition border ${
                       active
-                        ? 'bg-primary-900/30 border-primary-700/50'
+                        ? 'bg-primary-500/10 dark:bg-primary-900/30 border-primary-500/30 dark:border-primary-700/50'
                         : 'border-transparent hover:bg-black/5 dark:hover:bg-slate-800/50'
                     }`}
                   >
@@ -489,14 +489,14 @@ export default function ReportView() {
               {selectedVuln.evidence && (
                 <div>
                   <h4 className="text-xs font-semibold text-primary-500 uppercase tracking-wide mb-2">Evidence</h4>
-                  <div className="rounded-lg bg-black/50 border border-slate-800 p-3 text-xs text-gray-300 font-mono break-all">
+                  <div className="rounded-lg bg-black/5 dark:bg-black/50 border border-slate-800 p-3 text-xs text-gray-300 font-mono break-all">
                     {selectedVuln.evidence}
                   </div>
                 </div>
               )}
 
               <div>
-                <h4 className="text-xs font-semibold text-primary-500 uppercase tracking-wide mb-2">How it was detected</h4>
+                <h4 className="text-xs font-semibold text-primary-500 uppercase tracking-wide mb-2">Detection method</h4>
                 <p className="text-gray-400 text-sm">{getDetectionMethod(selectedVuln.category)}</p>
               </div>
 
@@ -504,7 +504,7 @@ export default function ReportView() {
                 <h4 className="text-xs font-semibold text-emerald-400 uppercase tracking-wide mb-2">How to fix</h4>
                 <p className="text-emerald-300/80 text-sm mb-3">{getRemediationAdvice(selectedVuln.category)}</p>
                 {getCodeExample(selectedVuln.category) && (
-                  <pre className="mt-2 rounded-lg bg-black/60 border border-slate-800 p-3 text-xs text-emerald-400 font-mono overflow-x-auto whitespace-pre">
+                  <pre className="mt-2 rounded-lg bg-black/5 dark:bg-black/60 border border-slate-800 p-3 text-xs text-emerald-400 font-mono overflow-x-auto whitespace-pre">
                     {getCodeExample(selectedVuln.category)}
                   </pre>
                 )}
@@ -558,18 +558,11 @@ function SeverityBadge({ severity }) {
   );
 }
 
-function PolicyBadge({ status }) {
-  const meta = POLICY[status] || POLICY.unknown;
-  return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${meta.cls}`}>
-      Policy: {meta.label}
-    </span>
-  );
-}
+
 
 function Stat({ label, value, className }) {
   return (
-    <div className="rounded-lg border border-slate-800 bg-black/30 p-2">
+    <div className="rounded-lg border border-slate-800 bg-black/5 dark:bg-black/30 p-2">
       <p className="text-[11px] text-gray-600">{label}</p>
       <p className={`text-sm font-semibold tabular-nums ${className || 'text-gray-200'}`}>{value}</p>
     </div>
@@ -578,19 +571,19 @@ function Stat({ label, value, className }) {
 
 function getDetectionMethod(category) {
   const methods = {
-    xss: 'A script tag was injected into query parameters and the response was checked for reflection.',
-    sqli: 'SQL payloads were sent and the response was checked for database error messages.',
-    headers: 'HTTP response headers were analyzed for missing security headers.',
-    ssl: 'A TLS connection was established to inspect the certificate and protocol.',
-    tls: 'A TLS connection was established to inspect the certificate and protocol.',
-    traversal: 'Path traversal sequences were injected to attempt accessing sensitive files.',
+    xss: 'A harmless script tag was added to the URL and the response was checked for reflection.',
+    sqli: 'Test input was added to the URL and the response was checked for database error messages.',
+    headers: 'HTTP response headers were checked for missing security headers.',
+    ssl: 'A TLS connection was opened to inspect the certificate and protocol.',
+    tls: 'A TLS connection was opened to inspect the certificate and protocol.',
+    traversal: 'Path traversal sequences were added to the URL to check for sensitive file exposure.',
     subdomain: 'Common subdomain names were resolved to discover exposed hosts.',
     cookies: 'Set-Cookie headers were inspected for missing security flags.',
     error: 'Requests were sent to trigger errors and check for stack trace exposure.',
     access_control: 'Numeric IDs were modified to test access control.',
     rate_limit: 'Multiple requests were sent to check for rate limiting.',
   };
-  return methods[category] || 'Automated security checks were run against the target.';
+  return methods[category] || 'Automated checks were run against the site.';
 }
 
 function getRemediationAdvice(category) {
