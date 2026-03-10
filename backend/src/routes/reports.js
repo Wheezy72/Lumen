@@ -26,6 +26,14 @@ function sanitizeName(s = '') {
   return s.replace(/[^a-z0-9\-_.]/gi, '_');
 }
 
+function formatDateTime(value) {
+  if (!value) return '—';
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return '—';
+  // ISO-like but readable, without timezone suffixes.
+  return d.toISOString().replace('T', ' ').slice(0, 16);
+}
+
 function makeBaseName(scan) {
   const url = new URL(scan.targetUrl);
   const host = url.hostname || 'target';
@@ -132,21 +140,37 @@ router.post('/pdf', async (req, res, next) => {
     const targetUrl = new URL(scan.targetUrl);
     const host = targetUrl.hostname || 'target';
 
+    const headerY = doc.y;
+    doc.rect(0, headerY, doc.page.width, 92).fill('#0b1220');
+    doc.fillColor('#ffffff');
+
+    let logoWidth = 0;
     try {
       const logoPath = path.join(__dirname, '..', '..', 'frontend', 'public', 'logo.jpg');
       if (fs.existsSync(logoPath)) {
-        doc.image(logoPath, { fit: [120, 40], align: 'center' });
-        doc.moveDown(0.5);
+        doc.image(logoPath, 44, headerY + 22, { fit: [44, 44] });
+        logoWidth = 54;
       }
     } catch {}
 
-    // Title block
-    doc.fillColor('#0b73f6').fontSize(22).text(`${host} – Security Report`, { align: 'center' });
-    doc.moveDown(0.25);
-    doc.fillColor('#4b5563').fontSize(11).text(`Automated security assessment for ${host}`, { align: 'center' });
-    doc.moveDown(0.25);
-    doc.fillColor('#333').fontSize(10).text(`Generated: ${new Date().toLocaleString()}`, { align: 'center' });
-    doc.moveDown(1);
+    doc
+      .font('Helvetica-Bold')
+      .fontSize(18)
+      .text('Lumen Security Report', 44 + logoWidth, headerY + 22, { continued: false });
+
+    doc
+      .font('Helvetica')
+      .fontSize(10)
+      .fillColor('#cbd5e1')
+      .text(host, 44 + logoWidth, headerY + 44);
+
+    doc
+      .fontSize(9)
+      .fillColor('#94a3b8')
+      .text(`Generated: ${formatDateTime(new Date())}`, 44 + logoWidth, headerY + 62);
+
+    doc.y = headerY + 104;
+    doc.fillColor('#111827');
 
     const results = scan.results || [];
     const counts = { low: 0, medium: 0, high: 0, critical: 0 };
@@ -198,11 +222,12 @@ router.post('/pdf', async (req, res, next) => {
     doc.moveDown(1);
 
     // Target summary box
-    doc.strokeColor('#e5e7eb').roundedRect(40, doc.y, doc.page.width - 80, 70, 6).stroke();
+    doc.strokeColor('#e5e7eb').roundedRect(40, doc.y, doc.page.width - 80, 80, 6).stroke();
     doc.moveDown(0.5).fontSize(12).fillColor('#111827').text(`Target: ${scan.targetUrl}`);
+    doc.fontSize(10).fillColor('#374151');
     doc.text(`Status: ${scan.status}`);
-    doc.text(`Started: ${scan.startedAt || ''}`);
-    doc.text(`Completed: ${scan.completedAt || ''}`);
+    doc.text(`Started: ${formatDateTime(scan.startedAt)}`);
+    doc.text(`Completed: ${formatDateTime(scan.completedAt)}`);
     doc.moveDown(1);
 
     const sevColor = (s = 'low') =>
@@ -214,10 +239,10 @@ router.post('/pdf', async (req, res, next) => {
     doc.fontSize(14).fillColor('#111827').text('Detailed Findings', { underline: true });
     doc.moveDown(0.5);
 
-    results.forEach(v => {
+    results.forEach((v, idx) => {
       doc.moveDown(0.4);
       doc.fillColor(sevColor(v.severity)).fontSize(12)
-        .text(`${v.title || 'Untitled'}  [${(v.severity || 'low').toUpperCase()}]`);
+        .text(`${idx + 1}. ${v.title || 'Untitled'}  [${(v.severity || 'low').toUpperCase()}]`);
       doc.fillColor('#374151').fontSize(10);
       if (v.cve) doc.text(`CVE: ${v.cve}`);
       if (typeof v.epss !== 'undefined') doc.text(`EPSS: ${v.epss}`);

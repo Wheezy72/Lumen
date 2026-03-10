@@ -26,10 +26,13 @@ router.post('/register', async (req, res, next) => {
   try {
     const { username, email, password, name } = await registerSchema.validateAsync(req.body, { stripUnknown: true });
 
+    const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+    const normalizedName = typeof name === 'string' ? name.trim() : '';
+
     // Build the query dynamically so we don't search for empty emails
     const query = [{ username }];
-    if (email) {
-      query.push({ email });
+    if (normalizedEmail) {
+      query.push({ email: normalizedEmail });
     }
 
     const existingUser = await User.findOne({ $or: query });
@@ -38,17 +41,23 @@ router.post('/register', async (req, res, next) => {
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
-    
-    // Dynamically build the user object so MongoDB's sparse index ignores empty fields
+
+    // Dynamically build the user object so MongoDB's partial email index ignores missing fields
     const newUserData = { username, passwordHash };
-    if (email) newUserData.email = email;
-    if (name) newUserData.name = name;
+    if (normalizedEmail) newUserData.email = normalizedEmail;
+    if (normalizedName) newUserData.name = normalizedName;
 
     const user = await User.create(newUserData);
-    
+
     const token = signToken({ id: user._id, username: user.username });
     setAuthCookie(res, token);
-    res.json({ id: user._id, username: user.username, email: user.email, name: user.name });
+    res.json({
+      id: user._id,
+      username: user.username,
+      email: user.email,
+      name: user.name,
+      emailAlertsEnabled: user.emailAlertsEnabled,
+    });
   } catch (e) {
     next(e);
   }
@@ -65,7 +74,13 @@ router.post('/login', async (req, res, next) => {
 
     const token = signToken({ id: user._id, username: user.username });
     setAuthCookie(res, token);
-    res.json({ id: user._id, username: user.username, email: user.email, name: user.name });
+    res.json({
+      id: user._id,
+      username: user.username,
+      email: user.email,
+      name: user.name,
+      emailAlertsEnabled: user.emailAlertsEnabled,
+    });
   } catch (e) {
     next(e);
   }
@@ -78,7 +93,13 @@ router.get('/me', authMiddleware, async (req, res, next) => {
     if (!user) {
       return res.status(404).json({ error: 'Account not found.' });
     }
-    res.json({ id: user._id, username: user.username, email: user.email, name: user.name });
+    res.json({
+      id: user._id,
+      username: user.username,
+      email: user.email,
+      name: user.name,
+      emailAlertsEnabled: user.emailAlertsEnabled,
+    });
   } catch (e) {
     next(e);
   }

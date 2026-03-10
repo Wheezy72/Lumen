@@ -154,12 +154,25 @@ function ScanRow({ scan, onDownload, isDownloading, onDelete, isDeleting }) {
   const badgeStyle = STATUS_STYLES[status] || STATUS_STYLES.queued;
   const pct = Math.min(100, Math.max(0, progress ?? 0));
 
+  const formatLocalDateTime = (value) => {
+    if (!value) return 'Queued';
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return 'Queued';
+    return new Intl.DateTimeFormat(undefined, {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(d);
+  };
+
   return (
     <tr className="hover:bg-white/[0.02] transition-colors duration-150">
       <td className="px-4 py-3 align-middle">
         <div className="font-medium text-white truncate max-w-xs">{targetUrl}</div>
         <div className="text-xs text-gray-600 mt-0.5">
-          {startedAt ? new Date(startedAt).toLocaleString() : 'Queued'}
+          {formatLocalDateTime(startedAt)}
         </div>
       </td>
 
@@ -176,7 +189,7 @@ function ScanRow({ scan, onDownload, isDownloading, onDelete, isDeleting }) {
         <div className="flex items-center gap-2">
           <div className="flex-1 h-1.5 rounded-full bg-slate-800 overflow-hidden">
             <div
-              className={`h-full rounded-full transition-[width] duration-700 ease-out ${barColor}`}
+              className={`h-full rounded-full transition-[width] duration-700 ease-out ${status === 'running' ? 'progress-fill-running' : barColor}`}
               style={{ width: `${pct}%` }}
             />
           </div>

@@ -1,12 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
-/**
- * Learning page for Lumen.
- *
- * The goal is to stay simple and clean: no emojis, no heavy gradients,
- * just clear cards that explain each vulnerability in plain language.
- */
 export default function Vulnerabilities() {
   const [expandedCard, setExpandedCard] = useState(null);
   const [activeTab, setActiveTab] = useState('vulnerabilities');
@@ -24,7 +18,9 @@ export default function Vulnerabilities() {
       realExample:
         'A login form builds SQL like `SELECT * FROM users WHERE email = \'' +
         'input' +
-        '\' AND password = \'input\'` instead of using parameters. The payload \' OR 1=1 -- logs in as the first user.',
+        '\' AND password = \'' +
+        'input' +
+        '\'` instead of using parameters. The payload \' OR 1=1 -- logs in as the first user.',
       prevention:
         'Use parameterised queries / prepared statements, never concatenate user input into SQL, and apply server-side input validation.'
     },
@@ -163,7 +159,6 @@ export default function Vulnerabilities() {
 
   const toggleCard = (id) => setExpandedCard(expandedCard === id ? null : id);
 
-  // When navigated to /learn#slug, expand the matching card and scroll it into view.
   useEffect(() => {
     if (!location.hash) return;
     const hash = location.hash.replace('#', '');
@@ -177,63 +172,45 @@ export default function Vulnerabilities() {
   }, [location.hash]);
 
   const severityBadge = (sev) => {
-    const base = 'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium';
-    if (sev === 'Critical') return `${base} bg-red-100 text-red-700`;
-    if (sev === 'High') return `${base} bg-orange-100 text-orange-700`;
-    if (sev === 'Medium') return `${base} bg-amber-100 text-amber-700`;
-    return `${base} bg-gray-100 text-gray-700`;
+    const base = 'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border';
+    if (sev === 'Critical') return `${base} bg-red-500/15 text-red-400 border-red-500/25`;
+    if (sev === 'High') return `${base} bg-amber-500/15 text-amber-400 border-amber-500/25`;
+    if (sev === 'Medium') return `${base} bg-blue-500/15 text-blue-400 border-blue-500/25`;
+    return `${base} bg-slate-500/15 text-slate-400 border-slate-500/25`;
   };
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-      {/* Header */}
-      <div className="mb-8 flex flex-col md:flex-row md:items-end md:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-dark-800">Learning centre</h1>
-          <p className="text-sm text-gray-600 mt-2">
-            Short, practical explanations of common web vulnerabilities and major real-world breaches.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => setActiveTab('vulnerabilities')}
-            className={`px-3 py-1.5 rounded-full text-sm ${
-              activeTab === 'vulnerabilities'
-                ? 'bg-primary-600 text-white'
-                : 'bg-white border border-gray-200 text-gray-700'
-            }`}
-          >
-            Vulnerabilities
-          </button>
-          <button
-            onClick={() => setActiveTab('breaches')}
-            className={`px-3 py-1.5 rounded-full text-sm ${
-              activeTab === 'breaches'
-                ? 'bg-primary-600 text-white'
-                : 'bg-white border border-gray-200 text-gray-700'
-            }`}
-          >
-            Historic breaches
-          </button>
-          <Link
-            to="/new"
-            className="px-3 py-1.5 rounded-full text-sm bg-dark-800 text-white hover:bg-dark-700"
-          >
-            Start a scan
-          </Link>
+    <div className="max-w-6xl mx-auto">
+      <div className="rounded-2xl border border-slate-800 bg-dark-200 p-6 sm:p-8">
+        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-5">
+          <div>
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-primary-400 to-secondary-400 bg-clip-text text-transparent">Learning centre</h1>
+            <p className="text-sm text-gray-500 mt-2 max-w-2xl">
+              Practical explanations of common web vulnerabilities and a few high-level case studies. Use this to justify your design choices in the final report.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <TabButton active={activeTab === 'vulnerabilities'} onClick={() => setActiveTab('vulnerabilities')}>
+              Vulnerabilities
+            </TabButton>
+            <TabButton active={activeTab === 'breaches'} onClick={() => setActiveTab('breaches')}>
+              Historic breaches
+            </TabButton>
+            <Link to="/new" className="btn btn-primary text-sm px-4 py-2">
+              Start a scan
+            </Link>
+          </div>
         </div>
       </div>
 
       {activeTab === 'vulnerabilities' && (
-        <div className="space-y-4">
-          <div className="card">
-            <div className="card-body">
-              <h2 className="text-lg font-semibold mb-1">Common web vulnerabilities</h2>
-              <p className="text-sm text-gray-600">
-                These cards are designed to be quick to read. Click any item to see how the issue works in practice and what you can do to
-                reduce the risk in your own applications.
-              </p>
-            </div>
+        <div className="mt-6 space-y-4">
+          <div className="rounded-xl border border-slate-800 bg-dark-200 p-5">
+            <h2 className="text-sm font-semibold text-gray-200">Common web vulnerabilities</h2>
+            <p className="text-sm text-gray-500 mt-2">
+              Click a card to expand: how the issue happens, what it looks like in real systems, and the mitigation you can mention in your dissertation.
+            </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -241,22 +218,32 @@ export default function Vulnerabilities() {
               <article
                 key={v.id}
                 id={v.slug}
-                className="card cursor-pointer transition-transform duration-200 hover:-translate-y-0.5"
-                onClick={() => toggleCard(v.id)}
+                className="rounded-xl border border-slate-800 bg-dark-200 overflow-hidden transition hover:border-primary-500/30"
               >
-                <header className="card-header flex items-start justify-between">
+                <button
+                  type="button"
+                  onClick={() => toggleCard(v.id)}
+                  className="w-full text-left p-5 flex items-start justify-between gap-4"
+                >
                   <div>
-                    <h3 className="text-sm font-semibold text-dark-800">{v.name}</h3>
-                    <p className="mt-1 text-xs text-gray-500 italic">{v.shortDesc}</p>
+                    <h3 className="text-sm font-semibold text-gray-200">{v.name}</h3>
+                    <p className="mt-1 text-xs text-gray-500">{v.shortDesc}</p>
                   </div>
                   <span className={severityBadge(v.severity)}>{v.severity}</span>
-                </header>
+                </button>
+
                 {expandedCard === v.id && (
-                  <div className="card-body border-t border-gray-100">
-                    <div className="space-y-3 text-sm">
-                      <Section title="How it works">{v.humanDesc}</Section>
-                      <Section title="Real example">{v.realExample}</Section>
-                      <Section title="How to reduce the risk">{v.prevention}</Section>
+                  <div className="px-5 pb-5 border-t border-slate-800 animate-slide-up">
+                    <div className="pt-4 space-y-4">
+                      <LearnSection title="How it works">{v.humanDesc}</LearnSection>
+
+                      <LearnSection title="Real example">
+                        <div className="rounded-lg bg-black/55 border border-slate-800 p-3 text-xs text-gray-300 font-mono whitespace-pre-wrap">
+                          {v.realExample}
+                        </div>
+                      </LearnSection>
+
+                      <LearnSection title="How to reduce the risk">{v.prevention}</LearnSection>
                     </div>
                   </div>
                 )}
@@ -267,34 +254,28 @@ export default function Vulnerabilities() {
       )}
 
       {activeTab === 'breaches' && (
-        <div className="space-y-4">
-          <div className="card">
-            <div className="card-body">
-              <h2 className="text-lg font-semibold mb-1">Security incidents in the real world</h2>
-              <p className="text-sm text-gray-600">
-                Large breaches often come down to the same patterns you see in smaller applications: missing patches, weak access control,
-                and limited monitoring.
-              </p>
-            </div>
+        <div className="mt-6 space-y-4">
+          <div className="rounded-xl border border-slate-800 bg-dark-200 p-5">
+            <h2 className="text-sm font-semibold text-gray-200">Security incidents in the real world</h2>
+            <p className="text-sm text-gray-500 mt-2">
+              These examples help you connect your scanner’s findings to real consequences (good for the “why this matters” section).
+            </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {breaches.map((b, i) => (
-              <article key={i} className="card h-full">
-                <div className="card-body flex flex-col justify-between">
+              <article key={i} className="rounded-xl border border-slate-800 bg-dark-200 p-5 flex flex-col gap-3">
+                <div className="flex items-start justify-between gap-3">
                   <div>
-                    <h3 className="text-sm font-semibold text-dark-800">{b.name}</h3>
-                    <p className="mt-1 text-xs text-gray-500">
-                      {b.affected} • {b.impact}
-                    </p>
-                    <p className="mt-2 text-sm text-gray-600">{b.description}</p>
+                    <h3 className="text-sm font-semibold text-gray-200">{b.name}</h3>
+                    <p className="text-xs text-gray-500 mt-1">{b.affected} • {b.impact}</p>
                   </div>
-                  <div className="mt-3">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
-                      {b.type}
-                    </span>
-                  </div>
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-500/10 text-gray-400 border border-slate-800">
+                    {b.type}
+                  </span>
                 </div>
+
+                <p className="text-sm text-gray-500 leading-relaxed">{b.description}</p>
               </article>
             ))}
           </div>
@@ -304,11 +285,27 @@ export default function Vulnerabilities() {
   );
 }
 
-function Section({ title, children }) {
+function TabButton({ active, onClick, children }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`px-3 py-2 rounded-full text-sm font-medium border transition ${
+        active
+          ? 'bg-primary-500/15 text-primary-400 border-primary-500/25'
+          : 'bg-slate-500/10 text-gray-400 border-slate-800 hover:bg-black/5 dark:hover:bg-slate-800'
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function LearnSection({ title, children }) {
   return (
     <section>
-      <h4 className="text-xs font-semibold text-gray-700 mb-1">{title}</h4>
-      <p className="text-sm text-gray-700 italic">{children}</p>
+      <h4 className="text-xs font-semibold text-primary-400 uppercase tracking-wide mb-2">{title}</h4>
+      <div className="text-sm text-gray-300 leading-relaxed">{children}</div>
     </section>
   );
 }

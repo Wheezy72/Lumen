@@ -356,6 +356,20 @@ svg.text-white {
   }
 }
 
+.progress-fill-running {
+  background-image:
+    linear-gradient(90deg, #2563eb, #22c55e),
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.22) 0, rgba(255, 255, 255, 0.22) 10px, rgba(255, 255, 255, 0) 10px, rgba(255, 255, 255, 0) 20px);
+  background-size: 100% 100%, 44px 44px;
+  background-position: 0 0, 0 0;
+  animation: progressStripe 1.1s linear infinite;
+}
+
+@keyframes progressStripe {
+  0% { background-position: 0 0, 0 0; }
+  100% { background-position: 0 0, 44px 0; }
+}
+
 /* Chart container */
 .chart-container {
   position: relative;
