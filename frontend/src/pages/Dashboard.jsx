@@ -95,7 +95,7 @@ export default function Dashboard() {
 
   // ── Grouped bar chart: findings per scan, grouped by severity ──────────
   const barLabels = barScans.map((s) => {
-    try { return new URL(s.target).hostname; } catch { return s.target?.slice(0, 18) || s._id?.slice(-6); }
+    try { return new URL(s.targetUrl).hostname; } catch { return s.targetUrl?.slice(0, 18) || s._id?.slice(-6); }
   });
 
   const barData = {
@@ -166,7 +166,7 @@ export default function Dashboard() {
   const recentFindings = recent.flatMap((s) =>
     (s.results || []).filter(isRealFinding).slice(0, 3).map((v) => ({
       ...v,
-      scanTarget: s.target,
+      scanTarget: s.targetUrl,
     })),
   ).slice(0, 8);
 
