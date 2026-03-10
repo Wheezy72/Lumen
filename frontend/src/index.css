@@ -14,9 +14,14 @@ html {
   --lumen-text: #0b1220;
   --lumen-muted: rgba(15, 23, 42, 0.72);
   --lumen-muted-2: rgba(15, 23, 42, 0.55);
-  --lumen-surface-200: #ffffff;
+  --lumen-surface-200: rgba(255, 255, 255, 0.82);
   --lumen-surface-300: #f3f6fb;
   --lumen-border: rgba(15, 23, 42, 0.12);
+
+  --lumen-input-bg: rgba(15, 23, 42, 0.92);
+  --lumen-input-text: #f8fafc;
+  --lumen-input-border: rgba(148, 163, 184, 0.28);
+  --lumen-input-placeholder: rgba(148, 163, 184, 0.62);
 }
 
 html.dark {
@@ -27,21 +32,42 @@ html.dark {
   --lumen-surface-200: #111113;
   --lumen-surface-300: #09090b;
   --lumen-border: #1e293b;
+
+  --lumen-input-bg: rgba(2, 6, 23, 0.60);
+  --lumen-input-text: #f1f5f9;
+  --lumen-input-border: rgba(148, 163, 184, 0.22);
+  --lumen-input-placeholder: rgba(148, 163, 184, 0.55);
 }
 
 body {
   color: var(--lumen-text);
   background-color: var(--lumen-bg);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 /* App background (keeps the blue/green identity even in light mode). */
 .app-shell {
+  position: relative;
+  isolation: isolate;
   background:
-    radial-gradient(1000px circle at 14% 0%, rgba(37, 99, 235, 0.14), transparent 55%),
-    radial-gradient(900px circle at 86% 0%, rgba(34, 197, 94, 0.12), transparent 60%),
+    radial-gradient(1000px circle at 14% 0%, rgba(37, 99, 235, 0.20), transparent 58%),
+    radial-gradient(900px circle at 86% 0%, rgba(34, 197, 94, 0.16), transparent 62%),
     var(--lumen-surface-300);
+}
+
+.app-shell::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(780px circle at 18% 14%, rgba(37, 99, 235, 0.18), transparent 60%),
+    radial-gradient(820px circle at 82% 12%, rgba(34, 197, 94, 0.14), transparent 64%);
+  opacity: 0.85;
+  animation: lumenPulse 9s ease-in-out infinite;
 }
 
 html.dark .app-shell {
@@ -49,6 +75,21 @@ html.dark .app-shell {
     radial-gradient(1100px circle at 14% 0%, rgba(37, 99, 235, 0.22), transparent 55%),
     radial-gradient(950px circle at 86% 0%, rgba(34, 197, 94, 0.18), transparent 60%),
     var(--lumen-surface-300);
+}
+
+html.dark .app-shell::before {
+  opacity: 1;
+}
+
+@keyframes lumenPulse {
+  0%, 100% {
+    opacity: 0.72;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    opacity: 0.95;
+    transform: translate3d(0, -8px, 0) scale(1.02);
+  }
 }
 
 /* Make existing Tailwind palette-based utility classes theme-aware (minimal overrides). */
@@ -189,19 +230,31 @@ svg.text-white {
   width: 100%;
   padding: 0.625rem 0.875rem 0.625rem 2.5rem;
   font-size: 0.875rem;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--lumen-input-border);
   border-radius: 0.5rem;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
   outline: none;
-  background-color: #fff;
-  color: #111827;
+  background-color: var(--lumen-input-bg);
+  color: var(--lumen-input-text);
+}
+
+.input::placeholder {
+  color: var(--lumen-input-placeholder);
+}
+
+.input-plain {
+  padding-left: 0.875rem;
+}
+
+.input-icon {
+  color: var(--lumen-input-placeholder) !important;
 }
 
 .input:focus {
   outline: 2px solid transparent;
   outline-offset: 2px;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
-  border-color: transparent;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.35);
+  border-color: rgba(59, 130, 246, 0.55);
 }
 
 .input-error {
