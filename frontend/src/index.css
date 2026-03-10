@@ -9,10 +9,15 @@ html {
 }
 
 body {
-  color: #f1f5f9;
-  background-color: #09090b;
+  color: #0f172a;
+  background-color: #f8fafc;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+.dark body {
+  color: #f1f5f9;
+  background-color: #09090b;
 }
 
 /* Custom component classes without @apply */
@@ -90,6 +95,14 @@ body {
   transform: translateY(0);
 }
 
+.dark .card {
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.78), rgba(2, 6, 23, 0.9));
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  box-shadow:
+    0 14px 32px rgba(0, 0, 0, 0.35),
+    0 1px 0 rgba(255, 255, 255, 0.04) inset;
+}
+
 .card:hover {
   transform: translateY(-3px);
   box-shadow:
@@ -98,9 +111,20 @@ body {
   border-color: rgba(59, 130, 246, 0.25);
 }
 
+.dark .card:hover {
+  box-shadow:
+    0 18px 42px rgba(0, 0, 0, 0.45),
+    0 1px 0 rgba(255, 255, 255, 0.05) inset;
+  border-color: rgba(59, 130, 246, 0.25);
+}
+
 .card-header {
   padding: 1.5rem;
   border-bottom: 1px solid #f3f4f6;
+}
+
+.dark .card-header {
+  border-bottom: 1px solid rgba(51, 65, 85, 0.7);
 }
 
 .card-body {
@@ -117,6 +141,16 @@ body {
   outline: none;
   background-color: #fff;
   color: #111827;
+}
+
+.dark .input {
+  background-color: rgba(2, 6, 23, 0.65);
+  border-color: rgba(51, 65, 85, 0.8);
+  color: #f1f5f9;
+}
+
+.dark .input::placeholder {
+  color: rgba(148, 163, 184, 0.85);
 }
 
 .input:focus {

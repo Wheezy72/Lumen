@@ -21,16 +21,20 @@ const REDIS_URL = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
 export const scanQueue = new Bull('scanQueue', REDIS_URL);
 
 // Redis pub/sub for Python worker communication
-const redis = new Redis(REDIS_URL);
+// NOTE: We intentionally create a *per-job* subscriber connection to avoid race
+// conditions where the Python worker publishes results before we subscribe.
 const pub = new Redis(REDIS_URL);
 const RESULT_CHANNEL = 'scan_results';
 const JOB_CHANNEL = 'scan_jobs';
+
+const NO_MESSAGE_TIMEOUT_MS = Number(process.env.PY_WORKER_NO_MESSAGE_TIMEOUT_MS || 90_000);
+const WORKER_TOTAL_TIMEOUT_MS = Number(process.env.PY_WORKER_TOTAL_TIMEOUT_MS || 15 * 60 * 1000);
 
 export const configureBull = () => {
   // Process scan jobs
   scanQueue.process('start', async (job) => {
     const { scanId, scanProfile } = job.data;
-    
+
     const scan = await Scan.findById(scanId);
     if (!scan) {
       logger.warn('Scan not found when starting job', { scanId });
@@ -45,48 +49,112 @@ export const configureBull = () => {
 
     publishScanUpdate(jobQueueApp(), { type: 'progress', scanId, progress: 5 });
 
-    // Send job to Python worker with scan profile (selected modules)
-    await pub.publish(JOB_CHANNEL, JSON.stringify({
-      scanId,
-      targetUrl: scan.targetUrl,
-      scanProfile: scanProfile || scan.scanProfile || null,
-    }));
+    // Dedicated subscription connection for this job.
+    const sub = new Redis(REDIS_URL);
 
-    // Wait for results from Python worker (with 15 minute timeout)
-    await new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        reject(new Error('Worker timeout - scan took too long'));
-      }, 15 * 60 * 1000);
+    try {
+      await sub.subscribe(RESULT_CHANNEL);
 
-      const onMessage = async (channel, message) => {
-        if (channel !== RESULT_CHANNEL) return;
-        
-        const data = JSON.parse(message);
-        if (data.scanId !== scanId) return;
+      const resultData = await new Promise((resolve, reject) => {
+        let gotAnyMessageForScan = false;
 
-        // Handle live progress updates from the Python worker
-        if (data.type === 'progress') {
-          scan.progress = data.progress;
-          await scan.save();
-          publishScanUpdate(jobQueueApp(), { type: 'progress', scanId, progress: data.progress });
-          return; // Continue waiting for final results
-        }
-        
-        // Handle final results
-        clearTimeout(timeout);
-        redis.removeListener('message', onMessage); // Replaced .off() with .removeListener()
-        // IMPORTANT: await handleResults to ensure DB save completes BEFORE job resolves
-        try {
-          await handleResults(scan, data);
-          resolve(true);
-        } catch (e) {
-          reject(e);
-        }
-      };
+        const noMsgTimeout = setTimeout(() => {
+          cleanup();
+          reject(
+            new Error(
+              'No response from Python worker. Ensure python/worker.py is running and REDIS_URL matches the backend.'
+            )
+          );
+        }, NO_MESSAGE_TIMEOUT_MS);
 
-      redis.on('message', onMessage);
-      redis.subscribe(RESULT_CHANNEL);
-    });
+        const totalTimeout = setTimeout(() => {
+          cleanup();
+          reject(
+            new Error(
+              'Worker timeout - no scan results were received. Ensure python/worker.py is running and the target is reachable.'
+            )
+          );
+        }, WORKER_TOTAL_TIMEOUT_MS);
+
+        const cleanup = () => {
+          clearTimeout(noMsgTimeout);
+          clearTimeout(totalTimeout);
+          if (onMessage) sub.removeListener('message', onMessage);
+        };
+
+        const handleMessage = async (channel, message) => {
+          if (channel !== RESULT_CHANNEL) return;
+
+          let data;
+          try {
+            data = JSON.parse(message);
+          } catch {
+            return;
+          }
+
+          if (data?.scanId !== scanId) return;
+
+          if (!gotAnyMessageForScan) {
+            gotAnyMessageForScan = true;
+            clearTimeout(noMsgTimeout);
+          }
+
+          // Live progress updates from Python worker
+          if (data.type === 'progress') {
+            scan.progress = data.progress;
+            await scan.save();
+            publishScanUpdate(jobQueueApp(), { type: 'progress', scanId, progress: data.progress });
+            return;
+          }
+
+          // Final results
+          clearTimeout(totalTimeout);
+          cleanup();
+          resolve(data);
+        };
+
+        // Wrap the async handler to avoid unhandled promise rejections from EventEmitter.
+        const onMessage = (channel, message) => {
+          void handleMessage(channel, message).catch((e) => {
+            cleanup();
+            reject(e);
+          });
+        };
+
+        sub.on('message', onMessage);
+
+        // Publish job *after* we're subscribed and listening.
+        const effectiveProfile =
+          Array.isArray(scanProfile) && scanProfile.length
+            ? scanProfile
+            : Array.isArray(scan.scanProfile) && scan.scanProfile.length
+              ? scan.scanProfile
+              : null;
+
+        pub
+          .publish(
+            JOB_CHANNEL,
+            JSON.stringify({
+              scanId,
+              targetUrl: scan.targetUrl,
+              scanProfile: effectiveProfile,
+            })
+          )
+          .catch((e) => {
+            cleanup();
+            reject(e);
+          });
+      });
+
+      await handleResults(scan, resultData);
+    } finally {
+      try {
+        await sub.unsubscribe(RESULT_CHANNEL);
+      } catch {}
+      try {
+        await sub.quit();
+      } catch {}
+    }
   });
 
   // Handle completed jobs

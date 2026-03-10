@@ -127,10 +127,10 @@ export default function NewScan() {
   };
 
   return (
-    <div className="max-w-3xl mx-auto text-gray-300">
+    <div className="max-w-3xl mx-auto text-slate-700 dark:text-gray-300">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-primary-500 cyber-glow-text">Launch Vector</h1>
-        <p className="text-gray-400 mt-1">Configure and initiate a targeted security sweep</p>
+        <p className="text-slate-600 dark:text-gray-400 mt-1">Configure and initiate a targeted security sweep</p>
       </div>
 
       {error && (

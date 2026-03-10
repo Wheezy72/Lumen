@@ -378,6 +378,10 @@ def run_scan(target_url: str, profile: Optional[List[str]] = None, scan_id: str 
     """Run selected scan modules and report progress."""
     issues: List[Dict] = []
 
+    # Treat an empty list as "no profile" (run everything).
+    if profile is not None and len(profile) == 0:
+        profile = None
+
     parsed = urllib.parse.urlparse(target_url)
     hostname = parsed.hostname
 

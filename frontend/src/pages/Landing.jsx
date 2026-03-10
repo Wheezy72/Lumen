@@ -3,17 +3,17 @@ import { Link } from 'react-router-dom';
 
 export default function Landing() {
   return (
-    <div className="min-h-screen bg-dark-300 text-white">
+    <div className="text-slate-900 dark:text-white">
 
       {/* ── Hero ─────────────────────────────────────────────────────── */}
       <section className="max-w-5xl mx-auto px-6 pt-24 pb-16 text-center">
-        <span className="inline-block px-3 py-1 text-xs font-semibold tracking-widest uppercase rounded-full bg-primary-900/60 text-primary-400 border border-primary-700/40 mb-6">
+        <span className="inline-block px-3 py-1 text-xs font-semibold tracking-widest uppercase rounded-full bg-primary-50 text-primary-700 border border-primary-200 dark:bg-primary-900/60 dark:text-primary-400 dark:border-primary-700/40 mb-6">
           Open-source · Self-hostable
         </span>
-        <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold leading-tight text-white">
+        <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold leading-tight text-slate-900 dark:text-white">
           See your application<br className="hidden sm:block" /> the way an attacker does.
         </h1>
-        <p className="mt-5 text-lg text-gray-400 max-w-2xl mx-auto">
+        <p className="mt-5 text-lg text-slate-600 dark:text-gray-400 max-w-2xl mx-auto">
           Point it at a URL. Get results in minutes.&nbsp;
           No setup, no enterprise contracts, no noise.
         </p>
@@ -27,14 +27,14 @@ export default function Landing() {
           </Link>
           <Link
             to="/login"
-            className="px-6 py-3 text-base font-semibold rounded-lg border border-slate-700 text-gray-300 hover:border-primary-500 hover:text-white transition"
+            className="px-6 py-3 text-base font-semibold rounded-lg border border-slate-200 text-slate-700 hover:border-primary-500 hover:text-slate-900 transition dark:border-slate-700 dark:text-gray-300 dark:hover:text-white"
           >
             Sign in
           </Link>
         </div>
 
         {/* Stats bar */}
-        <div className="mt-12 flex flex-wrap justify-center gap-x-10 gap-y-3 text-sm text-gray-500">
+        <div className="mt-12 flex flex-wrap justify-center gap-x-10 gap-y-3 text-sm text-slate-500 dark:text-gray-500">
           {[
             '10 automated checks',
             'OWASP aligned',
@@ -53,8 +53,8 @@ export default function Landing() {
 
       {/* ── How It Works ──────────────────────────────────────────────── */}
       <section className="max-w-5xl mx-auto px-6 py-16">
-        <h2 className="text-2xl font-bold text-center text-white mb-2">How it works</h2>
-        <p className="text-center text-gray-500 text-sm mb-10">Three steps from zero to report.</p>
+        <h2 className="text-2xl font-bold text-center text-slate-900 dark:text-white mb-2">How it works</h2>
+        <p className="text-center text-slate-600 dark:text-gray-500 text-sm mb-10">Three steps from zero to report.</p>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
           {[
@@ -77,18 +77,18 @@ export default function Landing() {
               label: 'Results & report',
             },
           ].map(({ step, title, desc, label }) => (
-            <div key={step} className="flex flex-col rounded-xl border border-slate-800 bg-dark-200 overflow-hidden">
+            <div key={step} className="flex flex-col rounded-xl border border-slate-200 bg-white overflow-hidden dark:border-slate-800 dark:bg-dark-200">
               {/* screenshot placeholder */}
-              <div className="h-44 bg-dark-300 border-b border-slate-800 flex flex-col items-center justify-center gap-2 text-gray-600">
+              <div className="h-44 bg-slate-50 border-b border-slate-200 flex flex-col items-center justify-center gap-2 text-slate-400 dark:bg-dark-300 dark:border-slate-800 dark:text-gray-600">
                 <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
                 <span className="text-xs">{label}</span>
               </div>
               <div className="p-5">
-                <span className="text-xs font-mono text-primary-500">{step}</span>
-                <h3 className="mt-1 font-semibold text-white">{title}</h3>
-                <p className="mt-2 text-sm text-gray-400">{desc}</p>
+                <span className="text-xs font-mono text-primary-600 dark:text-primary-500">{step}</span>
+                <h3 className="mt-1 font-semibold text-slate-900 dark:text-white">{title}</h3>
+                <p className="mt-2 text-sm text-slate-600 dark:text-gray-400">{desc}</p>
               </div>
             </div>
           ))}
@@ -99,12 +99,12 @@ export default function Landing() {
       <section className="max-w-5xl mx-auto px-6 py-16">
         <div className="grid md:grid-cols-2 gap-10 items-center">
           <div>
-            <h2 className="text-2xl font-bold text-white">Findings you can actually act on</h2>
-            <p className="mt-3 text-gray-400 text-sm leading-relaxed">
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Findings you can actually act on</h2>
+            <p className="mt-3 text-slate-600 dark:text-gray-400 text-sm leading-relaxed">
               Every result includes the check that ran, the evidence collected, and plain-English guidance
               on how to fix it — not just a CVE number and a shrug.
             </p>
-            <ul className="mt-6 space-y-3 text-sm text-gray-400">
+            <ul className="mt-6 space-y-3 text-sm text-slate-600 dark:text-gray-400">
               {[
                 'Grouped by severity: Critical → Low',
                 'Inline remediation steps per finding',
@@ -121,8 +121,8 @@ export default function Landing() {
             </ul>
           </div>
 
-          <div className="rounded-xl border border-slate-800 bg-dark-200 p-6">
-            <p className="text-xs text-gray-500 mb-4 font-mono">Example — OWASP Juice Shop scan</p>
+          <div className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-dark-200">
+            <p className="text-xs text-slate-500 dark:text-gray-500 mb-4 font-mono">Example — OWASP Juice Shop scan</p>
             <ul className="space-y-3">
               {[
                 { label: 'Reflected XSS', sev: 'High', color: 'bg-red-500/20 text-red-400' },
@@ -132,12 +132,12 @@ export default function Landing() {
                 { label: 'TLS version acceptable', sev: 'Info', color: 'bg-gray-500/20 text-gray-400' },
               ].map(({ label, sev, color }) => (
                 <li key={label} className="flex items-center justify-between text-sm">
-                  <span className="text-gray-300">{label}</span>
+                  <span className="text-slate-700 dark:text-gray-300">{label}</span>
                   <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${color}`}>{sev}</span>
                 </li>
               ))}
             </ul>
-            <div className="mt-5 pt-4 border-t border-slate-800 flex justify-between text-xs text-gray-600">
+            <div className="mt-5 pt-4 border-t border-slate-200 flex justify-between text-xs text-slate-500 dark:border-slate-800 dark:text-gray-600">
               <span>5 findings</span>
               <span>Completed in 42 s</span>
             </div>
@@ -147,9 +147,9 @@ export default function Landing() {
 
       {/* ── CTA ──────────────────────────────────────────────────────── */}
       <section className="max-w-5xl mx-auto px-6 py-16 text-center">
-        <div className="rounded-2xl border border-primary-800/40 bg-primary-900/20 px-8 py-12">
-          <h2 className="text-2xl font-bold text-white">Ready to run your first scan?</h2>
-          <p className="mt-2 text-gray-400 text-sm">Free. No credit card. Runs locally.</p>
+        <div className="rounded-2xl border border-primary-200 bg-primary-50 px-8 py-12 dark:border-primary-800/40 dark:bg-primary-900/20">
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Ready to run your first scan?</h2>
+          <p className="mt-2 text-slate-600 dark:text-gray-400 text-sm">Free. No credit card. Runs locally.</p>
           <Link
             to="/register"
             className="mt-6 inline-block btn btn-primary px-8 py-3 text-base font-semibold rounded-lg"

@@ -1,1 +1,40 @@
-{"name":"lumen-vuln-scanner-backend","version":"1.0.0","description":"Lumen Vulnerability Scanner - Backend API with Express, MongoDB, Redis Bull Queue, JWT Auth, SSE, PDF/CSV reporting","main":"src/index.js","type":"module","scripts":{"dev":"node src/index.js","start":"node src/index.js","worker":"node src/queue/index.js","test:e2e":"node scripts/e2e.js","export:zip":"node scripts/export.js","docs":"node scripts/generate-doc.js","health":"node scripts/health-check.js","devguide:pdf":"node scripts/generate-dev-guide-pdf.js","scheduler":"node scripts/scheduled-scans.js","lint":"echo \"No linter configured\""},"dependencies":{"archiver":"^6.0.1","bcryptjs":"^2.4.3","bull":"^4.12.2","cookie-parser":"^1.4.7","cors":"^2.8.5","csv-writer":"^1.6.0","dotenv":"^16.4.5","express":"^4.21.2","helmet":"^7.0.0","ioredis":"^5.4.1","joi":"^17.11.0","jsonwebtoken":"^9.0.2","mongoose":"^8.18.2","morgan":"^1.10.1","node-fetch":"^3.3.2","pdfkit":"^0.13.0","winston":"^3.13.0","nodemailer":"^6.9.15"}}
+{
+  "name": "lumen-vuln-scanner-backend",
+  "version": "1.0.0",
+  "description": "Lumen Vulnerability Scanner - Backend API with Express, MongoDB, Redis Bull Queue, JWT Auth, SSE, PDF/CSV reporting",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "node src/index.js",
+    "start": "node src/index.js",
+    "worker": "node src/queue/index.js",
+    "python:worker": "python3 ../python/worker.py",
+    "test:e2e": "node scripts/e2e.js",
+    "export:zip": "node scripts/export.js",
+    "docs": "node scripts/generate-doc.js",
+    "health": "node scripts/health-check.js",
+    "devguide:pdf": "node scripts/generate-dev-guide-pdf.js",
+    "scheduler": "node scripts/scheduled-scans.js",
+    "lint": "echo \"No linter configured\""
+  },
+  "dependencies": {
+    "archiver": "^6.0.1",
+    "bcryptjs": "^2.4.3",
+    "bull": "^4.12.2",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "csv-writer": "^1.6.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2",
+    "helmet": "^7.0.0",
+    "ioredis": "^5.4.1",
+    "joi": "^17.11.0",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.18.2",
+    "morgan": "^1.10.1",
+    "node-fetch": "^3.3.2",
+    "nodemailer": "^6.9.15",
+    "pdfkit": "^0.13.0",
+    "winston": "^3.13.0"
+  }
+}

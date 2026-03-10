@@ -94,20 +94,32 @@ cp .env.example .env
 npm run dev
 ```
 
-### 3️⃣ Frontend Setup
+### 3️⃣ Start Python Scan Worker
+The scanner needs the Python worker running to execute checks.
+
+- **Recommended (dev):** leave `AUTO_START_PYTHON_WORKER=true` in `backend/.env` (default in `.env.example`).
+- **Manual:** run it in a separate terminal:
+
+```bash
+cd python
+pip install -r requirements.txt
+python3 worker.py
+```
+
+### 4️⃣ Frontend Setup
 ```bash
 cd ../frontend
 npm install
 npm run dev
 ```
 
-### 4️⃣ Start Queue Worker (Optional)
+### 5️⃣ Start Queue Worker (Optional)
 ```bash
 cd backend
 npm run worker
 ```
 
-### 5️⃣ Helper scripts
+### 6️⃣ Helper scripts
 ```bash
 cd backend
 npm run health        # Hit /health and exit 0/1
