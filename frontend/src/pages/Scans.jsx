@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
 
@@ -21,6 +21,7 @@ const BAR_COLORS = {
 export default function Scans() {
   const [scans, setScans] = useState([]);
   const [downloading, setDownloading] = useState(null);
+  const [deleting, setDeleting] = useState(null);
 
   const load = async () => {
     const { data } = await axios.get('/api/scans');
@@ -78,6 +79,19 @@ export default function Scans() {
     }
   };
 
+  const deleteScan = async (scanId) => {
+    if (!window.confirm('Delete this scan? This cannot be undone.')) return;
+    try {
+      setDeleting(scanId);
+      await axios.delete(`/api/scans/${scanId}`);
+      setScans((prev) => prev.filter((s) => s._id !== scanId));
+    } catch (e) {
+      console.error('Delete error:', e.response?.data || e.message);
+    } finally {
+      setDeleting(null);
+    }
+  };
+
   const isDownloading = (scanId, type) =>
     downloading?.scanId === scanId && downloading?.type === type;
 
@@ -103,6 +117,7 @@ export default function Scans() {
               <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
               <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider w-44">Progress</th>
               <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Report</th>
+              <th className="px-4 py-3"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800/60">
@@ -112,11 +127,13 @@ export default function Scans() {
                 scan={s}
                 onDownload={downloadReport}
                 isDownloading={isDownloading}
+                onDelete={deleteScan}
+                isDeleting={deleting === s._id}
               />
             ))}
             {!scans.length && (
               <tr>
-                <td colSpan={4} className="px-4 py-12 text-center text-sm text-gray-600">
+                <td colSpan={5} className="px-4 py-12 text-center text-sm text-gray-600">
                   No scans yet.{' '}
                   <Link to="/new" className="text-primary-500 hover:underline">
                     Start your first scan →
@@ -131,7 +148,7 @@ export default function Scans() {
   );
 }
 
-function ScanRow({ scan, onDownload, isDownloading }) {
+function ScanRow({ scan, onDownload, isDownloading, onDelete, isDeleting }) {
   const { _id, targetUrl, status, progress, startedAt } = scan;
   const barColor = BAR_COLORS[status] || BAR_COLORS.queued;
   const badgeStyle = STATUS_STYLES[status] || STATUS_STYLES.queued;
@@ -199,6 +216,18 @@ function ScanRow({ scan, onDownload, isDownloading }) {
         ) : (
           <span className="text-xs text-gray-600">—</span>
         )}
+      </td>
+
+      <td className="px-4 py-3 align-middle">
+        <button
+          type="button"
+          onClick={() => onDelete(_id)}
+          disabled={isDeleting || status === 'running'}
+          className="text-xs text-red-500/60 hover:text-red-400 transition disabled:opacity-30"
+          title="Delete scan"
+        >
+          {isDeleting ? 'Deleting…' : 'Delete'}
+        </button>
       </td>
     </tr>
   );

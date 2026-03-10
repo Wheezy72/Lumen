@@ -7,6 +7,7 @@ const vulnerabilitySchema = new mongoose.Schema({
   description: String,
   evidence: String,
   cve: String,
+  epss: Number,
   category: String, // e.g., xss, sqli, ssl, headers, traversal, subdomain, cookies, error, access_control, rate_limit
 }, { _id: false });
 
