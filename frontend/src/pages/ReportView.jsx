@@ -1,6 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { Link, useParams } from 'react-router-dom';
+import AnimatedProgressBar from '../components/ui/AnimatedProgressBar.jsx';
+import EmptyState from '../components/ui/EmptyState.jsx';
 
 const SEV = {
   critical: { bg: 'bg-purple-500/15 text-purple-400 border border-purple-500/30', dot: 'bg-purple-400' },
@@ -8,6 +10,13 @@ const SEV = {
   medium:   { bg: 'bg-amber-500/15 text-amber-400 border border-amber-500/30',     dot: 'bg-amber-400' },
   low:      { bg: 'bg-blue-500/15 text-blue-400 border border-blue-500/30',        dot: 'bg-blue-400' },
   info:     { bg: 'bg-slate-500/15 text-slate-400 border border-slate-500/30',     dot: 'bg-slate-400' },
+};
+
+const POLICY = {
+  pass:   { label: 'Pass', cls: 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' },
+  fail:   { label: 'Fail', cls: 'bg-red-500/15 text-red-400 border border-red-500/30' },
+  skipped:{ label: 'Off',  cls: 'bg-slate-500/10 text-gray-400 border border-slate-800' },
+  unknown:{ label: '—',    cls: 'bg-slate-500/10 text-gray-400 border border-slate-800' },
 };
 
 export default function ReportView() {
@@ -20,6 +29,10 @@ export default function ReportView() {
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [pdfLoading, setPdfLoading] = useState(false);
   const [csvLoading, setCsvLoading] = useState(false);
+
+  const [diffLoading, setDiffLoading] = useState(false);
+  const [diffData, setDiffData] = useState(null);
+  const [baselineSaving, setBaselineSaving] = useState(false);
 
   const loadScan = async () => {
     try {
@@ -34,13 +47,52 @@ export default function ReportView() {
     }
   };
 
+  const loadDiff = async () => {
+    try {
+      setDiffLoading(true);
+      const { data } = await axios.get(`/api/scans/${scanId}/diff`);
+      setDiffData(data);
+    } catch {
+      setDiffData(null);
+    } finally {
+      setDiffLoading(false);
+    }
+  };
+
+  const setBaselineToThisScan = async () => {
+    if (!diffData?.target?.id) return;
+
+    try {
+      setBaselineSaving(true);
+      await axios.put(`/api/targets/${diffData.target.id}`, { baselineScanId: scanId });
+      await loadDiff();
+    } finally {
+      setBaselineSaving(false);
+    }
+  };
+
+  const clearBaseline = async () => {
+    if (!diffData?.target?.id) return;
+
+    try {
+      setBaselineSaving(true);
+      await axios.put(`/api/targets/${diffData.target.id}`, { baselineScanId: '' });
+      await loadDiff();
+    } finally {
+      setBaselineSaving(false);
+    }
+  };
+
   const generatePdf = async () => {
     try {
       setPdfLoading(true);
       const { data } = await axios.post('/api/reports/pdf', { scanId });
       window.open(data.url, '_blank');
-    } catch { alert('Failed to generate PDF'); }
-    finally { setPdfLoading(false); }
+    } catch {
+      alert('Failed to generate PDF');
+    } finally {
+      setPdfLoading(false);
+    }
   };
 
   const generateCsv = async () => {
@@ -48,12 +100,17 @@ export default function ReportView() {
       setCsvLoading(true);
       const { data } = await axios.post('/api/reports/csv', { scanId });
       window.open(data.url, '_blank');
-    } catch { alert('Failed to generate CSV'); }
-    finally { setCsvLoading(false); }
+    } catch {
+      alert('Failed to generate CSV');
+    } finally {
+      setCsvLoading(false);
+    }
   };
 
   useEffect(() => {
     loadScan();
+    loadDiff();
+
     const es = new EventSource('/api/sse/events');
     es.onmessage = (e) => {
       try {
@@ -66,6 +123,7 @@ export default function ReportView() {
           setScan((prev) => (prev ? { ...prev, status: 'failed', error: msg.error || prev.error } : prev));
         } else if (msg.type === 'completed') {
           loadScan();
+          loadDiff();
         }
       } catch {}
     };
@@ -75,6 +133,19 @@ export default function ReportView() {
   useEffect(() => {
     setSelectedIndex(0);
   }, [severityFilter, categoryFilter, scanId]);
+
+  const formatLocalDateTime = (value) => {
+    if (!value) return '—';
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return '—';
+    return new Intl.DateTimeFormat(undefined, {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(d);
+  };
 
   if (loading) {
     return (
@@ -98,20 +169,45 @@ export default function ReportView() {
 
   const findings = scan?.results || [];
 
+  const sevRank = (sev) => {
+    const s = (sev || 'info').toLowerCase();
+    if (s === 'critical') return 4;
+    if (s === 'high') return 3;
+    if (s === 'medium') return 2;
+    if (s === 'low') return 1;
+    return 0;
+  };
+
+  const topFindings = useMemo(() => {
+    return [...findings]
+      .sort((a, b) => {
+        const d = sevRank(b.severity) - sevRank(a.severity);
+        if (d) return d;
+        return String(a.title || '').localeCompare(String(b.title || ''));
+      })
+      .slice(0, 3);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [findings.length]);
+
   const categories = Array.from(
     new Set(findings.map((f) => (f.category || 'other').toLowerCase())),
   ).sort();
 
-  const filteredFindings = findings.filter((f) => {
-    const title = (f.title || '').toLowerCase();
-    const category = (f.category || 'other').toLowerCase();
-    const sev = (f.severity || 'info').toLowerCase();
+  const filteredFindings = findings
+    .filter((f) => {
+      const category = (f.category || 'other').toLowerCase();
+      const sev = (f.severity || 'info').toLowerCase();
 
-    if (severityFilter !== 'all' && sev !== severityFilter) return false;
-    if (categoryFilter !== 'all' && category !== categoryFilter) return false;
+      if (severityFilter !== 'all' && sev !== severityFilter) return false;
+      if (categoryFilter !== 'all' && category !== categoryFilter) return false;
 
-    return true;
-  });
+      return true;
+    })
+    .sort((a, b) => {
+      const d = sevRank(b.severity) - sevRank(a.severity);
+      if (d) return d;
+      return String(a.title || '').localeCompare(String(b.title || ''));
+    });
 
   const selectedVuln = filteredFindings[selectedIndex];
 
@@ -132,26 +228,14 @@ export default function ReportView() {
     : scan?.status === 'failed' ? 'text-red-400'
     : 'text-gray-400';
 
-  const formatLocalDateTime = (value) => {
-    if (!value) return '—';
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return '—';
-    return new Intl.DateTimeFormat(undefined, {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-    }).format(d);
-  };
+  const running = scan?.status === 'running' || scan?.status === 'queued' || scan?.status === 'scheduled';
 
   return (
     <div className="space-y-5">
-
       {/* ── Header ─────────────────────────────────────────────── */}
       <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold bg-gradient-to-r from-primary-400 to-secondary-400 bg-clip-text text-transparent">Scan Report</h1>
+          <h1 className="text-2xl font-bold bg-gradient-to-r from-primary-400 to-secondary-400 bg-clip-text text-transparent">Scan report</h1>
           <p className="text-gray-500 mt-1 break-all text-sm">{scan?.targetUrl}</p>
         </div>
         <div className="flex gap-2 shrink-0">
@@ -169,6 +253,117 @@ export default function ReportView() {
           >
             {csvLoading ? 'Generating…' : 'Download CSV'}
           </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Executive summary */}
+        <div className="lg:col-span-2 rounded-xl border border-slate-800 bg-dark-200 p-5">
+          <h2 className="text-sm font-semibold text-white">Executive summary</h2>
+          <p className="text-sm text-gray-500 mt-1">
+            {findings.length === 0
+              ? (running ? 'Scanning in progress…' : 'No findings reported.')
+              : `${findings.length} findings • top issues highlighted below.`}
+          </p>
+
+          {topFindings.length > 0 ? (
+            <ul className="mt-4 space-y-2">
+              {topFindings.map((f, i) => (
+                <li key={i} className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm text-gray-200 truncate">{f.title}</p>
+                    <p className="text-xs text-gray-600 mt-0.5 capitalize">{(f.category || 'other').toLowerCase()}</p>
+                  </div>
+                  <SeverityBadge severity={(f.severity || 'info').toLowerCase()} />
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="mt-4 text-sm text-gray-600">
+              {running ? 'Findings will populate once the scan completes.' : 'No vulnerabilities found.'}
+            </div>
+          )}
+
+          <div className="mt-4 pt-4 border-t border-slate-800 flex flex-wrap gap-2">
+            <Link to="/scans" className="px-3 py-2 rounded-lg text-sm font-medium bg-dark-300 border border-slate-800 hover:bg-black/5 dark:hover:bg-slate-800 transition">
+              Back to scans
+            </Link>
+            <Link to="/new" className="px-3 py-2 rounded-lg text-sm font-medium btn btn-primary">
+              New scan
+            </Link>
+          </div>
+        </div>
+
+        {/* DevSecOps */}
+        <div className="rounded-xl border border-slate-800 bg-dark-200 p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold text-white">DevSecOps</h2>
+              <p className="text-xs text-gray-600 mt-1">Baseline + policy gate</p>
+            </div>
+            <Link to="/targets" className="text-xs font-semibold text-primary-400 hover:text-primary-300 transition">
+              Manage →
+            </Link>
+          </div>
+
+          <div className="mt-4 space-y-3">
+            <div className="rounded-lg border border-slate-800 bg-black/30 p-3">
+              <p className="text-xs text-gray-600">Policy gate</p>
+              <div className="mt-1 flex items-center justify-between gap-2">
+                <PolicyBadge status={scan?.policy?.status || 'unknown'} enabled={diffData?.target?.policyEnabled} />
+                {scan?.diffSummary?.newBlockedCount != null && (
+                  <span className="text-xs text-gray-600 tabular-nums">New blocked: {scan.diffSummary.newBlockedCount}</span>
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-slate-800 bg-black/30 p-3">
+              <p className="text-xs text-gray-600">Baseline</p>
+              {diffLoading ? (
+                <p className="text-sm text-gray-500 mt-1">Loading diff…</p>
+              ) : !diffData?.target ? (
+                <p className="text-sm text-gray-600 mt-1">This scan isn’t linked to a target yet.</p>
+              ) : diffData?.baselineScanId ? (
+                <div className="mt-2 space-y-2">
+                  <p className="text-sm text-gray-200">Comparing to baseline</p>
+                  {diffData?.diff ? (
+                    <div className="grid grid-cols-3 gap-2 text-xs">
+                      <Stat label="New" value={diffData.diff.newIssues?.length || 0} className="text-red-400" />
+                      <Stat label="Fixed" value={diffData.diff.fixedIssues?.length || 0} className="text-emerald-400" />
+                      <Stat label="Persist" value={diffData.diff.persisting?.length || 0} className="text-gray-300" />
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-600">No diff available yet.</p>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-600 mt-1">No baseline set for this target.</p>
+              )}
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={setBaselineToThisScan}
+                disabled={baselineSaving || scan?.status !== 'completed' || !diffData?.target?.id}
+                className="px-3 py-2 rounded-lg text-sm font-medium bg-dark-300 border border-slate-800 hover:bg-black/5 dark:hover:bg-slate-800 transition disabled:opacity-40"
+              >
+                {baselineSaving ? 'Saving…' : 'Set baseline to this scan'}
+              </button>
+              <button
+                type="button"
+                onClick={clearBaseline}
+                disabled={baselineSaving || !diffData?.target?.id || !diffData?.target?.baselineScanId}
+                className="px-3 py-2 rounded-lg text-sm font-medium bg-dark-300 border border-slate-800 hover:bg-black/5 dark:hover:bg-slate-800 transition disabled:opacity-40"
+              >
+                Clear baseline
+              </button>
+            </div>
+
+            <p className="text-xs text-gray-600 leading-relaxed">
+              With policy enabled, any new High/Critical findings compared to the baseline will mark the scan as <span className="text-red-400">Policy: Fail</span>.
+            </p>
+          </div>
         </div>
       </div>
 
@@ -194,7 +389,7 @@ export default function ReportView() {
         </div>
 
         <div className="mt-4">
-          <ProgressBar progress={scan?.progress ?? 0} running={scan?.status === 'running' || scan?.status === 'queued' || scan?.status === 'scheduled'} />
+          <AnimatedProgressBar progress={scan?.progress ?? 0} running={running} />
         </div>
 
         {findings.length > 0 && (
@@ -206,7 +401,7 @@ export default function ReportView() {
                 className="bg-slate-500/10 text-gray-400 border border-slate-800"
                 label={`All (${findings.length})`}
               />
-              {['critical','high','medium','low','info'].map((s) =>
+              {['critical', 'high', 'medium', 'low', 'info'].map((s) =>
                 sevCounts[s] ? (
                   <FilterChip
                     key={s}
@@ -215,7 +410,7 @@ export default function ReportView() {
                     className={SEV[s]?.bg}
                     label={`${sevCounts[s]} ${s.charAt(0).toUpperCase() + s.slice(1)}`}
                   />
-                ) : null
+                ) : null,
               )}
             </div>
 
@@ -244,12 +439,12 @@ export default function ReportView() {
 
       {/* ── Findings + Detail ──────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-
         {/* Findings list */}
         <div className="rounded-xl border border-slate-800 bg-dark-200 p-4">
           <div className="flex items-end justify-between gap-3 mb-3">
             <h2 className="font-semibold text-white text-sm">
-              Findings <span className="text-gray-600 font-normal">({filteredFindings.length}{filteredFindings.length !== findings.length ? ` / ${findings.length}` : ''})</span>
+              Findings{' '}
+              <span className="text-gray-600 font-normal">({filteredFindings.length}{filteredFindings.length !== findings.length ? ` / ${findings.length}` : ''})</span>
             </h2>
             {(severityFilter !== 'all' || categoryFilter !== 'all') && (
               <button
@@ -266,7 +461,12 @@ export default function ReportView() {
           </div>
 
           {findings.length === 0 ? (
-            <div className="py-10 text-center text-gray-600 text-sm">No vulnerabilities found.</div>
+            <div className="py-6">
+              <EmptyState
+                title={running ? 'Scanning…' : 'No vulnerabilities found'}
+                description={running ? 'Findings will appear here once the scan completes.' : 'This scan completed with zero reported findings.'}
+              />
+            </div>
           ) : filteredFindings.length === 0 ? (
             <div className="py-10 text-center text-gray-600 text-sm">No matches for your filters.</div>
           ) : (
@@ -301,7 +501,7 @@ export default function ReportView() {
 
         {/* Detail panel */}
         <div className="lg:col-span-2 rounded-xl border border-slate-800 bg-dark-200 p-5">
-          <h2 className="font-semibold text-white mb-4 text-sm">Finding Details</h2>
+          <h2 className="font-semibold text-white mb-4 text-sm">Finding details</h2>
 
           {!selectedVuln ? (
             <div className="py-16 text-center text-gray-600 text-sm">Select a finding from the list.</div>
@@ -340,7 +540,7 @@ export default function ReportView() {
               </div>
 
               <div className="rounded-lg border border-emerald-800/40 bg-emerald-900/10 p-4">
-                <h4 className="text-xs font-semibold text-emerald-400 uppercase tracking-wide mb-2">How to Fix</h4>
+                <h4 className="text-xs font-semibold text-emerald-400 uppercase tracking-wide mb-2">How to fix</h4>
                 <p className="text-emerald-300/80 text-sm mb-3">{getRemediationAdvice(selectedVuln.category)}</p>
                 {getCodeExample(selectedVuln.category) && (
                   <pre className="mt-2 rounded-lg bg-black/60 border border-slate-800 p-3 text-xs text-emerald-400 font-mono overflow-x-auto whitespace-pre">
@@ -388,33 +588,38 @@ function CategoryBadge({ category }) {
   );
 }
 
-
-
-function ProgressBar({ progress, running }) {
-  const pct = Math.min(100, Math.max(0, progress ?? 0));
-
-  return (
-    <div className="space-y-2">
-      <div className="h-2.5 rounded-full bg-slate-800 overflow-hidden">
-        <div
-          className={`h-full rounded-full transition-[width] duration-700 ease-out ${running ? 'progress-fill-running' : 'bg-emerald-500'}`}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-      <div className="flex items-center justify-between text-xs text-gray-600">
-        <span className="capitalize">{running ? 'Scanning…' : 'Complete'}</span>
-        <span className="tabular-nums">{pct}%</span>
-      </div>
-    </div>
-  );
-}
-
 function SeverityBadge({ severity }) {
   const style = SEV[severity] || SEV.info;
   return (
     <span className={`shrink-0 px-2 py-0.5 rounded-full text-xs font-medium uppercase ${style.bg}`}>
       {severity}
     </span>
+  );
+}
+
+function PolicyBadge({ status, enabled }) {
+  if (!enabled) {
+    return (
+      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${POLICY.skipped.cls}`}>
+        Policy: {POLICY.skipped.label}
+      </span>
+    );
+  }
+
+  const meta = POLICY[status] || POLICY.unknown;
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${meta.cls}`}>
+      Policy: {meta.label}
+    </span>
+  );
+}
+
+function Stat({ label, value, className }) {
+  return (
+    <div className="rounded-lg border border-slate-800 bg-black/30 p-2">
+      <p className="text-[11px] text-gray-600">{label}</p>
+      <p className={`text-sm font-semibold tabular-nums ${className || 'text-gray-200'}`}>{value}</p>
+    </div>
   );
 }
 

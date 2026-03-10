@@ -22,6 +22,7 @@ import { logger } from './utils/logger.js';
 import { sseRouter, sseInit } from './routes/sse.js';
 import authRouter from './routes/auth.js';
 import userRouter from './routes/users.js';
+import targetRouter from './routes/targets.js';
 import scanRouter from './routes/scans.js';
 import reportRouter from './routes/reports.js';
 import { authMiddleware } from './middleware/auth.js';
@@ -95,8 +96,10 @@ mongoose.connect(MONGODB_URI, { autoIndex: true })
     // We normalise existing nulls and sync indexes to the model definition.
     try {
       const { default: User } = await import('./models/User.js');
+      const { default: Target } = await import('./models/Target.js');
       await User.updateMany({ email: null }, { $unset: { email: 1 }, $set: { emailAlertsEnabled: false } });
       await User.syncIndexes();
+      await Target.syncIndexes();
     } catch (e) {
       logger.warn('User index sync failed', { error: e.message });
     }
@@ -116,6 +119,7 @@ sseInit(app);
 // Routes
 app.use('/api/auth', authRouter);
 app.use('/api/users', authMiddleware, userRouter);
+app.use('/api/targets', authMiddleware, targetRouter);
 app.use('/api/scans', authMiddleware, scanRouter);
 app.use('/api/reports', authMiddleware, reportRouter);
 app.use('/api/sse', sseRouter);
