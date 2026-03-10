@@ -129,7 +129,7 @@ export default function NewScan() {
   return (
     <div className="max-w-3xl mx-auto text-gray-300">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-primary-500 cyber-glow-text">Launch Vector</h1>
+        <h1 className="text-2xl font-bold bg-gradient-to-r from-primary-400 to-secondary-400 bg-clip-text text-transparent">Launch Vector</h1>
         <p className="text-gray-400 mt-1">Configure and initiate a targeted security sweep</p>
       </div>
 
@@ -155,7 +155,7 @@ export default function NewScan() {
               value={targetUrl}
               onChange={(e) => setTargetUrl(e.target.value)}
               placeholder="https://example.com"
-              className="input bg-dark-300"
+              className="input input-plain"
             />
             <p className="text-sm text-gray-500 mt-2">
               Enter the fully qualified domain name or IP address
@@ -216,7 +216,7 @@ export default function NewScan() {
                     type="checkbox"
                     checked={customModules.includes(module.id)}
                     onChange={() => toggleModule(module.id)}
-                    className="mt-1 w-4 h-4 text-primary-500 bg-dark-300 border-slate-600 rounded"
+                    className="mt-1 w-4 h-4 text-primary-500 bg-black/40 border-slate-600 rounded"
                   />
                   <div>
                     <span className="font-medium text-gray-200">{module.name}</span>
@@ -237,7 +237,7 @@ export default function NewScan() {
                 type="checkbox"
                 checked={scheduleEnabled}
                 onChange={(e) => setScheduleEnabled(e.target.checked)}
-                className="w-4 h-4 text-primary-500 bg-dark-300 border-slate-600 rounded"
+                className="w-4 h-4 text-primary-500 bg-black/40 border-slate-600 rounded"
               />
               <span className="text-sm text-gray-400">Delay execution</span>
             </label>
@@ -253,7 +253,7 @@ export default function NewScan() {
                 value={scheduledTime}
                 onChange={(e) => setScheduledTime(e.target.value)}
                 min={getMinDateTime()}
-                className="input bg-dark-300"
+                className="input input-plain"
               />
               <p className="text-sm text-gray-500 mt-2">
                 The payload will deploy automatically at the specified time
@@ -271,7 +271,7 @@ export default function NewScan() {
           <button
             type="button"
             onClick={() => navigate('/scans')}
-            className="px-6 py-3 border border-slate-700 text-gray-400 rounded-lg hover:bg-slate-800 transition"
+            className="px-6 py-3 border border-slate-700 text-gray-400 rounded-lg hover:bg-black/5 dark:hover:bg-slate-800 transition"
           >
             Abort
           </button>
