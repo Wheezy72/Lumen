@@ -132,9 +132,13 @@ const createWaiter = (scanId, scan) => {
   const reject = settle(_reject);
 
   const start = () => {
-    responseTimeout = setTimeout(() => {
-      reject(new Error(`No response from Python worker within ${WORKER_RESPONSE_TIMEOUT_MS}ms`));
-    }, WORKER_RESPONSE_TIMEOUT_MS);
+    // The worker can publish an immediate "job received" progress message.
+    // If that arrives before start() is called, we must not arm the response timeout.
+    if (!heardFromWorker) {
+      responseTimeout = setTimeout(() => {
+        reject(new Error(`No response from Python worker within ${WORKER_RESPONSE_TIMEOUT_MS}ms`));
+      }, WORKER_RESPONSE_TIMEOUT_MS);
+    }
 
     overallTimeout = setTimeout(() => {
       reject(new Error('Worker timeout - scan took too long'));
@@ -142,9 +146,11 @@ const createWaiter = (scanId, scan) => {
   };
 
   const markHeardFromWorker = () => {
-    if (heardFromWorker) return;
     heardFromWorker = true;
-    if (responseTimeout) clearTimeout(responseTimeout);
+    if (responseTimeout) {
+      clearTimeout(responseTimeout);
+      responseTimeout = null;
+    }
   };
 
   return {
@@ -263,6 +269,7 @@ export const configureBull = () => {
   // Handle failed jobs
   scanQueue.on('failed', async (job, err) => {
     const { scanId, webhookUrl } = job.data;
+    logger.warn('Scan job failed', { scanId, error: err.message });
     const scan = await Scan.findById(scanId);
 
     // Don't overwrite a scan that already completed successfully
