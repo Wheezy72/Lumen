@@ -60,9 +60,11 @@ const initResultSubscriber = () => {
       if (data.type === 'progress') {
         const nextProgress = Number(data.progress);
         if (!Number.isNaN(nextProgress)) {
-          waiter.scan.progress = Math.max(waiter.scan.progress || 0, nextProgress);
-          await waiter.scan.save();
-          publishScanUpdate(jobQueueApp(), { type: 'progress', scanId, progress: waiter.scan.progress });
+          await waiter.enqueueWrite(async () => {
+            waiter.scan.progress = Math.max(waiter.scan.progress || 0, nextProgress);
+            await waiter.scan.save();
+            publishScanUpdate(jobQueueApp(), { type: 'progress', scanId, progress: waiter.scan.progress });
+          });
         }
         return;
       }
@@ -80,7 +82,7 @@ const initResultSubscriber = () => {
       });
 
       try {
-        await handleResults(waiter.scan, data);
+        await waiter.enqueueWrite(() => handleResults(waiter.scan, data));
         waiter.resolve(true);
       } catch (e) {
         waiter.reject(e);
@@ -107,6 +109,14 @@ const createWaiter = (scanId, scan) => {
   let overallTimeout = null;
   let responseTimeout = null;
   let heardFromWorker = false;
+
+  // Mongoose throws if you call scan.save() concurrently on the same document.
+  // Progress messages can arrive quickly, so serialize all writes per scan.
+  let writeChain = Promise.resolve();
+  const enqueueWrite = (fn) => {
+    writeChain = writeChain.then(fn, fn);
+    return writeChain;
+  };
 
   const cleanup = () => {
     if (overallTimeout) clearTimeout(overallTimeout);
@@ -161,6 +171,7 @@ const createWaiter = (scanId, scan) => {
     resolve,
     reject,
     markHeardFromWorker,
+    enqueueWrite,
   };
 };
 
