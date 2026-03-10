@@ -21,6 +21,7 @@ export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
   const { theme, toggleTheme } = useTheme();
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
     // Check for existing session
@@ -36,6 +37,10 @@ export default function App() {
     };
     checkAuth();
   }, []);
+
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [location.pathname]);
 
   const logout = async () => {
     try {
@@ -64,91 +69,120 @@ export default function App() {
   const isAuthRoute = location.pathname === "/login" || location.pathname === "/register";
 
   return (
-    <div className="min-h-screen bg-dark-300 text-white">
-      <header className="bg-dark-200/80 backdrop-blur-lg border-b border-slate-800 sticky top-0 z-50">
+    <div className="min-h-screen app-shell text-white">
+      <header className="bg-dark-200 backdrop-blur-lg border-b border-slate-800 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-3">
-              <div className="placeholder-logo cyber-glow"></div>
-              <Link
-                to="/"
-                className="text-xl font-bold bg-gradient-to-r from-primary-400 to-primary-600 bg-clip-text text-transparent"
-              >
+            <Link to="/" className="flex items-center space-x-3">
+              <div className="h-9 w-9 rounded-xl overflow-hidden ring-1 ring-black/10 dark:ring-white/10 shadow-soft">
+                <img src="/logo.jpg" alt="Lumen" className="h-full w-full object-cover" />
+              </div>
+              <span className="text-xl font-bold bg-gradient-to-r from-primary-400 to-secondary-400 bg-clip-text text-transparent">
                 Lumen Scanner
-              </Link>
-            </div>
+              </span>
+            </Link>
 
-            <nav className="hidden md:flex items-center space-x-1">
-              <NavLink to="/learn" isActive={isActiveRoute("/learn")}>
-                Learn
-              </NavLink>
+            <div className="hidden md:flex items-center gap-2">
+              <nav className="flex items-center space-x-1">
+                <NavLink to="/learn" isActive={isActiveRoute("/learn")}>
+                  Learn
+                </NavLink>
 
-              <button
-                type="button"
-                onClick={toggleTheme}
-                className="ml-2 inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white hover:bg-slate-800 transition"
-                aria-label="Toggle theme"
-                title={`Theme: ${theme}`}
-              >
-                {theme === "dark" ? <MoonIcon className="w-4 h-4" /> : <SunIcon className="w-4 h-4" />}
-                <span className="hidden lg:inline">{theme === "dark" ? "Dark" : "Light"}</span>
-              </button>
+                {user && (
+                  <>
+                    <NavLink to="/dashboard" isActive={isActiveRoute("/dashboard")}>
+                      <DashboardIcon className="w-4 h-4 mr-1.5" />
+                      Dashboard
+                    </NavLink>
+                    <NavLink to="/scans" isActive={isActiveRoute("/scans")}>
+                      <ScanIcon className="w-4 h-4 mr-1.5" />
+                      Scans
+                    </NavLink>
+                    <NavLink to="/new" isActive={isActiveRoute("/new")}>
+                      <PlusIcon className="w-4 h-4 mr-1.5" />
+                      New Scan
+                    </NavLink>
+                  </>
+                )}
+              </nav>
+
+              <div className="mx-2 h-6 w-px bg-slate-800/70" />
+
+              <ThemeToggleButton theme={theme} toggleTheme={toggleTheme} />
 
               {user ? (
-                <>
-                  <NavLink to="/dashboard" isActive={isActiveRoute("/dashboard")}>
-                    <DashboardIcon className="w-4 h-4 mr-1.5" />
-                    Dashboard
-                  </NavLink>
-                  <NavLink to="/scans" isActive={isActiveRoute("/scans")}>
-                    <ScanIcon className="w-4 h-4 mr-1.5" />
-                    Scans
-                  </NavLink>
-                  <NavLink to="/new" isActive={isActiveRoute("/new")}>
-                    <PlusIcon className="w-4 h-4 mr-1.5" />
-                    New Scan
-                  </NavLink>
-                  <div className="ml-4 pl-4 border-l border-slate-700">
-                    <button
-                      onClick={logout}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-red-400 border border-red-900/50 hover:bg-red-900/30 hover:border-red-700 transition whitespace-nowrap"
-                    >
-                      <LogoutIcon className="w-4 h-4" />
-                      Logout
-                    </button>
-                  </div>
-                </>
+                <button
+                  onClick={logout}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-red-500/80 border border-red-900/30 hover:bg-red-900/10 hover:border-red-700/40 transition whitespace-nowrap"
+                >
+                  <LogoutIcon className="w-4 h-4" />
+                  Logout
+                </button>
               ) : (
                 <>
                   <NavLink to="/login" isActive={isActiveRoute("/login")}>
                     Login
                   </NavLink>
-                  <Link
-                    to="/register"
-                    className="ml-2 px-4 py-1.5 rounded-lg text-sm font-semibold btn btn-primary"
-                  >
+                  <Link to="/register" className="ml-1 px-4 py-1.5 rounded-lg text-sm font-semibold btn btn-primary">
                     Get Started
                   </Link>
                 </>
               )}
-            </nav>
+            </div>
 
             {/* Mobile */}
             <div className="md:hidden flex items-center gap-2">
+              <ThemeToggleButton theme={theme} toggleTheme={toggleTheme} iconOnly />
               <button
                 type="button"
-                onClick={toggleTheme}
-                className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-slate-800 transition"
-                aria-label="Toggle theme"
-                title={`Theme: ${theme}`}
+                onClick={() => setMobileOpen((v) => !v)}
+                className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-black/5 dark:hover:bg-slate-800 transition"
+                aria-label="Toggle menu"
               >
-                {theme === "dark" ? <MoonIcon className="w-5 h-5" /> : <SunIcon className="w-5 h-5" />}
-              </button>
-              <button className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-slate-800">
                 <MenuIcon className="w-6 h-6" />
               </button>
             </div>
           </div>
+
+          {mobileOpen && (
+            <div className="md:hidden pb-4 pt-2 border-t border-slate-800">
+              <nav className="flex flex-col gap-1">
+                <NavLink to="/learn" isActive={isActiveRoute("/learn")}>
+                  Learn
+                </NavLink>
+
+                {user ? (
+                  <>
+                    <NavLink to="/dashboard" isActive={isActiveRoute("/dashboard")}>
+                      Dashboard
+                    </NavLink>
+                    <NavLink to="/scans" isActive={isActiveRoute("/scans")}>
+                      Scans
+                    </NavLink>
+                    <NavLink to="/new" isActive={isActiveRoute("/new")}>
+                      New Scan
+                    </NavLink>
+                    <button
+                      onClick={logout}
+                      className="mt-2 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-red-500/80 border border-red-900/30 hover:bg-red-900/10 hover:border-red-700/40 transition"
+                    >
+                      <LogoutIcon className="w-4 h-4" />
+                      Logout
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <NavLink to="/login" isActive={isActiveRoute("/login")}>
+                      Login
+                    </NavLink>
+                    <Link to="/register" className="mt-1 btn btn-primary w-full justify-center">
+                      Get Started
+                    </Link>
+                  </>
+                )}
+              </nav>
+            </div>
+          )}
         </div>
       </header>
 
@@ -180,7 +214,9 @@ export default function App() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
             <div className="text-center text-gray-600">
               <div className="flex items-center justify-center space-x-2 mb-3">
-                <div className="placeholder-logo"></div>
+                <div className="h-8 w-8 rounded-lg overflow-hidden ring-1 ring-black/10 dark:ring-white/10">
+                  <img src="/logo.jpg" alt="Lumen" className="h-full w-full object-cover" />
+                </div>
                 <span className="font-semibold text-gray-400">Lumen Vulnerability Scanner</span>
               </div>
               <p className="text-sm">Secure your applications with comprehensive vulnerability scanning.</p>
@@ -199,12 +235,29 @@ function NavLink({ to, children, isActive }) {
       to={to}
       className={`px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center ${
         isActive
-          ? 'bg-primary-900/50 text-primary-400'
-          : 'text-gray-400 hover:text-white hover:bg-slate-800'
+          ? 'bg-primary-500/10 text-primary-700 dark:bg-primary-900/50 dark:text-primary-400'
+          : 'text-gray-400 hover:text-white hover:bg-black/5 dark:hover:bg-slate-800'
       }`}
     >
       {children}
     </Link>
+  );
+}
+
+function ThemeToggleButton({ theme, toggleTheme, iconOnly = false }) {
+  const sizing = iconOnly ? "h-9 w-9 px-0" : "h-9 px-3";
+
+  return (
+    <button
+      type="button"
+      onClick={toggleTheme}
+      className={`inline-flex items-center justify-center gap-2 ${sizing} rounded-lg text-sm font-medium text-gray-400 border border-slate-800 bg-dark-200 hover:bg-black/5 dark:hover:bg-slate-800 transition`}
+      aria-label="Toggle theme"
+      title={`Theme: ${theme}`}
+    >
+      {theme === "dark" ? <MoonIcon className="w-4 h-4" /> : <SunIcon className="w-4 h-4" />}
+      {!iconOnly && <span className="hidden lg:inline">{theme === "dark" ? "Dark" : "Light"}</span>}
+    </button>
   );
 }
 

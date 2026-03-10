@@ -174,7 +174,7 @@ export default function Dashboard() {
     <div className="space-y-6 p-1">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-white">Security overview</h1>
+        <h1 className="text-2xl font-bold bg-gradient-to-r from-primary-400 to-secondary-400 bg-clip-text text-transparent">Security overview</h1>
         <p className="text-sm text-gray-500 mt-1">Aggregated findings across your recent scans.</p>
       </div>
 

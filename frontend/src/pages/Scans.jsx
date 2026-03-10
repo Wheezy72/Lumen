@@ -99,7 +99,7 @@ export default function Scans() {
     <div className="space-y-5">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-white">Scans</h1>
+          <h1 className="text-2xl font-bold bg-gradient-to-r from-primary-400 to-secondary-400 bg-clip-text text-transparent">Scans</h1>
           <p className="text-sm text-gray-500 mt-1">
             {scans.length} scan{scans.length !== 1 ? 's' : ''} total
           </p>

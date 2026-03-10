@@ -49,6 +49,26 @@ body {
   color: var(--lumen-text) !important;
 }
 
+.text-gray-200 {
+  color: var(--lumen-text) !important;
+}
+
+.text-gray-300 {
+  color: var(--lumen-text) !important;
+}
+
+.text-gray-400 {
+  color: var(--lumen-muted) !important;
+}
+
+.text-gray-500 {
+  color: var(--lumen-muted-2) !important;
+}
+
+.text-gray-600 {
+  color: var(--lumen-muted-2) !important;
+}
+
 /* Keep SVG icons that explicitly request white as white (e.g. icons on colored badges). */
 svg.text-white {
   color: #ffffff !important;
@@ -246,6 +266,34 @@ svg.text-white {
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
+}
+
+/* Simple slide-up animation used for cards and panels */
+.animate-slide-up {
+  animation: slideUp 0.35s ease-out both;
+}
+
+@keyframes slideUp {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Chart container */
+.chart-container {
+  position: relative;
+  background-color: white;
+  border-radius: 0.75rem;
+  box-shadow: 0 2px 15px -3px rgba(0, 0, 0, 0.07), 0 10px 20px -2px rgba(0, 0, 0, 0.04);
+  padding: 1.5rem;
+  border: 1px solid #f3f4f6;
+}
+00% { transform: rotate(360deg); }
 }
 
 /* Simple slide-up animation used for cards and panels */
