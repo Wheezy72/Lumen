@@ -216,8 +216,18 @@ export default function NewScan() {
                     type="checkbox"
                     checked={customModules.includes(module.id)}
                     onChange={() => toggleModule(module.id)}
-                    className="mt-1 w-4 h-4 text-primary-500 bg-black/40 border-slate-600 rounded"
+                    className="sr-only peer"
                   />
+                  <div className="mt-0.5 h-5 w-5 rounded-md border border-slate-700 bg-black/40 flex items-center justify-center transition peer-checked:border-primary-500 peer-checked:bg-primary-500/15">
+                    <svg
+                      className="w-4 h-4 text-primary-400 opacity-0 transition-opacity peer-checked:opacity-100"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
                   <div>
                     <span className="font-medium text-gray-200">{module.name}</span>
                     <p className="text-sm text-gray-500">{module.description}</p>
@@ -232,15 +242,29 @@ export default function NewScan() {
         <div className="bg-dark-200 rounded-xl border border-slate-800 p-6 shadow-neon">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-primary-400">Execution Schedule</h2>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={scheduleEnabled}
-                onChange={(e) => setScheduleEnabled(e.target.checked)}
-                className="w-4 h-4 text-primary-500 bg-black/40 border-slate-600 rounded"
-              />
+            <button
+              type="button"
+              onClick={() => setScheduleEnabled((v) => !v)}
+              className="inline-flex items-center gap-3"
+              aria-pressed={scheduleEnabled}
+            >
               <span className="text-sm text-gray-400">Delay execution</span>
-            </label>
+              <span
+                className={`h-6 w-11 rounded-full border transition relative ${
+                  scheduleEnabled
+                    ? 'bg-primary-500/20 border-primary-500/30'
+                    : 'bg-black/30 border-slate-700'
+                }`}
+              >
+                <span
+                  className={`absolute top-1/2 -translate-y-1/2 h-4 w-4 rounded-full transition ${
+                    scheduleEnabled
+                      ? 'bg-primary-400 left-6'
+                      : 'bg-slate-500 left-1'
+                  }`}
+                />
+              </span>
+            </button>
           </div>
 
           {scheduleEnabled ? (

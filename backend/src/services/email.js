@@ -36,7 +36,7 @@ export async function sendScanSummaryEmail(scan) {
 
   try {
     const user = await User.findById(scan.userId);
-    if (!user?.email) return;
+    if (!user?.email || !user.emailAlertsEnabled) return;
 
     const total = (scan.results || []).length;
     if (!total) {
@@ -85,7 +85,7 @@ export async function sendScanFailureEmail(scan, errorMessage) {
 
   try {
     const user = await User.findById(scan.userId);
-    if (!user?.email) return;
+    if (!user?.email || !user.emailAlertsEnabled) return;
 
     const subject = `[Lumen] Scan failed for ${scan.targetUrl}`;
     const text = [
@@ -117,7 +117,7 @@ export async function sendScheduledScanDiffEmail(scan, diff) {
 
   try {
     const user = await User.findById(scan.userId);
-    if (!user?.email) return;
+    if (!user?.email || !user.emailAlertsEnabled) return;
 
     const all = scan.results || [];
     const counts = { low: 0, medium: 0, high: 0, critical: 0 };

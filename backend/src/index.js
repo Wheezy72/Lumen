@@ -21,6 +21,7 @@ import fs from 'fs';
 import { logger } from './utils/logger.js';
 import { sseRouter, sseInit } from './routes/sse.js';
 import authRouter from './routes/auth.js';
+import userRouter from './routes/users.js';
 import scanRouter from './routes/scans.js';
 import reportRouter from './routes/reports.js';
 import { authMiddleware } from './middleware/auth.js';
@@ -86,7 +87,20 @@ app.use('/static/reports', express.static(reportsPath));
 
 // MongoDB connection
 mongoose.connect(MONGODB_URI, { autoIndex: true })
-  .then(() => logger.info('MongoDB connected'))
+  .then(async () => {
+    logger.info('MongoDB connected');
+
+    // If an older non-sparse unique index exists for email, it will treat missing values as null.
+    // That can cause E11000 duplicate key errors when registering users without an email.
+    // We normalise existing nulls and sync indexes to the model definition.
+    try {
+      const { default: User } = await import('./models/User.js');
+      await User.updateMany({ email: null }, { $unset: { email: 1 }, $set: { emailAlertsEnabled: false } });
+      await User.syncIndexes();
+    } catch (e) {
+      logger.warn('User index sync failed', { error: e.message });
+    }
+  })
   .catch((err) => {
     // Don't hard-exit on startup; allow /health to report degraded while devs bring Mongo up.
     logger.error('MongoDB connection error', { error: err.message });
@@ -101,6 +115,7 @@ sseInit(app);
 
 // Routes
 app.use('/api/auth', authRouter);
+app.use('/api/users', authMiddleware, userRouter);
 app.use('/api/scans', authMiddleware, scanRouter);
 app.use('/api/reports', authMiddleware, reportRouter);
 app.use('/api/sse', sseRouter);

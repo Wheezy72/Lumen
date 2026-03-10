@@ -16,7 +16,6 @@ export default function ReportView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [search, setSearch] = useState('');
   const [severityFilter, setSeverityFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [pdfLoading, setPdfLoading] = useState(false);
@@ -75,7 +74,7 @@ export default function ReportView() {
 
   useEffect(() => {
     setSelectedIndex(0);
-  }, [search, severityFilter, categoryFilter, scanId]);
+  }, [severityFilter, categoryFilter, scanId]);
 
   if (loading) {
     return (
@@ -111,11 +110,6 @@ export default function ReportView() {
     if (severityFilter !== 'all' && sev !== severityFilter) return false;
     if (categoryFilter !== 'all' && category !== categoryFilter) return false;
 
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
-      if (!title.includes(q) && !category.includes(q)) return false;
-    }
-
     return true;
   });
 
@@ -137,6 +131,19 @@ export default function ReportView() {
     : scan?.status === 'running' ? 'text-blue-400'
     : scan?.status === 'failed' ? 'text-red-400'
     : 'text-gray-400';
+
+  const formatLocalDateTime = (value) => {
+    if (!value) return '—';
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return '—';
+    return new Intl.DateTimeFormat(undefined, {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(d);
+  };
 
   return (
     <div className="space-y-5">
@@ -178,16 +185,16 @@ export default function ReportView() {
           </div>
           <div>
             <p className="text-xs text-gray-600 mb-1">Started</p>
-            <p className="font-semibold text-white">
-              {scan?.startedAt ? new Date(scan.startedAt).toLocaleString() : '—'}
-            </p>
+            <p className="font-semibold text-white">{formatLocalDateTime(scan?.startedAt)}</p>
           </div>
           <div>
             <p className="text-xs text-gray-600 mb-1">Completed</p>
-            <p className="font-semibold text-white">
-              {scan?.completedAt ? new Date(scan.completedAt).toLocaleString() : '—'}
-            </p>
+            <p className="font-semibold text-white">{formatLocalDateTime(scan?.completedAt)}</p>
           </div>
+        </div>
+
+        <div className="mt-4">
+          <ProgressBar progress={scan?.progress ?? 0} running={scan?.status === 'running' || scan?.status === 'queued' || scan?.status === 'scheduled'} />
         </div>
 
         {findings.length > 0 && (
@@ -244,57 +251,18 @@ export default function ReportView() {
             <h2 className="font-semibold text-white text-sm">
               Findings <span className="text-gray-600 font-normal">({filteredFindings.length}{filteredFindings.length !== findings.length ? ` / ${findings.length}` : ''})</span>
             </h2>
-            {(search || severityFilter !== 'all' || categoryFilter !== 'all') && (
+            {(severityFilter !== 'all' || categoryFilter !== 'all') && (
               <button
                 type="button"
                 onClick={() => {
-                  setSearch('');
                   setSeverityFilter('all');
                   setCategoryFilter('all');
                 }}
                 className="text-xs text-gray-500 hover:text-white transition"
               >
-                Reset
+                Reset filters
               </button>
             )}
-          </div>
-
-          <div className="space-y-2 mb-3">
-            <div className="relative">
-              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
-                <SearchIcon className="w-4 h-4" />
-              </span>
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search findings by title or topic…"
-                className="w-full rounded-lg bg-dark-300 border border-slate-800 px-3 py-2 pl-9 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
-              />
-            </div>
-
-            <div className="flex gap-2">
-              <select
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-                className="flex-1 rounded-lg bg-dark-300 border border-slate-800 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary-500/40"
-              >
-                <option value="all">All topics</option>
-                {categories.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
-
-              <select
-                value={severityFilter}
-                onChange={(e) => setSeverityFilter(e.target.value)}
-                className="w-36 rounded-lg bg-dark-300 border border-slate-800 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary-500/40"
-              >
-                <option value="all">All</option>
-                {['critical','high','medium','low','info'].map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
-            </div>
           </div>
 
           {findings.length === 0 ? (
@@ -420,11 +388,24 @@ function CategoryBadge({ category }) {
   );
 }
 
-function SearchIcon({ className }) {
+
+
+function ProgressBar({ progress, running }) {
+  const pct = Math.min(100, Math.max(0, progress ?? 0));
+
   return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35m1.85-5.15a7 7 0 11-14 0 7 7 0 0114 0z" />
-    </svg>
+    <div className="space-y-2">
+      <div className="h-2.5 rounded-full bg-slate-800 overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-[width] duration-700 ease-out ${running ? 'progress-fill-running' : 'bg-emerald-500'}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <div className="flex items-center justify-between text-xs text-gray-600">
+        <span className="capitalize">{running ? 'Scanning…' : 'Complete'}</span>
+        <span className="tabular-nums">{pct}%</span>
+      </div>
+    </div>
   );
 }
 
