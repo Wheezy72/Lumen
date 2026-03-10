@@ -8,11 +8,50 @@ html {
   scroll-behavior: smooth;
 }
 
+/* Light/dark theme variables */
+:root {
+  --lumen-bg: #ffffff;
+  --lumen-text: #0f172a;
+  --lumen-surface-200: #ffffff;
+  --lumen-surface-300: #f8fafc;
+  --lumen-border: #e2e8f0;
+}
+
+html.dark {
+  --lumen-bg: #09090b;
+  --lumen-text: #f1f5f9;
+  --lumen-surface-200: #111113;
+  --lumen-surface-300: #09090b;
+  --lumen-border: #1e293b;
+}
+
 body {
-  color: #f1f5f9;
-  background-color: #09090b;
+  color: var(--lumen-text);
+  background-color: var(--lumen-bg);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Make existing Tailwind palette-based utility classes theme-aware (minimal overrides). */
+.bg-dark-200 {
+  background-color: var(--lumen-surface-200) !important;
+}
+
+.bg-dark-300 {
+  background-color: var(--lumen-surface-300) !important;
+}
+
+.border-slate-800 {
+  border-color: var(--lumen-border) !important;
+}
+
+.text-white {
+  color: var(--lumen-text) !important;
+}
+
+/* Keep SVG icons that explicitly request white as white (e.g. icons on colored badges). */
+svg.text-white {
+  color: #ffffff !important;
 }
 
 /* Custom component classes without @apply */

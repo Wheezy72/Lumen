@@ -1,16 +1,17 @@
-import React, { useEffect, useState } from 'react';
-import { Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom';
-import axios from 'axios';
-import Landing from './pages/Landing.jsx';
-import Dashboard from './pages/Dashboard.jsx';
-import Login from './pages/Login.jsx';
-import Register from './pages/Register.jsx';
-import Scans from './pages/Scans.jsx';
-import NewScan from './pages/NewScan.jsx';
-import ReportView from './pages/ReportView.jsx';
-import Vulnerabilities from './pages/Vulnerabilities.jsx';
-import NotFound from './pages/NotFound.jsx';
-import ErrorPage from './pages/ErrorPage.jsx';
+import React, { useEffect, useState } from "react";
+import { Routes, Route, Link, useNavigate, useLocation } from "react-router-dom";
+import axios from "axios";
+import Landing from "./pages/Landing.jsx";
+import Dashboard from "./pages/Dashboard.jsx";
+import Login from "./pages/Login.jsx";
+import Register from "./pages/Register.jsx";
+import Scans from "./pages/Scans.jsx";
+import NewScan from "./pages/NewScan.jsx";
+import ReportView from "./pages/ReportView.jsx";
+import Vulnerabilities from "./pages/Vulnerabilities.jsx";
+import NotFound from "./pages/NotFound.jsx";
+import ErrorPage from "./pages/ErrorPage.jsx";
+import { useTheme } from "./theme/ThemeProvider.jsx";
 
 axios.defaults.withCredentials = true;
 
@@ -19,15 +20,16 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
+  const { theme, toggleTheme } = useTheme();
 
   useEffect(() => {
     // Check for existing session
     const checkAuth = async () => {
       try {
-        const { data } = await axios.get('/api/auth/me');
+        const { data } = await axios.get("/api/auth/me");
         setUser(data);
-      } catch (error) {
-        console.log('No active session');
+      } catch {
+        console.log("No active session");
       } finally {
         setLoading(false);
       }
@@ -37,11 +39,11 @@ export default function App() {
 
   const logout = async () => {
     try {
-      await axios.post('/api/auth/logout');
+      await axios.post("/api/auth/logout");
       setUser(null);
-      navigate('/login');
+      navigate("/login");
     } catch (error) {
-      console.error('Logout failed:', error);
+      console.error("Logout failed:", error);
     }
   };
 
@@ -56,9 +58,10 @@ export default function App() {
     );
   }
 
-  const isActiveRoute = (path) => {
-    return location.pathname === path;
-  };
+  const isActiveRoute = (path) => location.pathname === path;
+
+  // On auth routes, we want full-width background (no max-width container)
+  const isAuthRoute = location.pathname === "/login" || location.pathname === "/register";
 
   return (
     <div className="min-h-screen bg-dark-300 text-white">
@@ -76,20 +79,32 @@ export default function App() {
             </div>
 
             <nav className="hidden md:flex items-center space-x-1">
-              <NavLink to="/learn" isActive={isActiveRoute('/learn')}>
+              <NavLink to="/learn" isActive={isActiveRoute("/learn")}>
                 Learn
               </NavLink>
+
+              <button
+                type="button"
+                onClick={toggleTheme}
+                className="ml-2 inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white hover:bg-slate-800 transition"
+                aria-label="Toggle theme"
+                title={`Theme: ${theme}`}
+              >
+                {theme === "dark" ? <MoonIcon className="w-4 h-4" /> : <SunIcon className="w-4 h-4" />}
+                <span className="hidden lg:inline">{theme === "dark" ? "Dark" : "Light"}</span>
+              </button>
+
               {user ? (
                 <>
-                  <NavLink to="/dashboard" isActive={isActiveRoute('/dashboard')}>
+                  <NavLink to="/dashboard" isActive={isActiveRoute("/dashboard")}>
                     <DashboardIcon className="w-4 h-4 mr-1.5" />
                     Dashboard
                   </NavLink>
-                  <NavLink to="/scans" isActive={isActiveRoute('/scans')}>
+                  <NavLink to="/scans" isActive={isActiveRoute("/scans")}>
                     <ScanIcon className="w-4 h-4 mr-1.5" />
                     Scans
                   </NavLink>
-                  <NavLink to="/new" isActive={isActiveRoute('/new')}>
+                  <NavLink to="/new" isActive={isActiveRoute("/new")}>
                     <PlusIcon className="w-4 h-4 mr-1.5" />
                     New Scan
                   </NavLink>
@@ -105,18 +120,30 @@ export default function App() {
                 </>
               ) : (
                 <>
-                  <NavLink to="/login" isActive={isActiveRoute('/login')}>
+                  <NavLink to="/login" isActive={isActiveRoute("/login")}>
                     Login
                   </NavLink>
-                  <Link to="/register" className="ml-2 px-4 py-1.5 rounded-lg text-sm font-semibold btn btn-primary">
+                  <Link
+                    to="/register"
+                    className="ml-2 px-4 py-1.5 rounded-lg text-sm font-semibold btn btn-primary"
+                  >
                     Get Started
                   </Link>
                 </>
               )}
             </nav>
 
-            {/* Mobile menu button */}
-            <div className="md:hidden">
+            {/* Mobile */}
+            <div className="md:hidden flex items-center gap-2">
+              <button
+                type="button"
+                onClick={toggleTheme}
+                className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-slate-800 transition"
+                aria-label="Toggle theme"
+                title={`Theme: ${theme}`}
+              >
+                {theme === "dark" ? <MoonIcon className="w-5 h-5" /> : <SunIcon className="w-5 h-5" />}
+              </button>
               <button className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-slate-800">
                 <MenuIcon className="w-6 h-6" />
               </button>
@@ -125,7 +152,7 @@ export default function App() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className={isAuthRoute ? "min-h-[calc(100vh-4rem)]" : "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8"}>
         <div className="animate-fade-in">
           <Routes>
             <Route path="/" element={<Landing />} />
@@ -134,14 +161,8 @@ export default function App() {
               path="/dashboard"
               element={user ? <Dashboard /> : <Login onLogin={setUser} message="Please sign in to view the dashboard." />}
             />
-            <Route
-              path="/scans"
-              element={user ? <Scans /> : <Login onLogin={setUser} message="Please sign in to view your scans." />}
-            />
-            <Route
-              path="/new"
-              element={user ? <NewScan /> : <Login onLogin={setUser} message="Please sign in to start a new scan." />}
-            />
+            <Route path="/scans" element={user ? <Scans /> : <Login onLogin={setUser} message="Please sign in to view your scans." />} />
+            <Route path="/new" element={user ? <NewScan /> : <Login onLogin={setUser} message="Please sign in to start a new scan." />} />
             <Route path="/login" element={<Login onLogin={setUser} />} />
             <Route path="/register" element={<Register onRegister={setUser} />} />
             <Route
@@ -154,17 +175,19 @@ export default function App() {
         </div>
       </main>
 
-      <footer className="border-t border-slate-800 mt-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-          <div className="text-center text-gray-600">
-            <div className="flex items-center justify-center space-x-2 mb-3">
-              <div className="placeholder-logo"></div>
-              <span className="font-semibold text-gray-400">Lumen Vulnerability Scanner</span>
+      {!isAuthRoute && (
+        <footer className="border-t border-slate-800 mt-20">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+            <div className="text-center text-gray-600">
+              <div className="flex items-center justify-center space-x-2 mb-3">
+                <div className="placeholder-logo"></div>
+                <span className="font-semibold text-gray-400">Lumen Vulnerability Scanner</span>
+              </div>
+              <p className="text-sm">Secure your applications with comprehensive vulnerability scanning.</p>
             </div>
-            <p className="text-sm">Secure your applications with comprehensive vulnerability scanning.</p>
           </div>
-        </div>
-      </footer>
+        </footer>
+      )}
     </div>
   );
 }
@@ -223,6 +246,32 @@ function MenuIcon({ className }) {
   return (
     <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+    </svg>
+  );
+}
+
+function SunIcon({ className }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M12 3v2m0 14v2m9-9h-2M5 12H3m15.364-6.364-1.414 1.414M7.05 16.95l-1.414 1.414m0-12.728 1.414 1.414m10.9 10.9 1.414 1.414M12 8a4 4 0 100 8 4 4 0 000-8z"
+      />
+    </svg>
+  );
+}
+
+function MoonIcon({ className }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M21 12.79A9 9 0 1111.21 3a7 7 0 009.79 9.79z"
+      />
     </svg>
   );
 }
