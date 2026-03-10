@@ -182,10 +182,10 @@ export function ConstellationBackground({
       <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />
 
       {/* Subtle radial overlay */}
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(34,197,94,0.08),transparent_60%)] dark:bg-[radial-gradient(ellipse_at_top,rgba(34,197,94,0.12),transparent_60%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(37,99,235,0.14),transparent_55%),radial-gradient(ellipse_at_top,rgba(34,197,94,0.10),transparent_60%)] dark:bg-[radial-gradient(ellipse_at_top_left,rgba(37,99,235,0.18),transparent_55%),radial-gradient(ellipse_at_top,rgba(34,197,94,0.14),transparent_60%)]" />
 
       {/* Vignette */}
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/0 via-white/35 to-white/90 dark:from-black/0 dark:via-black/20 dark:to-black/60" />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/0 via-white/10 to-white/45 dark:from-black/0 dark:via-black/25 dark:to-black/70" />
 
       <div className="relative">{children}</div>
     </div>

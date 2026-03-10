@@ -16,6 +16,9 @@ export default function ReportView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [search, setSearch] = useState('');
+  const [severityFilter, setSeverityFilter] = useState('all');
+  const [categoryFilter, setCategoryFilter] = useState('all');
   const [pdfLoading, setPdfLoading] = useState(false);
   const [csvLoading, setCsvLoading] = useState(false);
 
@@ -56,12 +59,23 @@ export default function ReportView() {
     es.onmessage = (e) => {
       try {
         const msg = JSON.parse(e.data);
-        // Only re-fetch when this specific scan updates
-        if (msg.scanId === scanId && msg.type === 'completed') loadScan();
+        if (msg.scanId !== scanId) return;
+
+        if (msg.type === 'progress') {
+          setScan((prev) => (prev ? { ...prev, progress: msg.progress ?? prev.progress, status: 'running' } : prev));
+        } else if (msg.type === 'failed') {
+          setScan((prev) => (prev ? { ...prev, status: 'failed', error: msg.error || prev.error } : prev));
+        } else if (msg.type === 'completed') {
+          loadScan();
+        }
       } catch {}
     };
     return () => es.close();
   }, [scanId]);
+
+  useEffect(() => {
+    setSelectedIndex(0);
+  }, [search, severityFilter, categoryFilter, scanId]);
 
   if (loading) {
     return (
@@ -84,11 +98,38 @@ export default function ReportView() {
   }
 
   const findings = scan?.results || [];
-  const selectedVuln = findings[selectedIndex];
+
+  const categories = Array.from(
+    new Set(findings.map((f) => (f.category || 'other').toLowerCase())),
+  ).sort();
+
+  const filteredFindings = findings.filter((f) => {
+    const title = (f.title || '').toLowerCase();
+    const category = (f.category || 'other').toLowerCase();
+    const sev = (f.severity || 'info').toLowerCase();
+
+    if (severityFilter !== 'all' && sev !== severityFilter) return false;
+    if (categoryFilter !== 'all' && category !== categoryFilter) return false;
+
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      if (!title.includes(q) && !category.includes(q)) return false;
+    }
+
+    return true;
+  });
+
+  const selectedVuln = filteredFindings[selectedIndex];
 
   const sevCounts = findings.reduce((acc, f) => {
     const s = (f.severity || 'info').toLowerCase();
     acc[s] = (acc[s] || 0) + 1;
+    return acc;
+  }, {});
+
+  const categoryCounts = findings.reduce((acc, f) => {
+    const c = (f.category || 'other').toLowerCase();
+    acc[c] = (acc[c] || 0) + 1;
     return acc;
   }, {});
 
@@ -103,14 +144,14 @@ export default function ReportView() {
       {/* ── Header ─────────────────────────────────────────────── */}
       <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">Scan Report</h1>
+          <h1 className="text-2xl font-bold bg-gradient-to-r from-primary-400 to-secondary-400 bg-clip-text text-transparent">Scan Report</h1>
           <p className="text-gray-500 mt-1 break-all text-sm">{scan?.targetUrl}</p>
         </div>
         <div className="flex gap-2 shrink-0">
           <button
             onClick={generatePdf}
             disabled={pdfLoading}
-            className="px-4 py-2 rounded-lg text-sm font-medium bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 disabled:opacity-50 transition"
+            className="px-4 py-2 rounded-lg text-sm font-medium bg-dark-200 border border-slate-800 hover:bg-black/5 dark:hover:bg-slate-800 disabled:opacity-50 transition"
           >
             {pdfLoading ? 'Generating…' : 'Download PDF'}
           </button>
@@ -150,13 +191,45 @@ export default function ReportView() {
         </div>
 
         {findings.length > 0 && (
-          <div className="mt-4 pt-4 border-t border-slate-800 flex flex-wrap gap-2">
-            {['critical','high','medium','low','info'].map((s) =>
-              sevCounts[s] ? (
-                <span key={s} className={`px-3 py-1 rounded-full text-xs font-medium ${SEV[s]?.bg}`}>
-                  {sevCounts[s]} {s.charAt(0).toUpperCase() + s.slice(1)}
-                </span>
-              ) : null
+          <div className="mt-4 pt-4 border-t border-slate-800 space-y-3">
+            <div className="flex flex-wrap gap-2">
+              <FilterChip
+                active={severityFilter === 'all'}
+                onClick={() => setSeverityFilter('all')}
+                className="bg-slate-500/10 text-gray-400 border border-slate-800"
+                label={`All (${findings.length})`}
+              />
+              {['critical','high','medium','low','info'].map((s) =>
+                sevCounts[s] ? (
+                  <FilterChip
+                    key={s}
+                    active={severityFilter === s}
+                    onClick={() => setSeverityFilter(s)}
+                    className={SEV[s]?.bg}
+                    label={`${sevCounts[s]} ${s.charAt(0).toUpperCase() + s.slice(1)}`}
+                  />
+                ) : null
+              )}
+            </div>
+
+            {categories.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                <FilterChip
+                  active={categoryFilter === 'all'}
+                  onClick={() => setCategoryFilter('all')}
+                  className="bg-slate-500/10 text-gray-400 border border-slate-800"
+                  label="All topics"
+                />
+                {categories.map((c) => (
+                  <FilterChip
+                    key={c}
+                    active={categoryFilter === c}
+                    onClick={() => setCategoryFilter(c)}
+                    className="bg-primary-500/10 text-primary-400 border border-primary-500/20"
+                    label={`${c}${categoryCounts[c] ? ` (${categoryCounts[c]})` : ''}`}
+                  />
+                ))}
+              </div>
             )}
           </div>
         )}
@@ -167,15 +240,70 @@ export default function ReportView() {
 
         {/* Findings list */}
         <div className="rounded-xl border border-slate-800 bg-dark-200 p-4">
-          <h2 className="font-semibold text-white mb-3 text-sm">
-            Findings <span className="text-gray-600 font-normal">({findings.length})</span>
-          </h2>
+          <div className="flex items-end justify-between gap-3 mb-3">
+            <h2 className="font-semibold text-white text-sm">
+              Findings <span className="text-gray-600 font-normal">({filteredFindings.length}{filteredFindings.length !== findings.length ? ` / ${findings.length}` : ''})</span>
+            </h2>
+            {(search || severityFilter !== 'all' || categoryFilter !== 'all') && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearch('');
+                  setSeverityFilter('all');
+                  setCategoryFilter('all');
+                }}
+                className="text-xs text-gray-500 hover:text-white transition"
+              >
+                Reset
+              </button>
+            )}
+          </div>
+
+          <div className="space-y-2 mb-3">
+            <div className="relative">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
+                <SearchIcon className="w-4 h-4" />
+              </span>
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search findings by title or topic…"
+                className="w-full rounded-lg bg-dark-300 border border-slate-800 px-3 py-2 pl-9 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                className="flex-1 rounded-lg bg-dark-300 border border-slate-800 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+              >
+                <option value="all">All topics</option>
+                {categories.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+
+              <select
+                value={severityFilter}
+                onChange={(e) => setSeverityFilter(e.target.value)}
+                className="w-36 rounded-lg bg-dark-300 border border-slate-800 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+              >
+                <option value="all">All</option>
+                {['critical','high','medium','low','info'].map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </div>
+          </div>
 
           {findings.length === 0 ? (
             <div className="py-10 text-center text-gray-600 text-sm">No vulnerabilities found.</div>
+          ) : filteredFindings.length === 0 ? (
+            <div className="py-10 text-center text-gray-600 text-sm">No matches for your filters.</div>
           ) : (
-            <ul className="space-y-1.5 max-h-[520px] overflow-y-auto pr-1">
-              {findings.map((f, i) => {
+            <ul className="space-y-1.5 max-h-[460px] overflow-y-auto pr-1">
+              {filteredFindings.map((f, i) => {
                 const sev = (f.severity || 'info').toLowerCase();
                 const active = i === selectedIndex;
                 return (
@@ -185,14 +313,17 @@ export default function ReportView() {
                     className={`p-3 rounded-lg cursor-pointer transition border ${
                       active
                         ? 'bg-primary-900/30 border-primary-700/50'
-                        : 'border-transparent hover:bg-slate-800/50'
+                        : 'border-transparent hover:bg-black/5 dark:hover:bg-slate-800/50'
                     }`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <span className="text-sm text-gray-200 font-medium leading-snug">{f.title}</span>
                       <SeverityBadge severity={sev} />
                     </div>
-                    <p className="text-xs text-gray-600 mt-1">{f.category}</p>
+                    <div className="mt-1 flex items-center gap-2">
+                      <CategoryBadge category={(f.category || 'other').toLowerCase()} />
+                      {f.cve && <span className="text-xs text-gray-500 font-mono">{f.cve}</span>}
+                    </div>
                   </li>
                 );
               })}
@@ -211,7 +342,10 @@ export default function ReportView() {
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <h3 className="text-lg font-semibold text-white">{selectedVuln.title}</h3>
-                  <p className="text-xs text-gray-500 mt-1">Category: {selectedVuln.category}</p>
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <CategoryBadge category={(selectedVuln.category || 'other').toLowerCase()} />
+                    {selectedVuln.cve && <span className="text-xs text-gray-500 font-mono">{selectedVuln.cve}</span>}
+                  </div>
                 </div>
                 <SeverityBadge severity={(selectedVuln.severity || 'info').toLowerCase()} />
               </div>
@@ -249,7 +383,7 @@ export default function ReportView() {
 
               <div className="pt-4 border-t border-slate-800">
                 <Link
-                  to={'/learn#' + selectedVuln.category}
+                  to={'/learn#' + (selectedVuln.category || 'other')}
                   className="text-primary-500 hover:text-primary-400 text-sm font-medium transition"
                 >
                   Learn more about this vulnerability type →
@@ -260,6 +394,37 @@ export default function ReportView() {
         </div>
       </div>
     </div>
+  );
+}
+
+function FilterChip({ active, onClick, className, label }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`px-3 py-1 rounded-full text-xs font-medium transition ${className} ${
+        active ? 'ring-2 ring-primary-500/30' : 'opacity-80 hover:opacity-100'
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
+function CategoryBadge({ category }) {
+  const label = category || 'other';
+  return (
+    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-secondary-500/10 text-secondary-400 border border-secondary-500/20">
+      {label}
+    </span>
+  );
+}
+
+function SearchIcon({ className }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35m1.85-5.15a7 7 0 11-14 0 7 7 0 0114 0z" />
+    </svg>
   );
 }
 

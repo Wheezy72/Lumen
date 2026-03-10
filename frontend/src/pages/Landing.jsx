@@ -3,17 +3,17 @@ import { Link } from 'react-router-dom';
 
 export default function Landing() {
   return (
-    <div className="min-h-screen bg-dark-300 text-white">
+    <div className="min-h-screen bg-dark-300 text-slate-900 dark:text-white">
 
       {/* ── Hero ─────────────────────────────────────────────────────── */}
       <section className="max-w-5xl mx-auto px-6 pt-24 pb-16 text-center">
-        <span className="inline-block px-3 py-1 text-xs font-semibold tracking-widest uppercase rounded-full bg-primary-900/60 text-primary-400 border border-primary-700/40 mb-6">
+        <span className="inline-block px-3 py-1 text-xs font-semibold tracking-widest uppercase rounded-full bg-primary-500/10 dark:bg-primary-900/60 text-primary-700 dark:text-primary-400 border border-primary-500/20 dark:border-primary-700/40 mb-6">
           Open-source · Self-hostable
         </span>
-        <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold leading-tight text-white">
+        <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold leading-tight text-slate-900 dark:text-white">
           See your application<br className="hidden sm:block" /> the way an attacker does.
         </h1>
-        <p className="mt-5 text-lg text-gray-400 max-w-2xl mx-auto">
+        <p className="mt-5 text-lg text-slate-600 dark:text-gray-400 max-w-2xl mx-auto">
           Point it at a URL. Get results in minutes.&nbsp;
           No setup, no enterprise contracts, no noise.
         </p>
@@ -27,7 +27,7 @@ export default function Landing() {
           </Link>
           <Link
             to="/login"
-            className="px-6 py-3 text-base font-semibold rounded-lg border border-slate-700 text-gray-300 hover:border-primary-500 hover:text-white transition"
+            className="px-6 py-3 text-base font-semibold rounded-lg border border-slate-700 text-slate-700 hover:border-primary-500 hover:text-slate-900 dark:text-gray-300 dark:hover:text-white transition"
           >
             Sign in
           </Link>
@@ -53,7 +53,7 @@ export default function Landing() {
 
       {/* ── How It Works ──────────────────────────────────────────────── */}
       <section className="max-w-5xl mx-auto px-6 py-16">
-        <h2 className="text-2xl font-bold text-center text-white mb-2">How it works</h2>
+        <h2 className="text-2xl font-bold text-center text-slate-900 dark:text-white mb-2">How it works</h2>
         <p className="text-center text-gray-500 text-sm mb-10">Three steps from zero to report.</p>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
@@ -87,8 +87,8 @@ export default function Landing() {
               </div>
               <div className="p-5">
                 <span className="text-xs font-mono text-primary-500">{step}</span>
-                <h3 className="mt-1 font-semibold text-white">{title}</h3>
-                <p className="mt-2 text-sm text-gray-400">{desc}</p>
+                <h3 className="mt-1 font-semibold text-slate-900 dark:text-white">{title}</h3>
+                <p className="mt-2 text-sm text-slate-600 dark:text-gray-400">{desc}</p>
               </div>
             </div>
           ))}
@@ -99,12 +99,12 @@ export default function Landing() {
       <section className="max-w-5xl mx-auto px-6 py-16">
         <div className="grid md:grid-cols-2 gap-10 items-center">
           <div>
-            <h2 className="text-2xl font-bold text-white">Findings you can actually act on</h2>
-            <p className="mt-3 text-gray-400 text-sm leading-relaxed">
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Findings you can actually act on</h2>
+            <p className="mt-3 text-slate-600 dark:text-gray-400 text-sm leading-relaxed">
               Every result includes the check that ran, the evidence collected, and plain-English guidance
               on how to fix it — not just a CVE number and a shrug.
             </p>
-            <ul className="mt-6 space-y-3 text-sm text-gray-400">
+            <ul className="mt-6 space-y-3 text-sm text-slate-600 dark:text-gray-400">
               {[
                 'Grouped by severity: Critical → Low',
                 'Inline remediation steps per finding',
@@ -132,7 +132,7 @@ export default function Landing() {
                 { label: 'TLS version acceptable', sev: 'Info', color: 'bg-gray-500/20 text-gray-400' },
               ].map(({ label, sev, color }) => (
                 <li key={label} className="flex items-center justify-between text-sm">
-                  <span className="text-gray-300">{label}</span>
+                  <span className="text-slate-700 dark:text-gray-300">{label}</span>
                   <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${color}`}>{sev}</span>
                 </li>
               ))}
@@ -147,9 +147,9 @@ export default function Landing() {
 
       {/* ── CTA ──────────────────────────────────────────────────────── */}
       <section className="max-w-5xl mx-auto px-6 py-16 text-center">
-        <div className="rounded-2xl border border-primary-800/40 bg-primary-900/20 px-8 py-12">
-          <h2 className="text-2xl font-bold text-white">Ready to run your first scan?</h2>
-          <p className="mt-2 text-gray-400 text-sm">Free. No credit card. Runs locally.</p>
+        <div className="rounded-2xl border border-primary-500/20 dark:border-primary-800/40 bg-primary-500/10 dark:bg-primary-900/20 px-8 py-12">
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Ready to run your first scan?</h2>
+          <p className="mt-2 text-slate-600 dark:text-gray-400 text-sm">Free. No credit card. Runs locally.</p>
           <Link
             to="/register"
             className="mt-6 inline-block btn btn-primary px-8 py-3 text-base font-semibold rounded-lg"
