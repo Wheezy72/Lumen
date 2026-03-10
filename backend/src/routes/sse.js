@@ -30,6 +30,8 @@ sseRouter.get('/events', (req, res) => {
 });
 
 export const publishScanUpdate = (app, data) => {
-  const em = app.get('sseEmitter') || emitter;
+  const em = app && typeof app.get === 'function'
+    ? (app.get('sseEmitter') || emitter)
+    : emitter;
   em.emit('scan-update', data);
 };

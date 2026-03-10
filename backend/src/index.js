@@ -31,8 +31,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const {
-  MONGODB_URI,
-  CORS_ORIGINS,
+  MONGODB_URI = 'mongodb://localhost:27017/lumen_scanner',
+  CORS_ORIGINS = 'http://localhost:5173',
   PORT = 4000,
   NODE_ENV = 'development',
   REPORTS_DIR = 'reports',
@@ -88,8 +88,8 @@ app.use('/static/reports', express.static(reportsPath));
 mongoose.connect(MONGODB_URI, { autoIndex: true })
   .then(() => logger.info('MongoDB connected'))
   .catch((err) => {
+    // Don't hard-exit on startup; allow /health to report degraded while devs bring Mongo up.
     logger.error('MongoDB connection error', { error: err.message });
-    process.exit(1);
   });
 
 // Initialize Bull queues and worker delegation

@@ -2,6 +2,7 @@ import os
 import json
 import ssl
 import socket
+import threading
 import urllib.parse
 from typing import List, Dict, Optional
 
@@ -25,6 +26,10 @@ ALLOW_EXTERNAL = True
 JOB_CHANNEL = "scan_jobs"
 RESULT_CHANNEL = "scan_results"
 
+HEARTBEAT_KEY = os.getenv("PY_WORKER_HEARTBEAT_KEY", "lumen:python_worker:heartbeat")
+HEARTBEAT_TTL_SECONDS = int(os.getenv("PY_WORKER_HEARTBEAT_TTL_SECONDS", "15"))
+HEARTBEAT_INTERVAL_SECONDS = int(os.getenv("PY_WORKER_HEARTBEAT_INTERVAL_SECONDS", "5"))
+
 redis_client = redis.Redis.from_url(REDIS_URL)
 
 
@@ -42,6 +47,23 @@ def send_progress(scan_id: str, progress: int) -> None:
         RESULT_CHANNEL,
         json.dumps({"scanId": scan_id, "type": "progress", "progress": progress}),
     )
+
+
+def send_error(scan_id: str, error: str) -> None:
+    """Publish a scan failure back to Redis so the backend can fail fast."""
+    redis_client.publish(
+        RESULT_CHANNEL,
+        json.dumps({"scanId": scan_id, "type": "error", "error": error}),
+    )
+
+
+def heartbeat_loop(stop_event: threading.Event) -> None:
+    while not stop_event.is_set():
+        try:
+            redis_client.set(HEARTBEAT_KEY, "1", ex=HEARTBEAT_TTL_SECONDS)
+        except Exception as e:
+            print(f"Heartbeat error: {e}")
+        stop_event.wait(HEARTBEAT_INTERVAL_SECONDS)
 
 
 # --- Individual scan functions -------------------------------------------------
@@ -424,12 +446,17 @@ def run_scan(target_url: str, profile: Optional[List[str]] = None, scan_id: str 
 def main() -> None:
     pubsub = redis_client.pubsub()
     pubsub.subscribe(JOB_CHANNEL)
+
+    stop_event = threading.Event()
+    threading.Thread(target=heartbeat_loop, args=(stop_event,), daemon=True).start()
+
     print("Python worker is running and waiting for scan jobs...")
 
     for message in pubsub.listen():
         if message.get("type") != "message":
             continue
 
+        scan_id = None
         try:
             payload = json.loads(message["data"])
             scan_id = payload.get("scanId")
@@ -438,13 +465,20 @@ def main() -> None:
 
             if not target_url:
                 print("Received job without a targetUrl, skipping.")
+                if scan_id:
+                    send_error(scan_id, "Job missing targetUrl")
                 continue
 
             print(f"Processing scan {scan_id} for {target_url}")
+            if scan_id:
+                send_progress(scan_id, 10)
+
             issues = run_scan(target_url, profile, scan_id)
             send_results(scan_id, issues)
         except Exception as e:
             print(f"Worker error: {e}")
+            if scan_id:
+                send_error(scan_id, str(e))
 
 
 if __name__ == "__main__":
