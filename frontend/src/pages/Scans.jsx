@@ -116,7 +116,7 @@ export default function Scans() {
       {!hasScans ? (
         <EmptyState
           title="No scans yet"
-          description="Create a scan to start building baselines and policy gates."
+          description="Create a scan to start tracking changes over time."
           action={(
             <Link to="/new" className="btn btn-primary text-sm px-4 py-2">
               Start your first scan

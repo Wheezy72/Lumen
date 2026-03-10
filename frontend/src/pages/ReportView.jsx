@@ -32,7 +32,6 @@ export default function ReportView() {
 
   const [diffLoading, setDiffLoading] = useState(false);
   const [diffData, setDiffData] = useState(null);
-  const [baselineSaving, setBaselineSaving] = useState(false);
 
   const loadScan = async () => {
     try {
@@ -59,29 +58,7 @@ export default function ReportView() {
     }
   };
 
-  const setBaselineToThisScan = async () => {
-    if (!diffData?.target?.id) return;
-
-    try {
-      setBaselineSaving(true);
-      await axios.put(`/api/targets/${diffData.target.id}`, { baselineScanId: scanId });
-      await loadDiff();
-    } finally {
-      setBaselineSaving(false);
-    }
-  };
-
-  const clearBaseline = async () => {
-    if (!diffData?.target?.id) return;
-
-    try {
-      setBaselineSaving(true);
-      await axios.put(`/api/targets/${diffData.target.id}`, { baselineScanId: '' });
-      await loadDiff();
-    } finally {
-      setBaselineSaving(false);
-    }
-  };
+  
 
   const generatePdf = async () => {
     try {
@@ -294,38 +271,41 @@ export default function ReportView() {
           </div>
         </div>
 
-        {/* DevSecOps */}
+        {/* Changes */}
         <div className="rounded-xl border border-slate-800 bg-dark-200 p-5">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h2 className="text-sm font-semibold text-white">DevSecOps</h2>
-              <p className="text-xs text-gray-600 mt-1">Baseline + policy gate</p>
+              <h2 className="text-sm font-semibold text-white">Changes</h2>
+              <p className="text-xs text-gray-600 mt-1">Compared to the previous scan</p>
             </div>
-            <Link to="/targets" className="text-xs font-semibold text-primary-400 hover:text-primary-300 transition">
-              Manage →
-            </Link>
+            {diffData?.compareScanId ? (
+              <Link
+                to={`/report/${diffData.compareScanId}`}
+                className="text-xs font-semibold text-primary-400 hover:text-primary-300 transition"
+              >
+                View previous →
+              </Link>
+            ) : null}
           </div>
 
           <div className="mt-4 space-y-3">
             <div className="rounded-lg border border-slate-800 bg-black/30 p-3">
               <p className="text-xs text-gray-600">Policy gate</p>
               <div className="mt-1 flex items-center justify-between gap-2">
-                <PolicyBadge status={scan?.policy?.status || 'unknown'} enabled={diffData?.target?.policyEnabled} />
-                {scan?.diffSummary?.newBlockedCount != null && (
-                  <span className="text-xs text-gray-600 tabular-nums">New blocked: {scan.diffSummary.newBlockedCount}</span>
+                <PolicyBadge status={scan?.policy?.status || 'unknown'} />
+                {scan?.diffSummary?.newBlockedCount != null && scan?.policy?.status !== 'unknown' && (
+                  <span className="text-xs text-gray-600 tabular-nums">New high/critical: {scan.diffSummary.newBlockedCount}</span>
                 )}
               </div>
             </div>
 
             <div className="rounded-lg border border-slate-800 bg-black/30 p-3">
-              <p className="text-xs text-gray-600">Baseline</p>
+              <p className="text-xs text-gray-600">Diff</p>
               {diffLoading ? (
                 <p className="text-sm text-gray-500 mt-1">Loading diff…</p>
-              ) : !diffData?.target ? (
-                <p className="text-sm text-gray-600 mt-1">This scan isn’t linked to a target yet.</p>
-              ) : diffData?.baselineScanId ? (
+              ) : diffData?.compareScanId ? (
                 <div className="mt-2 space-y-2">
-                  <p className="text-sm text-gray-200">Comparing to baseline</p>
+                  <p className="text-sm text-gray-200">Compared to {formatLocalDateTime(diffData.compareCreatedAt)}</p>
                   {diffData?.diff ? (
                     <div className="grid grid-cols-3 gap-2 text-xs">
                       <Stat label="New" value={diffData.diff.newIssues?.length || 0} className="text-red-400" />
@@ -337,31 +317,12 @@ export default function ReportView() {
                   )}
                 </div>
               ) : (
-                <p className="text-sm text-gray-600 mt-1">No baseline set for this target.</p>
+                <p className="text-sm text-gray-600 mt-1">No previous scan for this host yet. Run another scan to see what changed.</p>
               )}
             </div>
 
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={setBaselineToThisScan}
-                disabled={baselineSaving || scan?.status !== 'completed' || !diffData?.target?.id}
-                className="px-3 py-2 rounded-lg text-sm font-medium bg-dark-300 border border-slate-800 hover:bg-black/5 dark:hover:bg-slate-800 transition disabled:opacity-40"
-              >
-                {baselineSaving ? 'Saving…' : 'Set baseline to this scan'}
-              </button>
-              <button
-                type="button"
-                onClick={clearBaseline}
-                disabled={baselineSaving || !diffData?.target?.id || !diffData?.target?.baselineScanId}
-                className="px-3 py-2 rounded-lg text-sm font-medium bg-dark-300 border border-slate-800 hover:bg-black/5 dark:hover:bg-slate-800 transition disabled:opacity-40"
-              >
-                Clear baseline
-              </button>
-            </div>
-
             <p className="text-xs text-gray-600 leading-relaxed">
-              With policy enabled, any new High/Critical findings compared to the baseline will mark the scan as <span className="text-red-400">Policy: Fail</span>.
+              <span className="text-gray-400">New</span> = not present last scan • <span className="text-gray-400">Fixed</span> = gone since last scan • <span className="text-gray-400">Persist</span> = still present.
             </p>
           </div>
         </div>
@@ -597,15 +558,7 @@ function SeverityBadge({ severity }) {
   );
 }
 
-function PolicyBadge({ status, enabled }) {
-  if (!enabled) {
-    return (
-      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${POLICY.skipped.cls}`}>
-        Policy: {POLICY.skipped.label}
-      </span>
-    );
-  }
-
+function PolicyBadge({ status }) {
   const meta = POLICY[status] || POLICY.unknown;
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${meta.cls}`}>

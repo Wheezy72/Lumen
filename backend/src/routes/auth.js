@@ -57,6 +57,7 @@ router.post('/register', async (req, res, next) => {
       email: user.email,
       name: user.name,
       emailAlertsEnabled: user.emailAlertsEnabled,
+      token,
     });
   } catch (e) {
     next(e);
@@ -80,6 +81,7 @@ router.post('/login', async (req, res, next) => {
       email: user.email,
       name: user.name,
       emailAlertsEnabled: user.emailAlertsEnabled,
+      token,
     });
   } catch (e) {
     next(e);
