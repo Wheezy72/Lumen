@@ -1,6 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
+import AnimatedProgressBar from '../components/ui/AnimatedProgressBar.jsx';
+import EmptyState from '../components/ui/EmptyState.jsx';
+import SeverityMiniBar from '../components/ui/SeverityMiniBar.jsx';
 
 const STATUS_STYLES = {
   completed: 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30',
@@ -10,12 +13,11 @@ const STATUS_STYLES = {
   scheduled: 'bg-purple-500/15 text-purple-400 border border-purple-500/30',
 };
 
-const BAR_COLORS = {
-  completed: 'bg-emerald-500',
-  running:   'bg-blue-500',
-  queued:    'bg-amber-500',
-  failed:    'bg-red-500',
-  scheduled: 'bg-purple-500',
+const POLICY_STYLES = {
+  pass: 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30',
+  fail: 'bg-red-500/15 text-red-400 border border-red-500/30',
+  skipped: 'bg-slate-500/10 text-gray-400 border border-slate-800',
+  unknown: 'bg-slate-500/10 text-gray-400 border border-slate-800',
 };
 
 export default function Scans() {
@@ -95,6 +97,8 @@ export default function Scans() {
   const isDownloading = (scanId, type) =>
     downloading?.scanId === scanId && downloading?.type === type;
 
+  const hasScans = scans.length > 0;
+
   return (
     <div className="space-y-5">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -109,50 +113,61 @@ export default function Scans() {
         </Link>
       </div>
 
-      <div className="rounded-xl border border-slate-800 bg-dark-200 overflow-hidden">
-        <table className="min-w-full text-sm">
-          <thead>
-            <tr className="border-b border-slate-800">
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Target</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider w-44">Progress</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Report</th>
-              <th className="px-4 py-3"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-800/60">
-            {scans.map((s) => (
-              <ScanRow
-                key={s._id}
-                scan={s}
-                onDownload={downloadReport}
-                isDownloading={isDownloading}
-                onDelete={deleteScan}
-                isDeleting={deleting === s._id}
-              />
-            ))}
-            {!scans.length && (
-              <tr>
-                <td colSpan={5} className="px-4 py-12 text-center text-sm text-gray-600">
-                  No scans yet.{' '}
-                  <Link to="/new" className="text-primary-500 hover:underline">
-                    Start your first scan →
-                  </Link>
-                </td>
+      {!hasScans ? (
+        <EmptyState
+          title="No scans yet"
+          description="Create a scan to start building baselines and policy gates."
+          action={(
+            <Link to="/new" className="btn btn-primary text-sm px-4 py-2">
+              Start your first scan
+            </Link>
+          )}
+        />
+      ) : (
+        <div className="rounded-xl border border-slate-800 bg-dark-200 overflow-hidden">
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-800">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Target</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider w-56">Progress</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Report</th>
+                <th className="px-4 py-3"></th>
               </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody className="divide-y divide-slate-800/60">
+              {scans.map((s) => (
+                <ScanRow
+                  key={s._id}
+                  scan={s}
+                  onDownload={downloadReport}
+                  isDownloading={isDownloading}
+                  onDelete={deleteScan}
+                  isDeleting={deleting === s._id}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
 
 function ScanRow({ scan, onDownload, isDownloading, onDelete, isDeleting }) {
-  const { _id, targetUrl, status, progress, startedAt } = scan;
-  const barColor = BAR_COLORS[status] || BAR_COLORS.queued;
+  const { _id, targetUrl, targetHost, status, progress, startedAt, results, policy } = scan;
   const badgeStyle = STATUS_STYLES[status] || STATUS_STYLES.queued;
   const pct = Math.min(100, Math.max(0, progress ?? 0));
+  const running = ['running', 'queued', 'scheduled'].includes(status);
+
+  const host = useMemo(() => {
+    if (targetHost) return targetHost;
+    try {
+      return new URL(targetUrl).hostname;
+    } catch {
+      return targetUrl;
+    }
+  }, [targetHost, targetUrl]);
 
   const formatLocalDateTime = (value) => {
     if (!value) return 'Queued';
@@ -167,31 +182,42 @@ function ScanRow({ scan, onDownload, isDownloading, onDelete, isDeleting }) {
     }).format(d);
   };
 
+  const policyStatus = (policy?.status || 'unknown').toLowerCase();
+  const policyStyle = POLICY_STYLES[policyStatus] || POLICY_STYLES.unknown;
+
   return (
     <tr className="hover:bg-white/[0.02] transition-colors duration-150">
       <td className="px-4 py-3 align-middle">
-        <div className="font-medium text-white truncate max-w-xs">{targetUrl}</div>
-        <div className="text-xs text-gray-600 mt-0.5">
-          {formatLocalDateTime(startedAt)}
+        <div className="font-medium text-white truncate max-w-xs">{host}</div>
+        <div className="text-xs text-gray-600 mt-0.5 truncate max-w-xs">{targetUrl}</div>
+        <div className="text-xs text-gray-600 mt-1">{formatLocalDateTime(startedAt)}</div>
+        {status === 'completed' && (
+          <div className="mt-2">
+            <SeverityMiniBar findings={results || []} />
+          </div>
+        )}
+      </td>
+
+      <td className="px-4 py-3 align-middle">
+        <div className="space-y-2">
+          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${badgeStyle}`}>
+            {status === 'running' && (
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+            )}
+            {status}
+          </span>
+          {['pass', 'fail'].includes(policyStatus) && (
+            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${policyStyle}`}>
+              Policy: {policyStatus}
+            </span>
+          )}
         </div>
       </td>
 
       <td className="px-4 py-3 align-middle">
-        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${badgeStyle}`}>
-          {status === 'running' && (
-            <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
-          )}
-          {status}
-        </span>
-      </td>
-
-      <td className="px-4 py-3 align-middle">
         <div className="flex items-center gap-2">
-          <div className="flex-1 h-1.5 rounded-full bg-slate-800 overflow-hidden">
-            <div
-              className={`h-full rounded-full transition-[width] duration-700 ease-out ${status === 'running' ? 'progress-fill-running' : barColor}`}
-              style={{ width: `${pct}%` }}
-            />
+          <div className="flex-1">
+            <AnimatedProgressBar progress={pct} running={running} compact />
           </div>
           <span className="text-xs text-gray-500 w-8 text-right tabular-nums">{pct}%</span>
         </div>
@@ -224,7 +250,7 @@ function ScanRow({ scan, onDownload, isDownloading, onDelete, isDeleting }) {
               {isDownloading(_id, 'csv') ? 'CSV…' : 'CSV'}
             </button>
           </div>
-        ) : status === 'running' || status === 'queued' ? (
+        ) : running ? (
           <span className="text-xs text-gray-600 italic">Scanning…</span>
         ) : (
           <span className="text-xs text-gray-600">—</span>

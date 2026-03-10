@@ -6,6 +6,7 @@ import Dashboard from "./pages/Dashboard.jsx";
 import Login from "./pages/Login.jsx";
 import Register from "./pages/Register.jsx";
 import Scans from "./pages/Scans.jsx";
+import Targets from "./pages/Targets.jsx";
 import NewScan from "./pages/NewScan.jsx";
 import ReportView from "./pages/ReportView.jsx";
 import Vulnerabilities from "./pages/Vulnerabilities.jsx";
@@ -107,6 +108,10 @@ export default function App() {
                           <ScanIcon className="w-4 h-4 mr-1.5" />
                           Scans
                         </NavLink>
+                        <NavLink to="/targets" isActive={isActiveRoute("/targets")}>
+                          <TargetIcon className="w-4 h-4 mr-1.5" />
+                          Targets
+                        </NavLink>
                         <NavLink to="/new" isActive={isActiveRoute("/new")}>
                           <PlusIcon className="w-4 h-4 mr-1.5" />
                           New Scan
@@ -195,6 +200,9 @@ export default function App() {
                     <NavLink to="/scans" isActive={isActiveRoute("/scans")}>
                       Scans
                     </NavLink>
+                    <NavLink to="/targets" isActive={isActiveRoute("/targets")}>
+                      Targets
+                    </NavLink>
                     <NavLink to="/new" isActive={isActiveRoute("/new")}>
                       New Scan
                     </NavLink>
@@ -235,6 +243,7 @@ export default function App() {
               element={user ? <Dashboard /> : <Login onLogin={setUser} message="Please sign in to view the dashboard." />}
             />
             <Route path="/scans" element={user ? <Scans /> : <Login onLogin={setUser} message="Please sign in to view your scans." />} />
+            <Route path="/targets" element={user ? <Targets /> : <Login onLogin={setUser} message="Please sign in to view targets." />} />
             <Route path="/new" element={user ? <NewScan /> : <Login onLogin={setUser} message="Please sign in to start a new scan." />} />
             <Route
               path="/settings"
@@ -302,6 +311,16 @@ function ScanIcon({ className }) {
   return (
     <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  );
+}
+
+function TargetIcon({ className }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 2a10 10 0 100 20 10 10 0 000-20z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6a6 6 0 100 12 6 6 0 000-12z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10a2 2 0 100 4 2 2 0 000-4z" />
     </svg>
   );
 }

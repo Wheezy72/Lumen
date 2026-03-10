@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 const vulnerabilitySchema = new mongoose.Schema({
   id: String,
   title: String,
-  severity: { type: String, enum: ['low', 'medium', 'high', 'critical'], required: true },
+  severity: { type: String, enum: ['info', 'low', 'medium', 'high', 'critical'], required: true },
   description: String,
   evidence: String,
   cve: String,
@@ -13,6 +13,8 @@ const vulnerabilitySchema = new mongoose.Schema({
 
 const scanSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
+  targetId: { type: mongoose.Schema.Types.ObjectId, ref: 'Target', index: true },
+  targetHost: { type: String, trim: true, lowercase: true },
   targetUrl: { type: String, required: true },
   status: { type: String, enum: ['queued', 'scheduled', 'running', 'completed', 'failed'], default: 'queued' },
   progress: { type: Number, default: 0 },
@@ -20,6 +22,21 @@ const scanSchema = new mongoose.Schema({
   results: [vulnerabilitySchema],
   startedAt: Date,
   completedAt: Date,
+
+  // DevSecOps signals
+  diffSummary: {
+    baselineScanId: { type: mongoose.Schema.Types.ObjectId, ref: 'Scan' },
+    newCount: Number,
+    fixedCount: Number,
+    persistingCount: Number,
+    newBlockedCount: Number,
+  },
+  policy: {
+    status: { type: String, enum: ['pass', 'fail', 'skipped', 'unknown'], default: 'unknown' },
+    blockedSeverities: [{ type: String }],
+    evaluatedAt: Date,
+  },
+
   // Scan profile - list of modules to run (e.g., ['headers', 'cookies', 'xss'])
   scanProfile: [{ type: String }],
   // When true, this scan was created by the scheduled-scans script rather than the UI.

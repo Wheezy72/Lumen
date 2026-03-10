@@ -1,6 +1,8 @@
 import express from 'express';
 import Joi from 'joi';
 import Scan from '../models/Scan.js';
+import Target from '../models/Target.js';
+import { computeScanDiff } from '../services/scanDiff.js';
 import { scanQueue } from '../queue/index.js';
 
 const router = express.Router();
@@ -33,8 +35,29 @@ router.post('/', async (req, res, next) => {
     const scheduledTime = data.scheduledFor ? new Date(data.scheduledFor) : null;
     const isScheduled = scheduledTime && scheduledTime > new Date();
     
+    let host;
+    try {
+      host = new URL(data.targetUrl).hostname?.toLowerCase();
+    } catch {
+      host = null;
+    }
+
+    let target = null;
+    if (host) {
+      try {
+        target = await Target.findOne({ userId: req.user.id, host });
+        if (!target) {
+          target = await Target.create({ userId: req.user.id, host });
+        }
+      } catch {
+        // ignore target creation issues; scans can still run
+      }
+    }
+
     // Create scan record
     const scan = await Scan.create({
+      targetId: target?._id,
+      targetHost: host || undefined,
       targetUrl: data.targetUrl,
       scanProfile: data.scanProfile || [],
       scheduledFor: scheduledTime,
@@ -42,6 +65,7 @@ router.post('/', async (req, res, next) => {
       status: isScheduled ? 'scheduled' : 'queued',
       scheduled: isScheduled,
       progress: 0,
+      policy: { status: 'unknown' },
     });
 
     // Add job to queue (with delay if scheduled)
@@ -78,6 +102,52 @@ router.get('/:id', async (req, res, next) => {
     }
     
     res.json(scan);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Diff current scan vs baseline (per target)
+router.get('/:id/diff', async (req, res, next) => {
+  try {
+    const scan = await Scan.findOne({ _id: req.params.id, userId: req.user.id });
+    if (!scan) return res.status(404).json({ error: 'Scan not found' });
+
+    if (!scan.targetId) {
+      return res.json({ baselineScanId: null, diff: null, policy: scan.policy || { status: 'unknown' }, target: null });
+    }
+
+    const target = await Target.findOne({ _id: scan.targetId, userId: req.user.id });
+    if (!target) {
+      return res.json({ baselineScanId: null, diff: null, policy: scan.policy || { status: 'unknown' }, target: null });
+    }
+
+    const targetSummary = {
+      id: target._id,
+      host: target.host,
+      baselineScanId: target.baselineScanId,
+      policyEnabled: target.policyEnabled,
+      policySeverities: target.policySeverities,
+    };
+
+    if (!target.baselineScanId) {
+      return res.json({ baselineScanId: null, diff: null, policy: scan.policy || { status: 'unknown' }, target: targetSummary });
+    }
+
+    const baseline = await Scan.findOne({ _id: target.baselineScanId, userId: req.user.id, targetId: target._id });
+    if (!baseline) {
+      return res.json({ baselineScanId: null, diff: null, policy: scan.policy || { status: 'unknown' }, target: targetSummary });
+    }
+
+    const diff = computeScanDiff(baseline.results || [], scan.results || []);
+
+    res.json({
+      baselineScanId: baseline._id,
+      baselineCreatedAt: baseline.createdAt,
+      diff,
+      policy: scan.policy || { status: 'unknown' },
+      target: targetSummary,
+    });
   } catch (err) {
     next(err);
   }
