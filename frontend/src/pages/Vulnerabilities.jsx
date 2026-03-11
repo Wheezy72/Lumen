@@ -185,9 +185,10 @@ export default function Vulnerabilities() {
 
   const severityBadge = (sev) => {
     const base = 'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border';
-    if (sev === 'Critical') return `${base} bg-red-500/15 text-red-400 border-red-500/25`;
-    if (sev === 'High') return `${base} bg-amber-500/15 text-amber-400 border-amber-500/25`;
-    if (sev === 'Medium') return `${base} bg-blue-500/15 text-blue-400 border-blue-500/25`;
+    if (sev === 'Critical') return `${base} bg-purple-500/15 text-purple-400 border-purple-500/25`;
+    if (sev === 'High') return `${base} bg-red-500/15 text-red-400 border-red-500/25`;
+    if (sev === 'Medium') return `${base} bg-amber-500/15 text-amber-400 border-amber-500/25`;
+    if (sev === 'Low') return `${base} bg-teal-500/15 text-teal-400 border-teal-500/25`;
     return `${base} bg-slate-500/15 text-slate-400 border-slate-500/25`;
   };
 

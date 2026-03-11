@@ -19,9 +19,29 @@ const SEV_COLORS = {
   critical: '#7c3aed',
   high: '#ef4444',
   medium: '#f59e0b',
-  low: '#3b82f6',
+  low: '#14b8a6',
   info: '#6b7280',
 };
+
+const HEADER_HINTS = {
+  'X-Frame-Options': 'Clickjacking protection',
+  'X-Content-Type-Options': 'MIME sniffing protection',
+  'Referrer-Policy': 'Referrer privacy',
+  'Strict-Transport-Security': 'HTTPS enforcement',
+  'Content-Security-Policy': 'Content restrictions',
+};
+
+function displayFindingTitle(title) {
+  const raw = String(title || '');
+  const match = raw.match(/^Missing security header:\s*(.+)$/i);
+  if (!match) return raw;
+
+  const header = match[1].trim();
+  const label = HEADER_HINTS[header];
+  if (label) return `Missing ${label} header (${header})`;
+
+  return `Missing browser security header (${header})`;
+}
 
 function isRealFinding(finding) {
   if (!finding || !finding.title) return false;
@@ -217,7 +237,7 @@ export default function Dashboard() {
             <ul className="space-y-2">
               {topVulns.map(([title, count]) => (
                 <li key={title} className="flex items-center justify-between text-sm">
-                  <span className="text-gray-300 truncate mr-3">{title}</span>
+                  <span className="text-gray-300 truncate mr-3">{displayFindingTitle(title)}</span>
                   <span className="shrink-0 text-xs bg-black/5 dark:bg-slate-700/60 border border-slate-800 text-gray-600 dark:text-gray-300 px-2 py-0.5 rounded-full font-mono">
                     ×{count}
                   </span>
@@ -239,7 +259,7 @@ export default function Dashboard() {
                 return (
                   <li key={idx} className="py-2.5 flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="text-sm text-gray-200 truncate">{finding.title}</p>
+                      <p className="text-sm text-gray-200 truncate">{displayFindingTitle(finding.title)}</p>
                       <p className="text-xs text-gray-600 truncate mt-0.5">{finding.scanTarget}</p>
                     </div>
                     <span
