@@ -36,7 +36,7 @@ function formatDateTime(value) {
 
 function makeBaseName(scan) {
   const url = new URL(scan.targetUrl);
-  const host = url.hostname || 'target';
+  const host = url.hostname || 'site';
   return sanitizeName(host);
 }
 
@@ -44,33 +44,33 @@ function describeDetection(vuln = {}) {
   const category = vuln.category || '';
   switch (category) {
     case 'xss':
-      return 'I sent a harmless script payload through query parameters and saw it reflected in the response.';
+      return 'The scanner added a harmless script tag to the URL and checked whether it was reflected in the response.';
     case 'sqli':
-      return 'I sent SQL-flavoured input into query parameters and looked for database error messages in the response.';
+      return 'The scanner added test input to the URL and checked the response for database error messages.';
     case 'headers':
-      return 'I inspected the HTTP response headers for widely recommended security headers that were missing.';
+      return 'The scanner checked the HTTP response for commonly recommended security headers.';
     case 'ssl':
-      return 'I opened a TLS connection to the host and inspected the certificate and negotiated protocol.';
+      return 'The scanner opened a TLS connection and inspected the certificate and negotiated protocol.';
     case 'traversal':
-      return 'I requested paths that try to step outside the normal web root and checked if sensitive file content appeared.';
+      return 'The scanner requested traversal-style paths and checked whether sensitive file content appeared in the response.';
     case 'subdomain':
-      return 'I tried resolving a small set of common subdomains (like www, api, dev) to see what is exposed.';
+      return 'The scanner tried resolving a small set of common subdomains (for example: www, api, dev).';
     case 'cookies':
-      return 'I looked at the Set-Cookie headers in the HTTP response to see which security flags were applied.';
+      return 'The scanner inspected Set-Cookie headers to see which security flags were applied.';
     case 'error':
-      return 'I sent a harmless probe request and inspected the response for stack traces or verbose error messages.';
+      return 'The scanner sent a harmless request and checked the response for stack traces or verbose error messages.';
     case 'access_control':
-      return 'I adjusted a numeric identifier in the URL and compared the responses to see if a different resource became accessible.';
+      return 'The scanner modified a numeric identifier in the URL and compared responses to look for access control issues.';
     case 'rate_limit':
-      return 'I sent a small burst of requests to the same endpoint and looked for signs of rate limiting such as HTTP 429 or Retry-After headers.';
+      return 'The scanner sent a short burst of requests and checked for rate limiting signals such as HTTP 429 or Retry-After headers.';
     case 'policy':
-      return 'I resolved the hostname and compared it with your worker configuration to decide whether the host can be scanned.';
+      return 'The scanner checked whether the hostname can be scanned under the current worker configuration.';
     case 'network':
-      return 'I attempted a DNS lookup for the target host and recorded any errors.';
+      return 'The scanner attempted DNS resolution for the host and recorded any errors.';
     case 'http':
-      return 'I sent a basic HTTP request to the target and recorded any connection or protocol errors.';
+      return 'The scanner sent a basic HTTP request and recorded any connection or protocol errors.';
     default:
-      return 'This issue was found by running a small set of automated checks against the target.';
+      return 'This issue was found by running a small set of automated checks against the site.';
   }
 }
 
@@ -138,7 +138,7 @@ router.post('/pdf', async (req, res, next) => {
     doc.pipe(ws);
 
     const targetUrl = new URL(scan.targetUrl);
-    const host = targetUrl.hostname || 'target';
+    const host = targetUrl.hostname || 'site';
 
     const headerY = doc.y;
     doc.rect(0, headerY, doc.page.width, 92).fill('#0b1220');
@@ -156,7 +156,7 @@ router.post('/pdf', async (req, res, next) => {
     doc
       .font('Helvetica-Bold')
       .fontSize(18)
-      .text('Lumen Security Report', 44 + logoWidth, headerY + 22, { continued: false });
+      .text('Security Scan Report', 44 + logoWidth, headerY + 22, { continued: false });
 
     doc
       .font('Helvetica')
@@ -202,7 +202,7 @@ router.post('/pdf', async (req, res, next) => {
     doc.fontSize(14).fillColor('#111827').text('Scope and Methodology', { underline: true });
     doc.moveDown(0.3);
     doc.fontSize(10).fillColor('#374151')
-      .text('The scanner executed a set of lightweight, automated checks against the HTTP interface of the target:');
+      .text('The scanner executed a set of lightweight, automated checks against the HTTP interface of the site:');
     doc.moveDown(0.2);
 
     const bullet = (text) => {
@@ -223,7 +223,7 @@ router.post('/pdf', async (req, res, next) => {
 
     // Target summary box
     doc.strokeColor('#e5e7eb').roundedRect(40, doc.y, doc.page.width - 80, 80, 6).stroke();
-    doc.moveDown(0.5).fontSize(12).fillColor('#111827').text(`Target: ${scan.targetUrl}`);
+    doc.moveDown(0.5).fontSize(12).fillColor('#111827').text(`Site: ${scan.targetUrl}`);
     doc.fontSize(10).fillColor('#374151');
     doc.text(`Status: ${scan.status}`);
     doc.text(`Started: ${formatDateTime(scan.startedAt)}`);
@@ -251,7 +251,7 @@ router.post('/pdf', async (req, res, next) => {
       doc.text(`Category: ${v.category || 'general'}`);
 
       doc.moveDown(0.2);
-      doc.font('Helvetica-Bold').fillColor('#111827').text('How I detected this');
+      doc.font('Helvetica-Bold').fillColor('#111827').text('Detection method');
       doc.font('Helvetica').fillColor('#374151').text(describeDetection(v));
 
       doc.moveDown(0.15);

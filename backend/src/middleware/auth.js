@@ -39,8 +39,14 @@ export const clearAuthCookie = (res) => {
 };
 
 export const authMiddleware = (req, res, next) => {
-  const token = req.cookies?.session;
+  const header = req.headers?.authorization;
+  const bearer = typeof header === 'string' && header.toLowerCase().startsWith('bearer ')
+    ? header.slice(7).trim()
+    : null;
+
+  const token = bearer || req.cookies?.session;
   if (!token) return res.status(401).json({ error: 'Authentication required.' });
+
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
     req.user = decoded;

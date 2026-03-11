@@ -6,7 +6,7 @@ import Dashboard from "./pages/Dashboard.jsx";
 import Login from "./pages/Login.jsx";
 import Register from "./pages/Register.jsx";
 import Scans from "./pages/Scans.jsx";
-import Targets from "./pages/Targets.jsx";
+import Changes from "./pages/Changes.jsx";
 import NewScan from "./pages/NewScan.jsx";
 import ReportView from "./pages/ReportView.jsx";
 import Vulnerabilities from "./pages/Vulnerabilities.jsx";
@@ -61,7 +61,7 @@ export default function App() {
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-dark-800 to-gray-900 flex items-center justify-center">
         <div className="text-center">
           <div className="loading-spinner mx-auto mb-4"></div>
-          <div className="text-white text-lg">Loading Lumen Scanner...</div>
+          <div className="text-white text-lg">Loading…</div>
         </div>
       </div>
     );
@@ -79,10 +79,10 @@ export default function App() {
           <div className={`flex justify-between items-center ${isAuthRoute ? 'h-12' : 'h-16'}`}>
             <Link to="/" className="flex items-center space-x-3">
               <div className={`${isAuthRoute ? 'h-8 w-8 rounded-lg' : 'h-9 w-9 rounded-xl'} overflow-hidden ring-1 ring-black/10 dark:ring-white/10 shadow-soft`}>
-                <img src="/logo.jpg" alt="Lumen" className="h-full w-full object-cover" />
+                <img src="/logo.jpg" alt="Logo" className="h-full w-full object-cover" />
               </div>
               <span className={`${isAuthRoute ? 'text-lg' : 'text-xl'} font-bold bg-gradient-to-r from-primary-400 to-secondary-400 bg-clip-text text-transparent`}>
-                Lumen Scanner
+                Vulnerability scanner
               </span>
             </Link>
 
@@ -108,9 +108,9 @@ export default function App() {
                           <ScanIcon className="w-4 h-4 mr-1.5" />
                           Scans
                         </NavLink>
-                        <NavLink to="/targets" isActive={isActiveRoute("/targets")}>
-                          <TargetIcon className="w-4 h-4 mr-1.5" />
-                          Targets
+                        <NavLink to="/changes" isActive={isActiveRoute("/changes") || isActiveRoute("/regressions")}>
+                          <DiffIcon className="w-4 h-4 mr-1.5" />
+                          Changes
                         </NavLink>
                         <NavLink to="/new" isActive={isActiveRoute("/new")}>
                           <PlusIcon className="w-4 h-4 mr-1.5" />
@@ -200,8 +200,9 @@ export default function App() {
                     <NavLink to="/scans" isActive={isActiveRoute("/scans")}>
                       Scans
                     </NavLink>
-                    <NavLink to="/targets" isActive={isActiveRoute("/targets")}>
-                      Targets
+                    <NavLink to="/changes" isActive={isActiveRoute("/changes") || isActiveRoute("/regressions")}>
+                      <DiffIcon className="w-4 h-4 mr-1.5" />
+                      Changes
                     </NavLink>
                     <NavLink to="/new" isActive={isActiveRoute("/new")}>
                       New Scan
@@ -243,7 +244,9 @@ export default function App() {
               element={user ? <Dashboard /> : <Login onLogin={setUser} message="Please sign in to view the dashboard." />}
             />
             <Route path="/scans" element={user ? <Scans /> : <Login onLogin={setUser} message="Please sign in to view your scans." />} />
-            <Route path="/targets" element={user ? <Targets /> : <Login onLogin={setUser} message="Please sign in to view targets." />} />
+            <Route path="/changes" element={user ? <Changes /> : <Login onLogin={setUser} message="Please sign in to view changes." />} />
+            {/* Alias kept for older links */}
+            <Route path="/regressions" element={user ? <Changes /> : <Login onLogin={setUser} message="Please sign in to view changes." />} />
             <Route path="/new" element={user ? <NewScan /> : <Login onLogin={setUser} message="Please sign in to start a new scan." />} />
             <Route
               path="/settings"
@@ -315,12 +318,12 @@ function ScanIcon({ className }) {
   );
 }
 
-function TargetIcon({ className }) {
+function DiffIcon({ className }) {
   return (
     <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 2a10 10 0 100 20 10 10 0 000-20z" />
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6a6 6 0 100 12 6 6 0 000-12z" />
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10a2 2 0 100 4 2 2 0 000-4z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h10M7 17h10" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l-2 2 2 2" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 15l2 2-2 2" />
     </svg>
   );
 }

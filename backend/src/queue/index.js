@@ -5,7 +5,6 @@ import { publishScanUpdate } from '../routes/sse.js';
 import fetch from 'node-fetch';
 import Redis from 'ioredis';
 import { sendScanSummaryEmail, sendScanFailureEmail } from '../services/email.js';
-import Target from '../models/Target.js';
 import { computeScanDiff } from '../services/scanDiff.js';
 
 /**
@@ -28,7 +27,7 @@ const pub = new Redis(REDIS_URL);
 const RESULT_CHANNEL = 'scan_results';
 const JOB_CHANNEL = 'scan_jobs';
 
-const PY_WORKER_HEARTBEAT_KEY = process.env.PY_WORKER_HEARTBEAT_KEY || 'lumen:python_worker:heartbeat';
+const PY_WORKER_HEARTBEAT_KEY = process.env.PY_WORKER_HEARTBEAT_KEY || 'scanner:python_worker:heartbeat';
 const SCAN_TIMEOUT_MS = parseInt(process.env.SCAN_TIMEOUT_MS || String(15 * 60 * 1000), 10);
 const WORKER_RESPONSE_TIMEOUT_MS = parseInt(process.env.SCAN_WORKER_RESPONSE_TIMEOUT_MS || String(20 * 1000), 10);
 
@@ -332,45 +331,56 @@ async function handleResults(scan, data) {
   scan.status = 'completed';
   scan.completedAt = new Date();
 
-  // DevSecOps: diff vs baseline + policy gate evaluation
-  if (scan.targetId) {
+  // Diff vs previous scan for the same host + simple policy gate.
+  if (scan.targetHost) {
     try {
-      const target = await Target.findOne({ _id: scan.targetId, userId: scan.userId });
-      const baselineId = target?.baselineScanId;
+      const anchor = scan.completedAt || new Date();
+      const previous = await Scan.findOne({
+        userId: scan.userId,
+        status: 'completed',
+        targetHost: scan.targetHost,
+        _id: { $ne: scan._id },
+        completedAt: { $lt: anchor },
+      }).sort({ completedAt: -1, createdAt: -1 });
 
-      if (baselineId && String(baselineId) !== String(scan._id)) {
-        const baseline = await Scan.findOne({ _id: baselineId, userId: scan.userId, targetId: scan.targetId });
+      if (previous?.status === 'completed') {
+        const diff = computeScanDiff(previous.results || [], results);
 
-        if (baseline?.status === 'completed') {
-          const diff = computeScanDiff(baseline.results || [], results);
+        const blockedSeverities = ['high', 'critical'];
+        const newBlocked = (diff.newIssues || []).filter((v) => {
+          const sev = (v.severity || 'info').toLowerCase();
+          return blockedSeverities.includes(sev);
+        });
 
-          const newBlocked = (diff.newIssues || []).filter((v) => {
-            const sev = (v.severity || 'info').toLowerCase();
-            return (target?.policySeverities || []).includes(sev);
-          });
+        scan.diffSummary = {
+          compareScanId: previous._id,
+          newCount: diff.newIssues.length,
+          fixedCount: diff.fixedIssues.length,
+          persistingCount: diff.persisting.length,
+          newBlockedCount: newBlocked.length,
+        };
 
-          scan.diffSummary = {
-            baselineScanId: baseline._id,
-            newCount: diff.newIssues.length,
-            fixedCount: diff.fixedIssues.length,
-            persistingCount: diff.persisting.length,
-            newBlockedCount: newBlocked.length,
-          };
+        scan.policy = {
+          status: newBlocked.length ? 'fail' : 'pass',
+          blockedSeverities,
+          evaluatedAt: new Date(),
+        };
 
-          if (target?.policyEnabled) {
-            scan.policy = {
-              status: newBlocked.length ? 'fail' : 'pass',
-              blockedSeverities: target.policySeverities || ['high', 'critical'],
-              evaluatedAt: new Date(),
-            };
-          } else {
-            scan.policy = {
-              status: 'skipped',
-              blockedSeverities: target?.policySeverities || ['high', 'critical'],
-              evaluatedAt: new Date(),
-            };
+        // Scheduled scans can email a diff summary.
+        if (scan.scheduled) {
+          try {
+            const { sendScheduledScanDiffEmail } = await import('../services/email.js');
+            await sendScheduledScanDiffEmail(scan, diff);
+          } catch (e) {
+            logger.warn('Scheduled diff email failed', { scanId: scan._id.toString(), error: e.message });
           }
         }
+      } else {
+        scan.policy = {
+          status: 'skipped',
+          blockedSeverities: ['high', 'critical'],
+          evaluatedAt: new Date(),
+        };
       }
     } catch (e) {
       logger.warn('Policy evaluation failed', { scanId: scan._id.toString(), error: e.message });

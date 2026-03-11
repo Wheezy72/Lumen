@@ -74,10 +74,10 @@ export default function Register({ onRegister }) {
         <div className="bg-dark-200 border border-slate-800 rounded-lg shadow-neon p-8">
           <div className="text-center mb-8">
             <div className="w-16 h-16 rounded-2xl overflow-hidden mx-auto mb-4 ring-1 ring-black/10 dark:ring-white/10 shadow-soft cyber-glow">
-              <img src="/logo.jpg" alt="Lumen" className="w-full h-full object-cover" />
+              <img src="/logo.jpg" alt="Logo" className="w-full h-full object-cover" />
             </div>
             <h1 className="text-2xl font-bold bg-gradient-to-r from-primary-500 to-secondary-500 bg-clip-text text-transparent">Create account</h1>
-            <p className="text-gray-400 mt-2">Get started with Lumen</p>
+            <p className="text-gray-400 mt-2">Create an account to start scanning</p>
           </div>
 
           {error && (
@@ -227,7 +227,7 @@ export default function Register({ onRegister }) {
               disabled={loading}
               className="w-full py-3 btn-primary transition disabled:opacity-50 disabled:cursor-not-allowed mt-2"
             >
-              {loading ? "Executing..." : "Create Account"}
+              {loading ? "Creating..." : "Create Account"}
             </button>
           </form>
 

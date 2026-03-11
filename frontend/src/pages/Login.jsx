@@ -52,10 +52,10 @@ export default function Login({ onLogin, message }) {
         <div className="bg-dark-200 border border-slate-800 rounded-lg shadow-neon p-8">
           <div className="text-center mb-8">
             <div className="w-16 h-16 rounded-2xl overflow-hidden mx-auto mb-4 ring-1 ring-black/10 dark:ring-white/10 shadow-soft cyber-glow">
-              <img src="/logo.jpg" alt="Lumen" className="w-full h-full object-cover" />
+              <img src="/logo.jpg" alt="Logo" className="w-full h-full object-cover" />
             </div>
             <h1 className="text-2xl font-bold bg-gradient-to-r from-primary-500 to-secondary-500 bg-clip-text text-transparent">Welcome back</h1>
-            <p className="text-gray-400 mt-2">Sign in to your Lumen account</p>
+            <p className="text-gray-400 mt-2">Sign in to your account</p>
           </div>
 
           {/* App.jsx routing message (e.g., "Please sign in to view the dashboard") */}

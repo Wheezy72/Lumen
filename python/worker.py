@@ -12,21 +12,20 @@ import requests
 from bs4 import BeautifulSoup
 
 """
-Python worker for Lumen.
+Python worker for the scanner.
 
 This process listens for scan jobs on Redis, runs a set of HTTP-focused
-security checks against the target, and publishes the findings back to the
-Node.js backend over Redis pub/sub.
+checks against the site, and publishes the findings back to the Node.js backend.
 """
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://127.0.0.1:6379")
-# Override safety lock to allow scanning public targets
+# Override safety lock to allow scanning public sites
 ALLOW_EXTERNAL = True
 
 JOB_CHANNEL = "scan_jobs"
 RESULT_CHANNEL = "scan_results"
 
-HEARTBEAT_KEY = os.getenv("PY_WORKER_HEARTBEAT_KEY", "lumen:python_worker:heartbeat")
+HEARTBEAT_KEY = os.getenv("PY_WORKER_HEARTBEAT_KEY", "scanner:python_worker:heartbeat")
 HEARTBEAT_TTL_SECONDS = int(os.getenv("PY_WORKER_HEARTBEAT_TTL_SECONDS", "15"))
 HEARTBEAT_INTERVAL_SECONDS = int(os.getenv("PY_WORKER_HEARTBEAT_INTERVAL_SECONDS", "5"))
 
@@ -137,22 +136,22 @@ def check_http_headers(url: str) -> List[Dict]:
 
 
 def check_xss(url: str) -> List[Dict]:
-    """Try to reflect a harmless script payload via query parameters."""
+    """Try to reflect a harmless script tag via query parameters."""
     issues: List[Dict] = []
-    payload = "<script>alert(1)</script>"
+    test_string = "<script>alert(1)</script>"
     try:
         parsed = urllib.parse.urlparse(url)
         qs = urllib.parse.parse_qs(parsed.query)
-        qs["x"] = [payload]
+        qs["x"] = [test_string]
         new_qs = urllib.parse.urlencode(qs, doseq=True)
         test_url = urllib.parse.urlunparse(parsed._replace(query=new_qs))
 
         resp = requests.get(test_url, timeout=10)
-        if payload in resp.text:
+        if test_string in resp.text:
             issues.append({
                 "title": "Reflected XSS",
                 "severity": "high",
-                "description": "A script payload was reflected in the response, indicating possible XSS.",
+                "description": "A harmless script tag was reflected in the response, indicating possible XSS.",
                 "evidence": f"URL: {test_url}",
                 "category": "xss",
             })
@@ -167,7 +166,7 @@ def check_xss(url: str) -> List[Dict]:
 
 
 def check_sql_injection(url: str) -> List[Dict]:
-    """Inject a simple SQL payload and look for error messages."""
+    """Add a simple SQL-shaped test string and look for error messages."""
     issues: List[Dict] = []
     payload = "' OR '1'='1"
     try:
@@ -229,7 +228,7 @@ def check_directory_traversal(url: str) -> List[Dict]:
 
 
 def discover_subdomains(hostname: str) -> List[Dict]:
-    """Resolve a small set of common subdomains for the target host."""
+    """Resolve a small set of common subdomains for the host."""
     issues: List[Dict] = []
     try:
         common = ["www", "api", "dev", "staging", "test", "mail"]
@@ -290,7 +289,7 @@ def check_error_leakage(url: str) -> List[Dict]:
     try:
         parsed = urllib.parse.urlparse(url)
         qs = urllib.parse.parse_qs(parsed.query)
-        qs["lumen_error_probe"] = ["1"]
+        qs["scan_error_probe"] = ["1"]
         test_url = urllib.parse.urlunparse(
             parsed._replace(query=urllib.parse.urlencode(qs, doseq=True))
         )
@@ -404,7 +403,7 @@ def run_scan(target_url: str, profile: Optional[List[str]] = None, scan_id: str 
     hostname = parsed.hostname
 
     if not hostname:
-        return [{"title": "Invalid target", "severity": "low", "category": "network"}]
+        return [{"title": "Invalid site URL", "severity": "low", "category": "network"}]
 
     try:
         resolved = socket.gethostbyname(hostname)
