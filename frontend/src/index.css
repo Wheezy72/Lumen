@@ -8,7 +8,7 @@ html {
   scroll-behavior: smooth;
 }
 
-/* Light/dark theme variables */
+/* Theme variables */
 :root {
   --app-bg: #f3f6fb;
   --app-text: #0b1220;
@@ -18,10 +18,10 @@ html {
   --app-surface-300: #f3f6fb;
   --app-border: rgba(15, 23, 42, 0.12);
 
-  --app-input-bg: rgba(255, 255, 255, 0.92);
-  --app-input-text: #0b1220;
-  --app-input-border: rgba(15, 23, 42, 0.18);
-  --app-input-placeholder: rgba(15, 23, 42, 0.42);
+  --app-input-bg: rgba(15, 23, 42, 0.92);
+  --app-input-text: #f8fafc;
+  --app-input-border: rgba(148, 163, 184, 0.28);
+  --app-input-placeholder: rgba(148, 163, 184, 0.62);
 }
 
 html.dark {
@@ -47,7 +47,7 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* App background (keeps the blue/green identity even in light mode). */
+/* App background */
 .app-shell {
   position: relative;
   isolation: isolate;
@@ -64,9 +64,9 @@ body {
   z-index: -1;
   pointer-events: none;
   background:
-    radial-gradient(780px circle at 18% 14%, rgba(37, 99, 235, 0.18), transparent 60%),
-    radial-gradient(820px circle at 82% 12%, rgba(34, 197, 94, 0.14), transparent 64%);
-  opacity: 0.85;
+    radial-gradient(780px circle at 18% 14%, rgba(37, 99, 235, 0.20), transparent 60%),
+    radial-gradient(820px circle at 82% 12%, rgba(34, 197, 94, 0.16), transparent 64%);
+  opacity: 0.92;
   animation: bgPulse 9s ease-in-out infinite;
 }
 
@@ -83,11 +83,11 @@ html.dark .app-shell::before {
 
 @keyframes bgPulse {
   0%, 100% {
-    opacity: 0.72;
+    opacity: 0.78;
     transform: translate3d(0, 0, 0) scale(1);
   }
   50% {
-    opacity: 0.95;
+    opacity: 1;
     transform: translate3d(0, -8px, 0) scale(1.02);
   }
 }

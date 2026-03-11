@@ -242,9 +242,9 @@ export const configureBull = () => {
   scanQueue.on('completed', async (job) => {
     const { scanId, webhookUrl } = job.data;
     const scan = await Scan.findById(scanId);
-    
-    // Send email notification (skip for scheduled scans)
-    if (scan && !scan.scheduled) {
+
+    // Send email notification (if enabled + user opted in).
+    if (scan) {
       try {
         await sendScanSummaryEmail(scan);
       } catch (e) {
@@ -366,15 +366,7 @@ async function handleResults(scan, data) {
           evaluatedAt: new Date(),
         };
 
-        // Scheduled scans can email a diff summary.
-        if (scan.scheduled) {
-          try {
-            const { sendScheduledScanDiffEmail } = await import('../services/email.js');
-            await sendScheduledScanDiffEmail(scan, diff);
-          } catch (e) {
-            logger.warn('Scheduled diff email failed', { scanId: scan._id.toString(), error: e.message });
-          }
-        }
+        
       } else {
         scan.policy = {
           status: 'skipped',

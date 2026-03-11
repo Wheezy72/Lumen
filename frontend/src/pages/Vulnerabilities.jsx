@@ -4,7 +4,7 @@ import { Link, useLocation } from 'react-router-dom';
 export default function Vulnerabilities() {
   const [expandedCard, setExpandedCard] = useState(null);
   const [activeTab, setActiveTab] = useState('vulnerabilities');
-  const [missingImages, setMissingImages] = useState(() => new Set());
+  const [imageAttempts, setImageAttempts] = useState(() => ({}));
   const location = useLocation();
 
   const headerArt = useMemo(
@@ -32,11 +32,7 @@ export default function Vulnerabilities() {
       humanDesc:
         'SQL injection lets an attacker change the meaning of a database query by injecting special characters or SQL keywords into fields such as login forms and search boxes.',
       realExample:
-        'A login form builds SQL like `SELECT * FROM users WHERE email = \'' +
-        'input' +
-        '\' AND password = \'' +
-        'input' +
-        '\'` instead of using parameters. The input \' OR 1=1 -- logs in as the first user.',
+        `A login form builds SQL like \`SELECT * FROM users WHERE email = 'input' AND password = 'input'\` instead of using parameters. The input '' OR 1=1 -- logs in as the first user.`,
       prevention:
         'Use parameterised queries / prepared statements, never concatenate user input into SQL, and apply server-side input validation.'
     },
@@ -195,12 +191,16 @@ export default function Vulnerabilities() {
     return `${base} bg-slate-500/15 text-slate-400 border-slate-500/25`;
   };
 
-  const markImageMissing = (slug) => {
-    setMissingImages((prev) => {
-      if (prev.has(slug)) return prev;
-      const next = new Set(prev);
-      next.add(slug);
-      return next;
+  const onHeaderImageError = (slug) => {
+    const candidates = ['png', 'jpg', 'jpeg'];
+
+    setImageAttempts((prev) => {
+      const current = prev[slug] ?? 0;
+      const nextAttempt = current + 1;
+      if (nextAttempt >= candidates.length) {
+        return { ...prev, [slug]: -1 };
+      }
+      return { ...prev, [slug]: nextAttempt };
     });
   };
 
@@ -218,7 +218,8 @@ export default function Vulnerabilities() {
               Short, practical notes on common web issues and a few real-world incidents.
             </p>
             <p className="text-xs text-gray-500 mt-2 max-w-2xl">
-              Tip: you can add your own header images by dropping files into <span className="font-mono">frontend/public/learn</span> (for example <span className="font-mono">sqli.jpg</span>).
+              Tip: add header images in <span className="font-mono">frontend/public/learn</span>.
+              Name them like <span className="font-mono">sqli.png</span> (or <span className="font-mono">.jpg</span>/<span className="font-mono">.jpeg</span>).
             </p>
           </div>
 
@@ -248,8 +249,10 @@ export default function Vulnerabilities() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {vulnerabilities.map((v) => {
               const art = headerArt[v.slug] || { from: 'from-primary-500/20', to: 'to-secondary-500/10' };
-              const imageUrl = `/learn/${v.slug}.jpg`;
-              const showImage = !missingImages.has(v.slug);
+              const candidates = ['png', 'jpg', 'jpeg'];
+              const attempt = imageAttempts[v.slug] ?? 0;
+              const showImage = attempt !== -1;
+              const imageUrl = showImage ? `/learn/${v.slug}.${candidates[attempt]}` : '';
 
               return (
                 <article
@@ -262,8 +265,8 @@ export default function Vulnerabilities() {
                       <img
                         src={imageUrl}
                         alt=""
-                        className="absolute inset-0 h-full w-full object-cover opacity-80"
-                        onError={() => markImageMissing(v.slug)}
+                        className="absolute inset-0 h-full w-full object-cover opacity-80 dark:opacity-60"
+                        onError={() => onHeaderImageError(v.slug)}
                         loading="lazy"
                       />
                     )}
