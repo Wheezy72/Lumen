@@ -1,6 +1,8 @@
 import nodemailer from 'nodemailer';
 import { logger } from '../utils/logger.js';
 import User from '../models/User.js';
+import Scan from '../models/Scan.js';
+import { computeScanDiff } from './scanDiff.js';
 
 /**
  * Simple email helper used to notify users about scan results.
@@ -38,38 +40,155 @@ export async function sendScanSummaryEmail(scan) {
     const user = await User.findById(scan.userId);
     if (!user?.email || !user.emailAlertsEnabled) return;
 
-    const total = (scan.results || []).length;
-    if (!total) return;
+    const results = scan.results || [];
+    const total = results.length;
 
-    const counts = { low: 0, medium: 0, high: 0, critical: 0 };
-    (scan.results || []).forEach((v) => {
-      const sev = v.severity || 'low';
-      counts[sev] = (counts[sev] || 0) + 1;
+    const counts = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
+    results.forEach((finding) => {
+      const severity = (finding.severity || 'info').toLowerCase();
+      counts[severity] = (counts[severity] || 0) + 1;
     });
 
-    const subject = `[Scan] Findings for ${scan.targetUrl}`;
-    const topFindings = (scan.results || [])
-      .slice(0, 3)
-      .map((v) => `- [${(v.severity || 'low').toUpperCase()}] ${v.title}`)
-      .join('\n');
+    const targetLabel = scan.targetHost || scan.targetUrl;
 
-    const text = [
-      `A scan completed for: ${scan.targetUrl}`,
-      '',
-      `Total findings: ${total}`,
-      `Critical: ${counts.critical}  High: ${counts.high}  Medium: ${counts.medium}  Low: ${counts.low}`,
-      '',
-      'Top findings:',
-      topFindings,
-      '',
-      'Log in to the dashboard to review the full report and export a PDF if needed.',
-    ].join('\n');
+    const severityRank = (sev) => {
+      const s = String(sev || 'info').toLowerCase();
+      if (s === 'critical') return 4;
+      if (s === 'high') return 3;
+      if (s === 'medium') return 2;
+      if (s === 'low') return 1;
+      return 0;
+    };
+
+    const sortFindings = (arr) =>
+      [...(arr || [])].sort((a, b) => {
+        const d = severityRank(b.severity) - severityRank(a.severity);
+        if (d) return d;
+        return String(a.title || '').localeCompare(String(b.title || ''));
+      });
+
+    let compareScan = null;
+    let diff = null;
+    const compareScanId = scan.diffSummary?.compareScanId;
+
+    if (compareScanId) {
+      compareScan = await Scan.findOne({
+        _id: compareScanId,
+        userId: scan.userId,
+        status: 'completed',
+      }).select('results createdAt completedAt');
+
+      if (compareScan) {
+        diff = computeScanDiff(compareScan.results || [], results);
+      }
+    }
+
+    const newIssues = sortFindings(diff?.newIssues || []);
+    const fixedIssues = sortFindings(diff?.fixedIssues || []);
+    const persisting = sortFindings(diff?.persisting || []);
+
+    const newHighCritical = newIssues.filter((finding) => {
+      const severity = (finding.severity || 'info').toLowerCase();
+      return severity === 'high' || severity === 'critical';
+    });
+
+    const hasComparison = Boolean(compareScan && diff);
+
+    let subject = `[Lumen] Scan complete for ${targetLabel}`;
+    if (hasComparison) {
+      if (newIssues.length) {
+        subject = `[Lumen] Scan complete – ${newIssues.length} new finding${newIssues.length === 1 ? '' : 's'} for ${targetLabel}`;
+      } else if (!fixedIssues.length) {
+        subject = `[Lumen] Scan complete – no changes for ${targetLabel}`;
+      }
+    }
+
+    const lines = [];
+
+    lines.push(`Scan complete for: ${scan.targetUrl}`);
+    lines.push('');
+
+    if (total === 0) {
+      lines.push('Findings: none');
+    } else {
+      lines.push(`Total findings: ${total}`);
+      lines.push(`Critical: ${counts.critical}  High: ${counts.high}  Medium: ${counts.medium}  Low: ${counts.low}  Info: ${counts.info}`);
+    }
+
+    if (!hasComparison) {
+      lines.push('');
+      lines.push('Changes since last scan: not available (first recorded scan for this site).');
+    } else {
+      lines.push('');
+      lines.push('Changes since last scan:');
+      lines.push(`New: ${newIssues.length}  Fixed: ${fixedIssues.length}  Still present: ${persisting.length}`);
+
+      if (newIssues.length === 0 && fixedIssues.length === 0) {
+        lines.push('No changes were detected compared to the previous scan.');
+      } else {
+        if (newIssues.length === 0) {
+          lines.push('No new findings were introduced compared to the previous scan.');
+        }
+        if (fixedIssues.length === 0) {
+          lines.push('No findings were fixed since the previous scan.');
+        }
+      }
+
+      if (newHighCritical.length) {
+        lines.push('');
+        lines.push(`Warning: ${newHighCritical.length} new high/critical finding${newHighCritical.length === 1 ? '' : 's'} detected.`);
+        newHighCritical.slice(0, 5).forEach((finding) => {
+          lines.push(`- [${(finding.severity || 'info').toUpperCase()}] ${finding.title}`);
+        });
+        if (newHighCritical.length > 5) {
+          lines.push(`  ...and ${newHighCritical.length - 5} more.`);
+        }
+      }
+
+      if (newIssues.length) {
+        lines.push('');
+        lines.push('New findings:');
+        newIssues.slice(0, 5).forEach((finding) => {
+          lines.push(`- [${(finding.severity || 'info').toUpperCase()}] ${finding.title}`);
+        });
+        if (newIssues.length > 5) {
+          lines.push(`  ...and ${newIssues.length - 5} more.`);
+        }
+      }
+
+      if (fixedIssues.length) {
+        lines.push('');
+        lines.push('Fixed since last scan:');
+        fixedIssues.slice(0, 5).forEach((finding) => {
+          lines.push(`- [${(finding.severity || 'info').toUpperCase()}] ${finding.title}`);
+        });
+        if (fixedIssues.length > 5) {
+          lines.push(`  ...and ${fixedIssues.length - 5} more.`);
+        }
+      }
+    }
+
+    if (total) {
+      const top = sortFindings(results).slice(0, 5);
+
+      lines.push('');
+      lines.push('Top findings in this scan:');
+      top.forEach((finding) => {
+        lines.push(`- [${(finding.severity || 'info').toUpperCase()}] ${finding.title}`);
+      });
+      if (total > 5) {
+        lines.push(`  ...and ${total - 5} more.`);
+      }
+    }
+
+    lines.push('');
+    lines.push('Open the Lumen dashboard to view the full report and export a PDF/CSV if needed.');
 
     await getTransporter().sendMail({
       from: EMAIL_FROM,
       to: user.email,
       subject,
-      text,
+      text: lines.join('\n'),
     });
   } catch (e) {
     logger.warn('Failed to send scan summary email', { error: e.message });
@@ -83,7 +202,7 @@ export async function sendScanFailureEmail(scan, errorMessage) {
     const user = await User.findById(scan.userId);
     if (!user?.email || !user.emailAlertsEnabled) return;
 
-    const subject = `[Scan] Scan failed for ${scan.targetUrl}`;
+    const subject = `[Lumen] Scan failed for ${scan.targetUrl}`;
     const text = [
       `A scan for ${scan.targetUrl} did not complete successfully.`,
       '',
@@ -127,7 +246,7 @@ export async function sendScheduledScanDiffEmail(scan, diff) {
       (v) => v.severity === 'high' || v.severity === 'critical',
     );
 
-    const subjectParts = ['[Scan] Scheduled scan'];
+    const subjectParts = ['[Lumen] Scheduled scan'];
     subjectParts.push(`for ${scan.targetUrl}`);
     if (newHighCritical.length) {
       subjectParts.push('– new high-risk issues detected');
