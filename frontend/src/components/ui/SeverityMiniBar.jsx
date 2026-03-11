@@ -4,7 +4,7 @@ const COLORS = {
   critical: 'bg-purple-500',
   high: 'bg-red-500',
   medium: 'bg-amber-500',
-  low: 'bg-blue-500',
+  low: 'bg-teal-500',
   info: 'bg-slate-500',
 };
 

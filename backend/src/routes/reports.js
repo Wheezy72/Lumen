@@ -108,6 +108,49 @@ function mitigationAdvice(vuln = {}) {
   }
 }
 
+const HEADER_HINTS = {
+  'X-Frame-Options': {
+    label: 'Clickjacking protection',
+    meaning: 'Helps stop other sites from embedding your pages inside hidden iframes (a common clickjacking trick).',
+  },
+  'X-Content-Type-Options': {
+    label: 'MIME sniffing protection',
+    meaning: 'Helps browsers avoid guessing file types in a way that can enable script injection in edge cases.',
+  },
+  'Referrer-Policy': {
+    label: 'Referrer privacy',
+    meaning: 'Controls how much URL information is shared in the Referer header when users navigate away from your site.',
+  },
+  'Strict-Transport-Security': {
+    label: 'HTTPS enforcement',
+    meaning: 'Tells browsers to use HTTPS only for this site, helping prevent downgrade attacks.',
+  },
+  'Content-Security-Policy': {
+    label: 'Script and content restrictions',
+    meaning: 'Limits where scripts/styles can load from, reducing the impact of XSS if a bug exists.',
+  },
+};
+
+function headerHintForTitle(title = '') {
+  const raw = String(title || '');
+  const match = raw.match(/^Missing security header:\s*(.+)$/i);
+  if (!match) return null;
+
+  const header = match[1].trim();
+  const info = HEADER_HINTS[header];
+  return {
+    header,
+    label: info?.label || 'Browser security',
+    meaning: info?.meaning || 'A recommended browser security header was not present in the HTTP response.',
+  };
+}
+
+function displayFindingTitle(vuln = {}) {
+  const hint = headerHintForTitle(vuln.title);
+  if (!hint) return vuln.title || 'Untitled';
+  return `Missing ${hint.label} header (${hint.header})`;
+}
+
 // Serve: GET /api/reports/file/:name (sets content-disposition)
 router.get('/file/:name', async (req, res, next) => {
   try {
@@ -240,13 +283,16 @@ router.post('/pdf', async (req, res, next) => {
     doc.moveDown(0.5);
 
     results.forEach((v, idx) => {
+      const headerHint = headerHintForTitle(v.title);
+
       doc.moveDown(0.4);
       doc.fillColor(sevColor(v.severity)).fontSize(12)
-        .text(`${idx + 1}. ${v.title || 'Untitled'}  [${(v.severity || 'low').toUpperCase()}]`);
+        .text(`${idx + 1}. ${displayFindingTitle(v)}  [${(v.severity || 'low').toUpperCase()}]`);
       doc.fillColor('#374151').fontSize(10);
       if (v.cve) doc.text(`CVE: ${v.cve}`);
       if (typeof v.epss !== 'undefined') doc.text(`EPSS: ${v.epss}`);
       if (v.description) doc.text(v.description);
+      if (headerHint) doc.text(`What it means: ${headerHint.meaning}`);
       if (v.evidence) doc.text(`Evidence: ${v.evidence}`);
       doc.text(`Category: ${v.category || 'general'}`);
 

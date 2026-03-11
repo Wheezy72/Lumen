@@ -8,9 +8,53 @@ const SEV = {
   critical: { bg: 'bg-purple-500/15 text-purple-400 border border-purple-500/30', dot: 'bg-purple-400' },
   high:     { bg: 'bg-red-500/15 text-red-400 border border-red-500/30',           dot: 'bg-red-400' },
   medium:   { bg: 'bg-amber-500/15 text-amber-400 border border-amber-500/30',     dot: 'bg-amber-400' },
-  low:      { bg: 'bg-blue-500/15 text-blue-400 border border-blue-500/30',        dot: 'bg-blue-400' },
+  low:      { bg: 'bg-teal-500/15 text-teal-400 border border-teal-500/30',        dot: 'bg-teal-400' },
   info:     { bg: 'bg-slate-500/15 text-slate-400 border border-slate-500/30',     dot: 'bg-slate-400' },
 };
+
+const HEADER_HINTS = {
+  'X-Frame-Options': {
+    label: 'clickjacking protection',
+    meaning: 'Helps stop other sites from embedding your pages inside hidden iframes (a common clickjacking trick).',
+  },
+  'X-Content-Type-Options': {
+    label: 'MIME sniffing protection',
+    meaning: 'Helps browsers avoid guessing file types in a way that can enable script injection in edge cases.',
+  },
+  'Referrer-Policy': {
+    label: 'referrer privacy',
+    meaning: 'Controls how much URL information is shared in the Referer header when users navigate away from your site.',
+  },
+  'Strict-Transport-Security': {
+    label: 'HTTPS enforcement',
+    meaning: 'Tells browsers to use HTTPS only for this site, helping prevent downgrade attacks.',
+  },
+  'Content-Security-Policy': {
+    label: 'script and content restrictions',
+    meaning: 'Limits where scripts/styles can load from, reducing the impact of XSS if a bug exists.',
+  },
+};
+
+function getHeaderHint(finding) {
+  const title = String(finding?.title || '');
+  const match = title.match(/^Missing security header:\s*(.+)$/i);
+  if (!match) return null;
+
+  const header = match[1].trim();
+  const info = HEADER_HINTS[header];
+
+  return {
+    header,
+    label: info?.label || 'browser security',
+    meaning: info?.meaning || 'A recommended browser security header was not present in the HTTP response.',
+  };
+}
+
+function displayFindingTitle(finding) {
+  const hint = getHeaderHint(finding);
+  if (!hint) return finding?.title;
+  return `Missing ${hint.label} header (${hint.header})`;
+}
 
 
 
@@ -449,7 +493,7 @@ export default function ReportView() {
                     }`}
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <span className="text-sm text-gray-200 font-medium leading-snug">{f.title}</span>
+                      <span className="text-sm text-gray-200 font-medium leading-snug">{displayFindingTitle(f)}</span>
                       <SeverityBadge severity={sev} />
                     </div>
                     <div className="mt-1 flex items-center gap-2">
@@ -473,7 +517,7 @@ export default function ReportView() {
             <div className="space-y-5">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h3 className="text-lg font-semibold text-white">{selectedVuln.title}</h3>
+                  <h3 className="text-lg font-semibold text-white">{displayFindingTitle(selectedVuln)}</h3>
                   <div className="mt-1 flex flex-wrap items-center gap-2">
                     <CategoryBadge category={(selectedVuln.category || 'other').toLowerCase()} />
                     {selectedVuln.cve && <span className="text-xs text-gray-500 font-mono">{selectedVuln.cve}</span>}
@@ -482,12 +526,25 @@ export default function ReportView() {
                 <SeverityBadge severity={(selectedVuln.severity || 'info').toLowerCase()} />
               </div>
 
-              {selectedVuln.description && (
-                <div>
-                  <h4 className="text-xs font-semibold text-primary-500 uppercase tracking-wide mb-2">Description</h4>
-                  <p className="text-gray-300 text-sm leading-relaxed">{selectedVuln.description}</p>
-                </div>
-              )}
+              {(() => {
+                const headerHint = getHeaderHint(selectedVuln);
+
+                if (!selectedVuln.description && !headerHint) return null;
+
+                return (
+                  <div>
+                    <h4 className="text-xs font-semibold text-primary-500 uppercase tracking-wide mb-2">Description</h4>
+                    {selectedVuln.description && (
+                      <p className="text-gray-300 text-sm leading-relaxed">{selectedVuln.description}</p>
+                    )}
+                    {headerHint && (
+                      <p className={`text-sm leading-relaxed ${selectedVuln.description ? 'mt-2 text-gray-400' : 'text-gray-300'}`}>
+                        {headerHint.meaning}
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
 
               {selectedVuln.evidence && (
                 <div>
