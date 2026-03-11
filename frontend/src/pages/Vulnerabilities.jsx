@@ -32,11 +32,7 @@ export default function Vulnerabilities() {
       humanDesc:
         'SQL injection lets an attacker change the meaning of a database query by injecting special characters or SQL keywords into fields such as login forms and search boxes.',
       realExample:
-        'A login form builds SQL like `SELECT * FROM users WHERE email = \'' +
-        'input' +
-        '\' AND password = \'' +
-        'input' +
-        '\'` instead of using parameters. The input \'' OR 1=1 -- logs in as the first user.',
+        `A login form builds SQL like \`SELECT * FROM users WHERE email = 'input' AND password = 'input'\` instead of using parameters. The input '' OR 1=1 -- logs in as the first user.`,
       prevention:
         'Use parameterised queries / prepared statements, never concatenate user input into SQL, and apply server-side input validation.'
     },
