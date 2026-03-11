@@ -21,6 +21,43 @@ const REDIS_URL = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
 
 export const scanQueue = new Bull('scanQueue', REDIS_URL);
 
+let recurringSyncPromise = null;
+export const syncRecurringSchedules = async () => {
+  if (recurringSyncPromise) return recurringSyncPromise;
+
+  recurringSyncPromise = (async () => {
+    try {
+      const enabled = await RecurringScan.find({ enabled: true }).select('_id cron timezone').lean();
+
+      await Promise.all(
+        enabled.map((recurring) => {
+          const tz = recurring.timezone || undefined;
+          const repeat = tz ? { cron: recurring.cron, tz } : { cron: recurring.cron };
+
+          return scanQueue.add(
+            'recurringTick',
+            { recurringScanId: recurring._id.toString() },
+            {
+              jobId: `recurring:${recurring._id.toString()}`,
+              repeat,
+            },
+          );
+        }),
+      );
+
+      if (enabled.length) {
+        logger.info('Recurring scan schedules synced', { count: enabled.length });
+      }
+    } catch (e) {
+      logger.warn('Recurring scan schedule sync failed', { error: e.message });
+    }
+  })().finally(() => {
+    recurringSyncPromise = null;
+  });
+
+  return recurringSyncPromise;
+};
+
 // Redis pub/sub for Python worker communication
 const redis = new Redis(REDIS_URL);
 const pub = new Redis(REDIS_URL);
@@ -240,6 +277,8 @@ export const configureBull = () => {
 
   // Handle completed jobs
   scanQueue.on('completed', async (job) => {
+    if (job.name !== 'start') return;
+
     const { scanId, webhookUrl } = job.data;
     const scan = await Scan.findById(scanId);
 
@@ -305,14 +344,12 @@ export const configureBull = () => {
           await fetch(webhookUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ type: 'failed', scanId, error: err.message }),
-          });
+            body: JSON.stringify({ type: 'failed', scanId, error: err.message })            });
         } catch (e) {
-          logger.warn('Webhook failure notification failed', { webhookUrl, error: e.message });
-        }
-      }
-    }
-  });
+          logger.warn('Webhook failure notification failed', { webhoo  });
+
+  // Handle failed jobs
+  scanQueue.on('fail  });
 };
 
 // Reference to Express app for SSE notifications
@@ -347,6 +384,45 @@ async function handleResults(scan, data) {
         const diff = computeScanDiff(previous.results || [], results);
 
         const blockedSeverities = ['high', 'critical'];
+        const newBlocked = (diff.newIssues || []).filter((v) => {
+          const sev = (v.severity || 'info').toLowerCase();
+          return blockedSeverities.includes(sev);
+        });
+
+        scan.diffSummary = {
+          compareScanId: previous._id,
+          newCount: diff.newIssues.length,
+          fixedCount: diff.fixedIssues.length,
+          persistingCount: diff.persisting.length,
+          newBlockedCount: newBlocked.l  scan.        };
+
+        scan.policy = {
+          status: newBlocked.length ? 'fail  // Diff vs previous scan for the same h          evaluatedAt: new  if (sca        };
+
+        
+      } else {
+        scan.policy = {
+          status: 'skipped',
+          blockedSeverities: ['high', 'critical'],
+          evaluatedAt: new Date(),
+        };
+      }
+    } catch (e) {
+      logger.warn('Policy evaluation failed', { scanId: scan._id.toString(), error: e.message });
+    }
+  }
+
+  await scan.save();
+
+  publishScanUpdate(jobQueueApp(), {
+    type: 'completed',
+    scanId: scan._id.toString(),
+    progress: 100,
+    status: 'completed',
+  });
+
+  return true;
+}ritical'];
         const newBlocked = (diff.newIssues || []).filter((v) => {
           const sev = (v.severity || 'info').toLowerCase();
           return blockedSeverities.includes(sev);

@@ -2,6 +2,7 @@ import express from 'express';
 import Joi from 'joi';
 import net from 'node:net';
 import Scan from '../models/Scan.js';
+import RecurringScan from '../models/RecurringScan.js';
 import { computeScanDiff } from '../services/scanDiff.js';
 import { scanQueue } from '../queue/index.js';
 
@@ -44,6 +45,25 @@ const scanSchema = Joi.object({
   webhookUrl: Joi.string().uri({ allowRelative: false }).optional(),
 });
 
+const recurringScanSchema = Joi.object({
+  targetUrl: Joi.string().uri({ allowRelative: false }).required(),
+  scanProfile: Joi.array().items(Joi.string()).min(1).required(),
+  cron: Joi.string().required(),
+  timezone: Joi.string().optional(),
+  enabled: Joi.boolean().optional().default(true),
+  webhookUrl: Joi.string().uri({ allowRelative: false }).optional(),
+  runNow: Joi.boolean().optional().default(false),
+});
+
+const recurringScanUpdateSchema = Joi.object({
+  targetUrl: Joi.string().uri({ allowRelative: false }).optional(),
+  scanProfile: Joi.array().items(Joi.string()).min(1).optional(),
+  cron: Joi.string().optional(),
+  timezone: Joi.string().optional().allow(null, ''),
+  enabled: Joi.boolean().optional(),
+  webhookUrl: Joi.string().uri({ allowRelative: false }).optional().allow(null, ''),
+});
+
 // Get all scans for current user
 router.get('/', async (req, res, next) => {
   try {
@@ -76,6 +96,220 @@ const listChanges = async (req, res, next) => {
 
 router.get('/regressions', listChanges);
 router.get('/changes', listChanges);
+
+const ensureRecurringJob = async (recurring) => {
+  const tz = recurring.timezone || undefined;
+  const repeat = tz ? { cron: recurring.cron, tz } : { cron: recurring.cron };
+
+  await scanQueue.add(
+    'recurringTick',
+    { recurringScanId: recurring._id.toString() },
+    {
+      jobId: `recurring:${recurring._id.toString()}`,
+      repeat,
+    },
+  );
+};
+
+const removeRecurringJob = async (recurring) => {
+  const jobs = await scanQueue.getRepeatableJobs();
+  const jobId = `recurring:${recurring._id.toString()}`;
+
+  await Promise.all(
+    jobs
+      .filter((j) => j.id === jobId || String(j.key || '').includes(jobId))
+      .map((j) => scanQueue.removeRepeatableByKey(j.key)),
+  );
+};
+
+// List recurring scan schedules
+router.get('/recurring', async (req, res, next) => {
+  try {
+    const items = await RecurringScan.find({ userId: req.user.id }).sort({ createdAt: -1 }).limit(200);
+    res.json(items);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Create recurring scan schedule (cron)
+router.post('/recurring', async (req, res, next) => {
+  try {
+    const data = await recurringScanSchema.validateAsync(req.body, { stripUnknown: true });
+
+    let host;
+    try {
+      host = new URL(data.targetUrl).hostname?.toLowerCase();
+    } catch {
+      host = null;
+    }
+
+    const allowPrivate = process.env.ALLOW_PRIVATE_TARGETS === 'true';
+    if (!allowPrivate && isBlockedHost(host)) {
+      return res.status(400).json({
+        error: 'This target is not allowed. For safety, localhost/private network targets are blocked in this deployment.',
+      });
+    }
+
+    const recurring = await RecurringScan.create({
+      userId: req.user.id,
+      targetUrl: data.targetUrl,
+      targetHost: host || undefined,
+      scanProfile: data.scanProfile,
+      cron: data.cron,
+      timezone: data.timezone || undefined,
+      enabled: data.enabled,
+      webhookUrl: data.webhookUrl || undefined,
+    });
+
+    if (recurring.enabled) {
+      try {
+        await ensureRecurringJob(recurring);
+      } catch (e) {
+        await recurring.deleteOne();
+        return res.status(400).json({ error: `Invalid schedule: ${e.message}` });
+      }
+    }
+
+    if (data.runNow) {
+      const scan = await Scan.create({
+        userId: req.user.id,
+        targetUrl: data.targetUrl,
+        targetHost: host || undefined,
+        scanProfile: data.scanProfile,
+        status: 'queued',
+        scheduled: true,
+        scheduledFor: new Date(),
+        progress: 0,
+        webhookUrl: data.webhookUrl || undefined,
+        policy: { status: 'unknown' },
+        recurringScanId: recurring._id,
+      });
+
+      await scanQueue.add(
+        'start',
+        { scanId: scan._id.toString(), scanProfile: data.scanProfile, webhookUrl: data.webhookUrl || undefined },
+        { attempts: 3, backoff: { type: 'exponential', delay: 5000 } },
+      );
+
+      return res.status(201).json({ recurring, startedScanId: scan._id.toString() });
+    }
+
+    res.status(201).json({ recurring });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Update recurring schedule (enable/disable, cron, etc)
+router.patch('/recurring/:id', async (req, res, next) => {
+  try {
+    const data = await recurringScanUpdateSchema.validateAsync(req.body, { stripUnknown: true });
+
+    const recurring = await RecurringScan.findOne({ _id: req.params.id, userId: req.user.id });
+    if (!recurring) return res.status(404).json({ error: 'Recurring scan not found' });
+
+    const prevEnabled = recurring.enabled;
+    const prevCron = recurring.cron;
+    const prevTz = recurring.timezone;
+
+    if (data.targetUrl) {
+      let host;
+      try {
+        host = new URL(data.targetUrl).hostname?.toLowerCase();
+      } catch {
+        host = null;
+      }
+
+      const allowPrivate = process.env.ALLOW_PRIVATE_TARGETS === 'true';
+      if (!allowPrivate && isBlockedHost(host)) {
+        return res.status(400).json({
+          error: 'This target is not allowed. For safety, localhost/private network targets are blocked in this deployment.',
+        });
+      }
+
+      recurring.targetUrl = data.targetUrl;
+      recurring.targetHost = host || undefined;
+    }
+
+    if (data.scanProfile) recurring.scanProfile = data.scanProfile;
+    if (typeof data.cron === 'string') recurring.cron = data.cron;
+    if (typeof data.timezone !== 'undefined') recurring.timezone = data.timezone || undefined;
+    if (typeof data.webhookUrl !== 'undefined') recurring.webhookUrl = data.webhookUrl || undefined;
+    if (typeof data.enabled === 'boolean') recurring.enabled = data.enabled;
+
+    await recurring.save();
+
+    const cronChanged = recurring.cron !== prevCron || recurring.timezone !== prevTz;
+
+    if (prevEnabled) {
+      if (!recurring.enabled || cronChanged) {
+        await removeRecurringJob({ _id: recurring._id, cron: prevCron, timezone: prevTz });
+      }
+    }
+
+    if (recurring.enabled && (!prevEnabled || cronChanged)) {
+      try {
+        await ensureRecurringJob(recurring);
+      } catch (e) {
+        recurring.enabled = false;
+        await recurring.save();
+        return res.status(400).json({ error: `Invalid schedule: ${e.message}` });
+      }
+    }
+
+    res.json({ recurring });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Run a recurring schedule immediately
+router.post('/recurring/:id/run', async (req, res, next) => {
+  try {
+    const recurring = await RecurringScan.findOne({ _id: req.params.id, userId: req.user.id });
+    if (!recurring) return res.status(404).json({ error: 'Recurring scan not found' });
+
+    const scan = await Scan.create({
+      userId: req.user.id,
+      targetUrl: recurring.targetUrl,
+      targetHost: recurring.targetHost || undefined,
+      scanProfile: recurring.scanProfile || [],
+      status: 'queued',
+      scheduled: true,
+      scheduledFor: new Date(),
+      progress: 0,
+      webhookUrl: recurring.webhookUrl || undefined,
+      policy: { status: 'unknown' },
+      recurringScanId: recurring._id,
+    });
+
+    await scanQueue.add(
+      'start',
+      { scanId: scan._id.toString(), scanProfile: recurring.scanProfile || [], webhookUrl: recurring.webhookUrl || undefined },
+      { attempts: 3, backoff: { type: 'exponential', delay: 5000 } },
+    );
+
+    res.status(201).json({ startedScanId: scan._id.toString() });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Delete recurring schedule
+router.delete('/recurring/:id', async (req, res, next) => {
+  try {
+    const recurring = await RecurringScan.findOne({ _id: req.params.id, userId: req.user.id });
+    if (!recurring) return res.status(404).json({ error: 'Recurring scan not found' });
+
+    await removeRecurringJob(recurring);
+    await recurring.deleteOne();
+
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+});
 
 // Create a new scan
 router.post('/', async (req, res, next) => {

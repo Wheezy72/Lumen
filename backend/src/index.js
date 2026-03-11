@@ -26,7 +26,7 @@ import scanRouter from './routes/scans.js';
 import reportRouter from './routes/reports.js';
 import { authMiddleware } from './middleware/auth.js';
 import { errorHandler } from './middleware/error.js';
-import { configureBull, setJobQueueApp } from './queue/index.js';
+import { configureBull, setJobQueueApp, syncRecurringSchedules } from './queue/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -93,6 +93,8 @@ mongoose.connect(MONGODB_URI, { autoIndex: true })
     } catch (e) {
       logger.warn('User index sync failed', { error: e.message });
     }
+
+    await syncRecurringSchedules();
   })
   .catch((err) => {
     logger.error('MongoDB connection error', { error: err.message });

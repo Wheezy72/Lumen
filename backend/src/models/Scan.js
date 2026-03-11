@@ -43,8 +43,9 @@ const scanSchema = new mongoose.Schema({
   // Scan profile - list of modules to run (e.g., ['headers', 'cookies', 'xss'])
   scanProfile: [{ type: String }],
 
-  // When true, this scan was created by the scheduled-scans script rather than the UI.
+  // When true, this scan was created by a scheduler (delayed or recurring) rather than the UI.
   scheduled: { type: Boolean, default: false },
+  recurringScanId: { type: mongoose.Schema.Types.ObjectId, ref: 'RecurringScan', index: true },
   // Optional: when to run the scan (for scheduled scans)
   scheduledFor: { type: Date },
 
