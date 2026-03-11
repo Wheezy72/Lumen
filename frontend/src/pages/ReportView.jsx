@@ -134,7 +134,10 @@ export default function ReportView() {
     return (
       <div className="text-center py-16">
         <p className="text-red-400 mb-4">{error}</p>
-        <button onClick={loadScan} className="text-primary-500 hover:underline text-sm">Try again</button>
+        <div className="flex items-center justify-center gap-3">
+          <button onClick={loadScan} className="text-primary-500 hover:underline text-sm">Try again</button>
+          <Link to="/login" className="text-gray-500 hover:text-gray-400 text-sm">Sign in</Link>
+        </div>
       </div>
     );
   }

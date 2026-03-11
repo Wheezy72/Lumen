@@ -8,7 +8,7 @@ html {
   scroll-behavior: smooth;
 }
 
-/* Light/dark theme variables */
+/* Theme variables */
 :root {
   --app-bg: #f3f6fb;
   --app-text: #0b1220;
@@ -18,10 +18,10 @@ html {
   --app-surface-300: #f3f6fb;
   --app-border: rgba(15, 23, 42, 0.12);
 
-  --app-input-bg: rgba(255, 255, 255, 0.92);
-  --app-input-text: #0b1220;
-  --app-input-border: rgba(15, 23, 42, 0.18);
-  --app-input-placeholder: rgba(15, 23, 42, 0.42);
+  --app-input-bg: rgba(15, 23, 42, 0.92);
+  --app-input-text: #f8fafc;
+  --app-input-border: rgba(148, 163, 184, 0.28);
+  --app-input-placeholder: rgba(148, 163, 184, 0.62);
 }
 
 html.dark {
@@ -47,7 +47,7 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* App background (keeps the blue/green identity even in light mode). */
+/* App background */
 .app-shell {
   position: relative;
   isolation: isolate;
