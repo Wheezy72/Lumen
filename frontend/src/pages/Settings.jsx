@@ -117,7 +117,7 @@ export default function Settings({ user, onUpdateUser }) {
               checked={form.emailAlertsEnabled}
               onChange={(e) => setForm((p) => ({ ...p, emailAlertsEnabled: e.target.checked }))}
               disabled={!canEnableAlerts}
-              className="mt-1 w-4 h-4 text-primary-500 bg-black/40 border-slate-600 rounded disabled:opacity-40"
+              className="mt-1 w-4 h-4 text-primary-500 bg-black/5 dark:bg-black/40 border-slate-600 rounded disabled:opacity-40"
             />
             <div>
               <div className="text-sm font-medium text-gray-300">Email alerts</div>

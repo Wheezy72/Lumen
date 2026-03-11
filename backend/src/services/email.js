@@ -3,7 +3,7 @@ import { logger } from '../utils/logger.js';
 import User from '../models/User.js';
 
 /**
- * Simple email helper used to notify developers about scan results.
+ * Simple email helper used to notify users about scan results.
  * This is intentionally small and direct: if sending fails, the error
  * is logged and the scan flow continues without retry logic.
  */
@@ -39,11 +39,7 @@ export async function sendScanSummaryEmail(scan) {
     if (!user?.email || !user.emailAlertsEnabled) return;
 
     const total = (scan.results || []).length;
-    if (!total) {
-      // If nothing was found, stay quiet. The dashboard still shows the result,
-      // but there is no need to email about an empty report.
-      return;
-    }
+    if (!total) return;
 
     const counts = { low: 0, medium: 0, high: 0, critical: 0 };
     (scan.results || []).forEach((v) => {
@@ -51,7 +47,7 @@ export async function sendScanSummaryEmail(scan) {
       counts[sev] = (counts[sev] || 0) + 1;
     });
 
-    const subject = `[Lumen] Vulnerabilities found on ${scan.targetUrl}`;
+    const subject = `[Scan] Findings for ${scan.targetUrl}`;
     const topFindings = (scan.results || [])
       .slice(0, 3)
       .map((v) => `- [${(v.severity || 'low').toUpperCase()}] ${v.title}`)
@@ -66,7 +62,7 @@ export async function sendScanSummaryEmail(scan) {
       'Top findings:',
       topFindings,
       '',
-      'You can log in to the Lumen dashboard to review the full report and export a PDF if needed.',
+      'Log in to the dashboard to review the full report and export a PDF if needed.',
     ].join('\n');
 
     await getTransporter().sendMail({
@@ -87,13 +83,13 @@ export async function sendScanFailureEmail(scan, errorMessage) {
     const user = await User.findById(scan.userId);
     if (!user?.email || !user.emailAlertsEnabled) return;
 
-    const subject = `[Lumen] Scan failed for ${scan.targetUrl}`;
+    const subject = `[Scan] Scan failed for ${scan.targetUrl}`;
     const text = [
       `A scan for ${scan.targetUrl} did not complete successfully.`,
       '',
       `Error: ${errorMessage}`,
       '',
-      'You can log in to the Lumen dashboard to see more details and try again.',
+      'Log in to the dashboard to see more details and try again.',
     ].join('\n');
 
     await getTransporter().sendMail({
@@ -107,11 +103,6 @@ export async function sendScanFailureEmail(scan, errorMessage) {
   }
 }
 
-/**
- * Diff-aware email for scheduled scans. This highlights new issues
- * compared with the previous scan, and reminds the developer about
- * important findings that are still present.
- */
 export async function sendScheduledScanDiffEmail(scan, diff) {
   if (EMAIL_ENABLED !== 'true') return;
 
@@ -136,7 +127,7 @@ export async function sendScheduledScanDiffEmail(scan, diff) {
       (v) => v.severity === 'high' || v.severity === 'critical',
     );
 
-    const subjectParts = ['[Lumen] Scheduled scan'];
+    const subjectParts = ['[Scan] Scheduled scan'];
     subjectParts.push(`for ${scan.targetUrl}`);
     if (newHighCritical.length) {
       subjectParts.push('– new high-risk issues detected');
@@ -152,16 +143,14 @@ export async function sendScheduledScanDiffEmail(scan, diff) {
 
     if (!diff) {
       lines.push('');
-      lines.push('This is the first recorded scan for this target, so there is no previous run to compare against.');
+      lines.push('This is the first recorded scan for this site, so there is no previous run to compare against.');
     }
 
     if (newIssues.length) {
       lines.push('');
       lines.push('New findings since the previous scan:');
       newIssues.slice(0, 10).forEach((v) => {
-        lines.push(
-          `- [${(v.severity || 'low').toUpperCase()}] ${v.title} (${v.category || 'general'})`,
-        );
+        lines.push(`- [${(v.severity || 'low').toUpperCase()}] ${v.title} (${v.category || 'general'})`);
       });
       if (newIssues.length > 10) {
         lines.push(`  ...and ${newIssues.length - 10} more.`);
@@ -172,9 +161,7 @@ export async function sendScheduledScanDiffEmail(scan, diff) {
       lines.push('');
       lines.push('Important findings still present (also seen in the previous scan):');
       persistingHighCritical.slice(0, 10).forEach((v) => {
-        lines.push(
-          `- [${(v.severity || 'low').toUpperCase()}] ${v.title} (${v.category || 'general'})`,
-        );
+        lines.push(`- [${(v.severity || 'low').toUpperCase()}] ${v.title} (${v.category || 'general'})`);
       });
       if (persistingHighCritical.length > 10) {
         lines.push(`  ...and ${persistingHighCritical.length - 10} more.`);
@@ -182,9 +169,7 @@ export async function sendScheduledScanDiffEmail(scan, diff) {
     }
 
     lines.push('');
-    lines.push(
-      'You can log in to the Lumen dashboard to review the full report, confirm which findings are real, and export a PDF if needed.',
-    );
+    lines.push('Log in to the dashboard to review the full report and export a PDF if needed.');
 
     await getTransporter().sendMail({
       from: EMAIL_FROM,

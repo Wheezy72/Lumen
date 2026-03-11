@@ -13,12 +13,7 @@ const STATUS_STYLES = {
   scheduled: 'bg-purple-500/15 text-purple-400 border border-purple-500/30',
 };
 
-const POLICY_STYLES = {
-  pass: 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30',
-  fail: 'bg-red-500/15 text-red-400 border border-red-500/30',
-  skipped: 'bg-slate-500/10 text-gray-400 border border-slate-800',
-  unknown: 'bg-slate-500/10 text-gray-400 border border-slate-800',
-};
+const WARNING_STYLE = 'bg-red-500/15 text-red-400 border border-red-500/30';
 
 export default function Scans() {
   const [scans, setScans] = useState([]);
@@ -128,7 +123,7 @@ export default function Scans() {
           <table className="min-w-full text-sm">
             <thead>
               <tr className="border-b border-slate-800">
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Target</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Site</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider w-56">Progress</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Report</th>
@@ -155,10 +150,11 @@ export default function Scans() {
 }
 
 function ScanRow({ scan, onDownload, isDownloading, onDelete, isDeleting }) {
-  const { _id, targetUrl, targetHost, status, progress, startedAt, results, policy } = scan;
+  const { _id, targetUrl, targetHost, status, progress, startedAt, results, diffSummary } = scan;
   const badgeStyle = STATUS_STYLES[status] || STATUS_STYLES.queued;
   const pct = Math.min(100, Math.max(0, progress ?? 0));
   const running = ['running', 'queued', 'scheduled'].includes(status);
+  const newHighCritical = diffSummary?.newBlockedCount ?? 0;
 
   const host = useMemo(() => {
     if (targetHost) return targetHost;
@@ -182,11 +178,10 @@ function ScanRow({ scan, onDownload, isDownloading, onDelete, isDeleting }) {
     }).format(d);
   };
 
-  const policyStatus = (policy?.status || 'unknown').toLowerCase();
-  const policyStyle = POLICY_STYLES[policyStatus] || POLICY_STYLES.unknown;
+  
 
   return (
-    <tr className="hover:bg-white/[0.02] transition-colors duration-150">
+    <tr className="hover:bg-black/5 dark:hover:bg-white/[0.02] transition-colors duration-150">
       <td className="px-4 py-3 align-middle">
         <div className="font-medium text-white truncate max-w-xs">{host}</div>
         <div className="text-xs text-gray-600 mt-0.5 truncate max-w-xs">{targetUrl}</div>
@@ -206,9 +201,9 @@ function ScanRow({ scan, onDownload, isDownloading, onDelete, isDeleting }) {
             )}
             {status}
           </span>
-          {['pass', 'fail'].includes(policyStatus) && (
-            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${policyStyle}`}>
-              Policy: {policyStatus}
+          {newHighCritical > 0 && (
+            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${WARNING_STYLE}`}>
+              Warning ({newHighCritical})
             </span>
           )}
         </div>

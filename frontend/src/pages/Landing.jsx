@@ -60,7 +60,7 @@ export default function Landing() {
           {[
             {
               step: '01',
-              title: 'Enter a target URL',
+              title: 'Enter a site URL',
               desc: 'Paste the address of any web application you own or have permission to test.',
               label: 'New Scan form',
             },

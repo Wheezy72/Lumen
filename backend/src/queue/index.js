@@ -27,7 +27,7 @@ const pub = new Redis(REDIS_URL);
 const RESULT_CHANNEL = 'scan_results';
 const JOB_CHANNEL = 'scan_jobs';
 
-const PY_WORKER_HEARTBEAT_KEY = process.env.PY_WORKER_HEARTBEAT_KEY || 'lumen:python_worker:heartbeat';
+const PY_WORKER_HEARTBEAT_KEY = process.env.PY_WORKER_HEARTBEAT_KEY || 'scanner:python_worker:heartbeat';
 const SCAN_TIMEOUT_MS = parseInt(process.env.SCAN_TIMEOUT_MS || String(15 * 60 * 1000), 10);
 const WORKER_RESPONSE_TIMEOUT_MS = parseInt(process.env.SCAN_WORKER_RESPONSE_TIMEOUT_MS || String(20 * 1000), 10);
 

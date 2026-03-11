@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Bar, Doughnut } from 'react-chartjs-2';
+import { useTheme } from '../theme/ThemeProvider.jsx';
 import {
   Chart,
   ArcElement,
@@ -16,27 +17,27 @@ Chart.register(ArcElement, BarElement, CategoryScale, LinearScale, Tooltip, Lege
 const SEV_ORDER = ['critical', 'high', 'medium', 'low', 'info'];
 const SEV_COLORS = {
   critical: '#7c3aed',
-  high:     '#ef4444',
-  medium:   '#f59e0b',
-  low:      '#3b82f6',
-  info:     '#6b7280',
+  high: '#ef4444',
+  medium: '#f59e0b',
+  low: '#3b82f6',
+  info: '#6b7280',
 };
 
-/** Returns true if a finding looks like a real vulnerability, not a scan error */
-function isRealFinding(v) {
-  if (!v || !v.title) return false;
-  const t = v.title.toLowerCase();
+function isRealFinding(finding) {
+  if (!finding || !finding.title) return false;
+  const title = finding.title.toLowerCase();
   return !(
-    t.includes('error') ||
-    t.includes('exception') ||
-    t.includes('failed') ||
-    t.includes('timeout') ||
-    t.includes('could not') ||
-    t.includes('unable to')
+    title.includes('error') ||
+    title.includes('exception') ||
+    title.includes('failed') ||
+    title.includes('timeout') ||
+    title.includes('could not') ||
+    title.includes('unable to')
   );
 }
 
 export default function Dashboard() {
+  const { theme } = useTheme();
   const [metrics, setMetrics] = useState({ totalScans: 0, openScans: 0, success: 0, failed: 0 });
   const [vulnCounts, setVulnCounts] = useState({ low: 0, medium: 0, high: 0, critical: 0, info: 0 });
   const [recent, setRecent] = useState([]);
@@ -47,42 +48,40 @@ export default function Dashboard() {
     try {
       const { data } = await axios.get('/api/scans');
       const total = data.length;
-      const open = data.filter((s) => ['queued', 'running'].includes(s.status)).length;
-      const success = data.filter((s) => s.status === 'completed').length;
-      const failed = data.filter((s) => s.status === 'failed').length;
+      const open = data.filter((scan) => ['queued', 'running'].includes(scan.status)).length;
+      const success = data.filter((scan) => scan.status === 'completed').length;
+      const failed = data.filter((scan) => scan.status === 'failed').length;
 
-      // Aggregate severity counts across last 10 scans (real findings only)
       const counts = { low: 0, medium: 0, high: 0, critical: 0, info: 0 };
-      // Top-5 most-common finding titles
-      const titleMap = {};
+      const titleCounts = {};
 
-      data.slice(0, 10).forEach((s) => {
-        s.results?.filter(isRealFinding).forEach((v) => {
-          const sev = (v.severity || 'info').toLowerCase();
-          if (counts[sev] !== undefined) counts[sev]++;
-          titleMap[v.title] = (titleMap[v.title] || 0) + 1;
+      data.slice(0, 10).forEach((scan) => {
+        (scan.results || []).filter(isRealFinding).forEach((finding) => {
+          const sev = (finding.severity || 'info').toLowerCase();
+          if (counts[sev] !== undefined) counts[sev] += 1;
+          titleCounts[finding.title] = (titleCounts[finding.title] || 0) + 1;
         });
       });
 
-      // Bar chart: last 6 completed scans, each bar = severity breakdown
-      const completed = data.filter((s) => s.status === 'completed').slice(0, 6).reverse();
+      const completed = data.filter((scan) => scan.status === 'completed').slice(0, 6).reverse();
       setBarScans(completed);
 
       setMetrics({ totalScans: total, openScans: open, success, failed });
       setVulnCounts(counts);
       setRecent(data.slice(0, 5));
 
-      const sorted = Object.entries(titleMap)
+      const sorted = Object.entries(titleCounts)
         .sort((a, b) => b[1] - a[1])
         .slice(0, 5);
       setTopVulns(sorted);
     } catch {
-      // silently ignore — backend may not be running
+      // ignore — backend may not be running
     }
   };
 
   useEffect(() => {
     fetchData();
+
     const es = new EventSource('/api/sse/events');
     es.onmessage = (e) => {
       try {
@@ -90,12 +89,16 @@ export default function Dashboard() {
         if (['progress', 'completed', 'failed'].includes(msg.type)) fetchData();
       } catch {}
     };
+
     return () => es.close();
   }, []);
 
-  // ── Grouped bar chart: findings per scan, grouped by severity ──────────
-  const barLabels = barScans.map((s) => {
-    try { return new URL(s.targetUrl).hostname; } catch { return s.targetUrl?.slice(0, 18) || s._id?.slice(-6); }
+  const barLabels = barScans.map((scan) => {
+    try {
+      return new URL(scan.targetUrl).hostname;
+    } catch {
+      return scan.targetUrl?.slice(0, 18) || scan._id?.slice(-6);
+    }
   });
 
   const barData = {
@@ -104,25 +107,28 @@ export default function Dashboard() {
       label: sev.charAt(0).toUpperCase() + sev.slice(1),
       backgroundColor: SEV_COLORS[sev],
       data: barScans.length
-        ? barScans.map((s) =>
-            (s.results || []).filter(isRealFinding).filter(
-              (v) => (v.severity || 'info').toLowerCase() === sev,
+        ? barScans.map((scan) =>
+            (scan.results || []).filter(isRealFinding).filter(
+              (finding) => (finding.severity || 'info').toLowerCase() === sev,
             ).length,
           )
         : [0],
     })),
   };
 
+  const axisText = theme === 'dark' ? '#6b7280' : 'rgba(15, 23, 42, 0.55)';
+  const legendText = theme === 'dark' ? '#9ca3af' : 'rgba(15, 23, 42, 0.55)';
+  const gridColor = theme === 'dark' ? 'rgba(148, 163, 184, 0.15)' : 'rgba(15, 23, 42, 0.10)';
+
   const barOptions = {
     responsive: true,
-    plugins: { legend: { position: 'bottom', labels: { color: '#9ca3af', boxWidth: 12, padding: 16 } } },
+    plugins: { legend: { position: 'bottom', labels: { color: legendText, boxWidth: 12, padding: 16 } } },
     scales: {
-      x: { stacked: false, ticks: { color: '#6b7280' }, grid: { color: '#1f2937' } },
-      y: { beginAtZero: true, ticks: { color: '#6b7280', precision: 0 }, grid: { color: '#1f2937' } },
+      x: { stacked: false, ticks: { color: axisText }, grid: { color: gridColor } },
+      y: { beginAtZero: true, ticks: { color: axisText, precision: 0 }, grid: { color: gridColor } },
     },
   };
 
-  // ── Doughnut chart ──────────────────────────────────────────────────────
   const doughnutTotal = Object.values(vulnCounts).reduce((a, b) => a + b, 0);
 
   const doughnutData = {
@@ -138,10 +144,9 @@ export default function Dashboard() {
   const doughnutOptions = {
     cutout: '65%',
     responsive: true,
-    plugins: { legend: { position: 'bottom', labels: { color: '#9ca3af', boxWidth: 12, padding: 12 } } },
+    plugins: { legend: { position: 'bottom', labels: { color: legendText, boxWidth: 12, padding: 12 } } },
   };
 
-  // Centre-text plugin (inline)
   const centreTextPlugin = {
     id: 'centreText',
     beforeDraw(chart) {
@@ -151,34 +156,31 @@ export default function Dashboard() {
       const cy = (chartArea.top + chartArea.bottom) / 2;
       ctx.save();
       ctx.font = 'bold 22px sans-serif';
-      ctx.fillStyle = '#f9fafb';
+      ctx.fillStyle = theme === 'dark' ? '#f9fafb' : '#111827';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(doughnutTotal, cx, cy - 8);
       ctx.font = '11px sans-serif';
-      ctx.fillStyle = '#6b7280';
+      ctx.fillStyle = axisText;
       ctx.fillText('findings', cx, cy + 12);
       ctx.restore();
     },
   };
 
-  // Recent real findings (no errors)
-  const recentFindings = recent.flatMap((s) =>
-    (s.results || []).filter(isRealFinding).slice(0, 3).map((v) => ({
-      ...v,
-      scanTarget: s.targetUrl,
+  const recentFindings = recent.flatMap((scan) =>
+    (scan.results || []).filter(isRealFinding).slice(0, 3).map((finding) => ({
+      ...finding,
+      scanTarget: scan.targetUrl,
     })),
   ).slice(0, 8);
 
   return (
     <div className="space-y-6 p-1">
-      {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold bg-gradient-to-r from-primary-400 to-secondary-400 bg-clip-text text-transparent">Security overview</h1>
-        <p className="text-sm text-gray-500 mt-1">Aggregated findings across your recent scans.</p>
+        <h1 className="text-2xl font-bold bg-gradient-to-r from-primary-400 to-secondary-400 bg-clip-text text-transparent">Overview</h1>
+        <p className="text-sm text-gray-500 mt-1">A quick summary of your latest scans.</p>
       </div>
 
-      {/* Metric cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <MetricCard label="Total scans" value={metrics.totalScans} color="text-blue-400" icon={<ScanIcon />} />
         <MetricCard label="Running" value={metrics.openScans} color="text-amber-400" icon={<SpinnerIcon />} />
@@ -186,11 +188,9 @@ export default function Dashboard() {
         <MetricCard label="Failed" value={metrics.failed} color="text-red-400" icon={<XIcon />} />
       </div>
 
-      {/* Charts row */}
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-4">
-        {/* Bar chart */}
         <div className="rounded-xl border border-slate-800 bg-dark-200 p-5">
-          <h3 className="text-sm font-semibold text-white mb-4">Findings per scan by severity</h3>
+          <h3 className="text-sm font-semibold text-white mb-4">Findings per scan</h3>
           {barScans.length === 0 ? (
             <div className="h-48 flex items-center justify-center text-gray-600 text-sm">
               No completed scans yet.
@@ -200,7 +200,6 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* Doughnut chart */}
         <div className="rounded-xl border border-slate-800 bg-dark-200 p-5 flex flex-col items-center min-w-[240px]">
           <h3 className="text-sm font-semibold text-white mb-4 self-start">Severity breakdown</h3>
           <div className="w-44 h-44">
@@ -209,12 +208,9 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Bottom row */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
-        {/* Top vulnerabilities */}
         <div className="rounded-xl border border-slate-800 bg-dark-200 p-5">
-          <h3 className="text-sm font-semibold text-white mb-4">Top vulnerabilities</h3>
+          <h3 className="text-sm font-semibold text-white mb-4">Top issues</h3>
           {topVulns.length === 0 ? (
             <p className="text-sm text-gray-600">No findings yet.</p>
           ) : (
@@ -222,7 +218,7 @@ export default function Dashboard() {
               {topVulns.map(([title, count]) => (
                 <li key={title} className="flex items-center justify-between text-sm">
                   <span className="text-gray-300 truncate mr-3">{title}</span>
-                  <span className="shrink-0 text-xs bg-slate-700 text-gray-300 px-2 py-0.5 rounded-full font-mono">
+                  <span className="shrink-0 text-xs bg-black/5 dark:bg-slate-700/60 border border-slate-800 text-gray-600 dark:text-gray-300 px-2 py-0.5 rounded-full font-mono">
                     ×{count}
                   </span>
                 </li>
@@ -231,21 +227,20 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* Recent findings */}
         <div className="rounded-xl border border-slate-800 bg-dark-200 p-5">
           <h3 className="text-sm font-semibold text-white mb-4">Recent findings</h3>
           {recentFindings.length === 0 ? (
             <p className="text-sm text-gray-600">No findings yet. Start a scan to see results here.</p>
           ) : (
             <ul className="divide-y divide-slate-800">
-              {recentFindings.map((v, i) => {
-                const sev = (v.severity || 'info').toLowerCase();
+              {recentFindings.map((finding, idx) => {
+                const sev = (finding.severity || 'info').toLowerCase();
                 const color = SEV_COLORS[sev] || SEV_COLORS.info;
                 return (
-                  <li key={i} className="py-2.5 flex items-start justify-between gap-3">
+                  <li key={idx} className="py-2.5 flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="text-sm text-gray-200 truncate">{v.title}</p>
-                      <p className="text-xs text-gray-600 truncate mt-0.5">{v.scanTarget}</p>
+                      <p className="text-sm text-gray-200 truncate">{finding.title}</p>
+                      <p className="text-xs text-gray-600 truncate mt-0.5">{finding.scanTarget}</p>
                     </div>
                     <span
                       className="shrink-0 text-xs px-2 py-0.5 rounded-full font-medium mt-0.5"
@@ -267,7 +262,7 @@ export default function Dashboard() {
 function MetricCard({ label, value, color, icon }) {
   return (
     <div className="rounded-xl border border-slate-800 bg-dark-200 p-4 flex items-center gap-4">
-      <div className={`w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center ${color} shrink-0`}>
+      <div className={`w-10 h-10 rounded-lg bg-black/5 dark:bg-slate-800 flex items-center justify-center ${color} shrink-0`}>
         {icon}
       </div>
       <div>
@@ -285,6 +280,7 @@ function ScanIcon() {
     </svg>
   );
 }
+
 function SpinnerIcon() {
   return (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -292,6 +288,7 @@ function SpinnerIcon() {
     </svg>
   );
 }
+
 function CheckIcon() {
   return (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -299,6 +296,7 @@ function CheckIcon() {
     </svg>
   );
 }
+
 function XIcon() {
   return (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
