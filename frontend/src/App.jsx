@@ -33,7 +33,7 @@ export default function App() {
         const { data } = await axios.get("/api/auth/me");
         setUser(data);
       } catch {
-        console.log("No active session");
+        // No active session.
       } finally {
         setLoading(false);
       }
