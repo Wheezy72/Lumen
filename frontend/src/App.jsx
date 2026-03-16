@@ -76,22 +76,22 @@ export default function App() {
     <div className="min-h-screen app-shell text-white">
       <header className="bg-dark-200 backdrop-blur-lg border-b border-slate-800 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className={`flex justify-between items-center ${isAuthRoute ? 'h-12' : 'h-16'}`}>
-            <Link to={user ? "/dashboard" : "/"} className="flex items-center space-x-3">
-              <div className={`${isAuthRoute ? 'h-8 w-8 rounded-lg' : 'h-9 w-9 rounded-xl'} overflow-hidden ring-1 ring-black/10 dark:ring-white/10 shadow-soft`}>
-                <img src="/logo.jpg" alt="Logo" className="h-full w-full object-cover" />
-              </div>
-              <span className={`${isAuthRoute ? 'text-lg' : 'text-xl'} font-bold bg-gradient-to-r from-primary-400 to-secondary-400 bg-clip-text text-transparent`}>
-                Lumen Vulnerability Scanner
-              </span>
-            </Link>
+          {isAuthRoute ? (
+            <div className="flex justify-end items-center h-16">
+              <ThemeToggleButton theme={theme} toggleTheme={toggleTheme} iconOnly />
+            </div>
+          ) : (
+            <>
+              <div className="flex justify-between items-center h-16">
+                <Link to={user ? "/dashboard" : "/"} className="flex items-center space-x-3">
+                  <div className="h-9 w-9 rounded-xl overflow-hidden ring-1 ring-black/10 dark:ring-white/10 shadow-soft">
+                    <img src="/logo.jpg" alt="Logo" className="h-full w-full object-cover" />
+                  </div>
+                  <span className="text-xl font-bold bg-gradient-to-r from-primary-400 to-secondary-400 bg-clip-text text-transparent">
+                    Lumen Vulnerability Scanner
+                  </span>
+                </Link>
 
-            {isAuthRoute ? (
-              <div className="flex items-center gap-2">
-                <ThemeToggleButton theme={theme} toggleTheme={toggleTheme} iconOnly />
-              </div>
-            ) : (
-              <>
                 <div className="hidden md:flex items-center gap-2">
                   <nav className="flex items-center space-x-1">
                     <NavLink to="/learn" isActive={isActiveRoute("/learn")}>
@@ -181,55 +181,58 @@ export default function App() {
                     <MenuIcon className="w-6 h-6" />
                   </button>
                 </div>
-              </>
-            )}
-          </div>
+              </div>
 
-          {!isAuthRoute && mobileOpen && (
-            <div className="md:hidden pb-4 pt-2 border-t border-slate-800">
-              <nav className="flex flex-col gap-1">
-                <NavLink to="/learn" isActive={isActiveRoute("/learn")}>
-                  Learn
-                </NavLink>
+              {mobileOpen && (
+                <div className="md:hidden pb-4 pt-2 border-t border-slate-800">
+                  <nav className="flex flex-col gap-1">
+                    <NavLink to="/learn" isActive={isActiveRoute("/learn")}>
+                      Learn
+                    </NavLink>
 
-                {user ? (
-                  <>
-                    <NavLink to="/dashboard" isActive={isActiveRoute("/dashboard")}>
-                      Dashboard
-                    </NavLink>
-                    <NavLink to="/scans" isActive={isActiveRoute("/scans")}>
-                      Scans
-                    </NavLink>
-                    <NavLink to="/changes" isActive={isActiveRoute("/changes") || isActiveRoute("/regressions")}>
-                      <DiffIcon className="w-4 h-4 mr-1.5" />
-                      Changes
-                    </NavLink>
-                    <NavLink to="/new" isActive={isActiveRoute("/new")}>
-                      New Scan
-                    </NavLink>
-                    <NavLink to="/settings" isActive={isActiveRoute("/settings")}>
-                      Settings
-                    </NavLink>
-                    <button
-                      onClick={logout}
-                      className="mt-2 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-red-500/80 border border-red-900/30 hover:bg-red-900/10 hover:border-red-700/40 transition"
-                    >
-                      <LogoutIcon className="w-4 h-4" />
-                      Logout
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <NavLink to="/login" isActive={isActiveRoute("/login")}>
-                      Login
-                    </NavLink>
-                    <Link to="/register" className="mt-1 btn btn-primary w-full justify-center">
-                      Get Started
-                    </Link>
-                  </>
-                )}
-              </nav>
-            </div>
+                    {user ? (
+                      <>
+                        <NavLink to="/dashboard" isActive={isActiveRoute("/dashboard")}>
+                          <DashboardIcon className="w-4 h-4 mr-1.5" />
+                          Dashboard
+                        </NavLink>
+                        <NavLink to="/scans" isActive={isActiveRoute("/scans")}>
+                          <ScanIcon className="w-4 h-4 mr-1.5" />
+                          Scans
+                        </NavLink>
+                        <NavLink to="/changes" isActive={isActiveRoute("/changes") || isActiveRoute("/regressions")}>
+                          <DiffIcon className="w-4 h-4 mr-1.5" />
+                          Changes
+                        </NavLink>
+                        <NavLink to="/new" isActive={isActiveRoute("/new")}>
+                          <PlusIcon className="w-4 h-4 mr-1.5" />
+                          New Scan
+                        </NavLink>
+                        <NavLink to="/settings" isActive={isActiveRoute("/settings")}>
+                          Settings
+                        </NavLink>
+                        <button
+                          onClick={logout}
+                          className="mt-2 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-red-500/80 border border-red-900/30 hover:bg-red-900/10 hover:border-red-700/40 transition"
+                        >
+                          <LogoutIcon className="w-4 h-4" />
+                          Logout
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <NavLink to="/login" isActive={isActiveRoute("/login")}>
+                          Login
+                        </NavLink>
+                        <Link to="/register" className="mt-1 btn btn-primary w-full justify-center">
+                          Get Started
+                        </Link>
+                      </>
+                    )}
+                  </nav>
+                </div>
+              )}
+            </>
           )}
         </div>
       </header>
