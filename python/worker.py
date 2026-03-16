@@ -19,8 +19,6 @@ checks against the site, and publishes the findings back to the Node.js backend.
 """
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://127.0.0.1:6379")
-# Override safety lock to allow scanning public sites
-ALLOW_EXTERNAL = True
 
 JOB_CHANNEL = "scan_jobs"
 RESULT_CHANNEL = "scan_results"
@@ -138,16 +136,17 @@ def check_http_headers(url: str) -> List[Dict]:
 def check_xss(url: str) -> List[Dict]:
     """Try to reflect a harmless script tag via query parameters."""
     issues: List[Dict] = []
-    test_string = "<script>alert(1)</script>"
+    probe = "<script>alert(1)</script>"
+
     try:
         parsed = urllib.parse.urlparse(url)
         qs = urllib.parse.parse_qs(parsed.query)
-        qs["x"] = [test_string]
+        qs["x"] = [probe]
         new_qs = urllib.parse.urlencode(qs, doseq=True)
         test_url = urllib.parse.urlunparse(parsed._replace(query=new_qs))
 
         resp = requests.get(test_url, timeout=10)
-        if test_string in resp.text:
+        if probe in resp.text:
             issues.append({
                 "title": "Reflected XSS",
                 "severity": "high",
@@ -162,6 +161,7 @@ def check_xss(url: str) -> List[Dict]:
             "description": str(e),
             "category": "xss",
         })
+
     return issues
 
 
@@ -395,7 +395,7 @@ def check_rate_limiting(url: str) -> List[Dict]:
 # --- Orchestration -------------------------------------------------------------
 
 
-def run_scan(target_url: str, profile: Optional[List[str]] = None, scan_id: str = None) -> List[Dict]:
+def run_scan(target_url: str, profile: Optional[List[str]] = None, scan_id: Optional[str] = None) -> List[Dict]:
     """Run selected scan modules and report progress."""
     issues: List[Dict] = []
 
@@ -406,36 +406,65 @@ def run_scan(target_url: str, profile: Optional[List[str]] = None, scan_id: str 
         return [{"title": "Invalid site URL", "severity": "low", "category": "network"}]
 
     try:
-        resolved = socket.gethostbyname(hostname)
+        socket.gethostbyname(hostname)
     except Exception as e:
-        return [{"title": "DNS resolution failed", "severity": "low", "description": str(e), "category": "network"}]
+        return [{
+            "title": "DNS resolution failed",
+            "severity": "low",
+            "description": str(e),
+            "category": "network",
+        }]
 
-    # Define all possible modules to calculate progress steps
-    all_modules = ["tls", "headers", "xss", "sqli", "traversal", "subdomain", "cookies", "error", "access_control", "rate_limit"]
-    enabled_modules = [m for m in all_modules if (profile is None or m in profile)]
-    
-    if not enabled_modules: return []
-    
-    # Calculation for live progress bar
-    progress_step = 90 / len(enabled_modules)
+    modules = [
+        "tls",
+        "headers",
+        "xss",
+        "sqli",
+        "traversal",
+        "subdomain",
+        "cookies",
+        "error",
+        "access_control",
+        "rate_limit",
+    ]
+
+    if profile is None:
+        enabled = modules
+    else:
+        enabled = [m for m in modules if m in profile]
+
+    if not enabled:
+        return []
+
+    progress_step = 90 / len(enabled)
     current_progress = 5
 
-    for module in enabled_modules:
-        if module == "tls": issues += check_tls(hostname)
-        elif module == "headers": issues += check_http_headers(target_url)
-        elif module == "xss": issues += check_xss(target_url)
-        elif module == "sqli": issues += check_sql_injection(target_url)
-        elif module == "traversal": issues += check_directory_traversal(target_url)
-        elif module == "subdomain": issues += discover_subdomains(hostname)
-        elif module == "cookies": issues += check_cookie_flags(target_url)
-        elif module == "error": issues += check_error_leakage(target_url)
-        elif module == "access_control": issues += check_broken_access_control(target_url)
-        elif module == "rate_limit": issues += check_rate_limiting(target_url)
-        
+    for module in enabled:
+        if module == "tls":
+            issues.extend(check_tls(hostname))
+        elif module == "headers":
+            issues.extend(check_http_headers(target_url))
+        elif module == "xss":
+            issues.extend(check_xss(target_url))
+        elif module == "sqli":
+            issues.extend(check_sql_injection(target_url))
+        elif module == "traversal":
+            issues.extend(check_directory_traversal(target_url))
+        elif module == "subdomain":
+            issues.extend(discover_subdomains(hostname))
+        elif module == "cookies":
+            issues.extend(check_cookie_flags(target_url))
+        elif module == "error":
+            issues.extend(check_error_leakage(target_url))
+        elif module == "access_control":
+            issues.extend(check_broken_access_control(target_url))
+        elif module == "rate_limit":
+            issues.extend(check_rate_limiting(target_url))
+
         current_progress += progress_step
         if scan_id:
             send_progress(scan_id, int(current_progress))
-            
+
     return issues
 
 
