@@ -107,12 +107,6 @@ router.get('/me', authMiddleware, async (req, res, next) => {
   }
 });
 
-// Convenience endpoint for API testing: returns a bearer token for the current session.
-router.get('/token', authMiddleware, async (req, res) => {
-  const token = signToken({ id: req.user.id, username: req.user.username });
-  res.json({ token });
-});
-
 router.post('/logout', async (req, res) => {
   clearAuthCookie(res);
   res.json({ ok: true });

@@ -114,6 +114,29 @@ npm run health        # Hit /health and exit 0/1
 npm run devguide:pdf  # Render docs/dev_guide.md as reports/dev_guide.pdf
 ```
 
+### API-only mode (no web UI)
+If you just want to drive scans from scripts/CI, you can run the backend + workers and call the key-protected API.
+
+1) Set `PUBLIC_API_KEY` in `backend/.env`.
+
+2) Start services (MongoDB + Redis), then:
+```bash
+cd backend
+npm run dev
+```
+```bash
+cd python
+python worker.py
+```
+
+3) Call the API:
+```bash
+curl -sS http://localhost:4000/api/v1/scans \
+  -H "Authorization: Bearer $PUBLIC_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"target":"https://example.com","modules":["headers","cookies"]}'
+```
+
 The **developer guide** lives in `docs/dev_guide.md`. The PDF output is helpful when you want a printable,
 structured overview of how everything fits together.
 

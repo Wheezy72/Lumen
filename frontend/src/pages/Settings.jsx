@@ -6,8 +6,6 @@ export default function Settings({ user, onUpdateUser }) {
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
-  const [apiToken, setApiToken] = useState('');
-  const [tokenStatus, setTokenStatus] = useState('');
 
   const hydrate = (u) => {
     setForm({
@@ -58,27 +56,6 @@ export default function Settings({ user, onUpdateUser }) {
   };
 
   const canEnableAlerts = Boolean(form.email.trim());
-
-  const loadToken = async () => {
-    setTokenStatus('');
-    try {
-      const { data } = await axios.get('/api/auth/token');
-      setApiToken(data?.token || '');
-    } catch {
-      setTokenStatus('Failed to load token');
-    }
-  };
-
-  const copyToken = async () => {
-    if (!apiToken) return;
-    try {
-      await navigator.clipboard.writeText(apiToken);
-      setTokenStatus('Copied');
-      setTimeout(() => setTokenStatus(''), 1500);
-    } catch {
-      setTokenStatus('Copy failed');
-    }
-  };
 
   return (
     <div className="max-w-2xl">
@@ -156,42 +133,7 @@ export default function Settings({ user, onUpdateUser }) {
           </label>
         </div>
 
-        <div className="bg-dark-200 rounded-xl border border-slate-800 p-6">
-          <h2 className="text-sm font-semibold text-gray-200 mb-4">API access</h2>
-          <p className="text-sm text-gray-500">Use this token in the Authorization header to call the API.</p>
-
-          <div className="mt-4 flex flex-col sm:flex-row gap-3">
-            <button
-              type="button"
-              onClick={loadToken}
-              className="px-4 py-2 rounded-lg text-sm font-medium border border-slate-800 bg-slate-500/10 text-gray-400 hover:bg-black/5 dark:hover:bg-slate-800 transition"
-            >
-              Generate token
-            </button>
-            <button
-              type="button"
-              onClick={copyToken}
-              disabled={!apiToken}
-              className="px-4 py-2 rounded-lg text-sm font-medium border border-slate-800 bg-slate-500/10 text-gray-400 hover:bg-black/5 dark:hover:bg-slate-800 transition disabled:opacity-50"
-            >
-              Copy
-            </button>
-          </div>
-
-          {apiToken && (
-            <div className="mt-4 rounded-lg bg-black/5 dark:bg-black/55 border border-slate-800 p-3 text-xs text-gray-300 font-mono break-all">
-              {apiToken}
-            </div>
-          )}
-
-          {tokenStatus && (
-            <div className="mt-3 text-xs text-gray-500">{tokenStatus}</div>
-          )}
-
-          <div className="mt-4 text-xs text-gray-500 font-mono whitespace-pre-wrap">
-            {`Example:\nAuthorization: Bearer <token>\n\nPOST /api/v1/scans`}
-          </div>
-        </div>
+        
 
         <button
           type="submit"

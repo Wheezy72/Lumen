@@ -32,12 +32,15 @@ const isBlockedHost = (host) => {
     return BLOCKED_IP_PREFIXES.some((p) => h.startsWith(p));
   }
 
+  // Keep IPv6 simple: block localhost; allow public domains.
   if (ipType === 6) {
     if (h === '::1') return true;
   }
 
   return false;
 };
+
+const publicOwnerQuery = { $or: [{ userId: { $exists: false } }, { userId: null }] };
 
 function ensureReportDir() {
   const dir = path.join(process.cwd(), 'reports');
@@ -169,7 +172,7 @@ router.post('/scans', async (req, res, next) => {
     }
 
     const scan = await Scan.create({
-      userId: req.user.id,
+      userId: null,
       targetUrl: data.target,
       targetHost: host || undefined,
       scanProfile: data.modules || [],
@@ -203,10 +206,21 @@ router.post('/scans', async (req, res, next) => {
   }
 });
 
+// GET /api/v1/scans
+router.get('/scans', async (req, res, next) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit || '50', 10) || 50, 200);
+    const scans = await Scan.find(publicOwnerQuery).sort({ createdAt: -1 }).limit(limit);
+    res.json(scans);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/v1/scans/:id
 router.get('/scans/:id', async (req, res, next) => {
   try {
-    const scan = await Scan.findOne({ _id: req.params.id, userId: req.user.id });
+    const scan = await Scan.findOne({ _id: req.params.id, ...publicOwnerQuery });
     if (!scan) return res.status(404).json({ error: 'Scan not found' });
     res.json(scan);
   } catch (err) {
@@ -217,7 +231,7 @@ router.get('/scans/:id', async (req, res, next) => {
 // GET /api/v1/scans/:id/report
 router.get('/scans/:id/report', async (req, res, next) => {
   try {
-    const scan = await Scan.findOne({ _id: req.params.id, userId: req.user.id });
+    const scan = await Scan.findOne({ _id: req.params.id, ...publicOwnerQuery });
     if (!scan) return res.status(404).json({ error: 'Scan not found' });
 
     res.json({
@@ -239,7 +253,7 @@ router.get('/scans/:id/report', async (req, res, next) => {
 // GET /api/v1/scans/:id/report.pdf
 router.get('/scans/:id/report.pdf', async (req, res, next) => {
   try {
-    const scan = await Scan.findOne({ _id: req.params.id, userId: req.user.id });
+    const scan = await Scan.findOne({ _id: req.params.id, ...publicOwnerQuery });
     if (!scan) return res.status(404).json({ error: 'Scan not found' });
 
     const dir = ensureReportDir();
@@ -278,7 +292,7 @@ router.post('/schedules', async (req, res, next) => {
     }
 
     const schedule = await RecurringScan.create({
-      userId: req.user.id,
+      userId: null,
       targetUrl: data.target,
       targetHost: host || undefined,
       scanProfile: data.modules || [],
@@ -297,7 +311,7 @@ router.post('/schedules', async (req, res, next) => {
 
     if (data.runNow) {
       const scan = await Scan.create({
-        userId: req.user.id,
+        userId: null,
         targetUrl: data.target,
         targetHost: host || undefined,
         scanProfile: data.modules || [],
@@ -347,7 +361,7 @@ router.post('/schedules', async (req, res, next) => {
 
 router.get('/schedules', async (req, res, next) => {
   try {
-    const items = await RecurringScan.find({ userId: req.user.id }).sort({ createdAt: -1 }).limit(200);
+    const items = await RecurringScan.find(publicOwnerQuery).sort({ createdAt: -1 }).limit(200);
     res.json(items);
   } catch (err) {
     next(err);
@@ -356,7 +370,7 @@ router.get('/schedules', async (req, res, next) => {
 
 router.delete('/schedules/:id', async (req, res, next) => {
   try {
-    const schedule = await RecurringScan.findOne({ _id: req.params.id, userId: req.user.id });
+    const schedule = await RecurringScan.findOne({ _id: req.params.id, ...publicOwnerQuery });
     if (!schedule) return res.status(404).json({ error: 'Schedule not found' });
 
     const jobId = `recurring:${schedule._id.toString()}`;

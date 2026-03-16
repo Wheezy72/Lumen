@@ -1,15 +1,17 @@
 import Bull from 'bull';
-import Scan from '../models/Scan.js';
-import { logger } from '../utils/logger.js';
-import { publishScanUpdate } from '../routes/sse.js';
 import fetch from 'node-fetch';
 import Redis from 'ioredis';
+
+import Scan from '../models/Scan.js';
+import RecurringScan from '../models/RecurringScan.js';
+import { logger } from '../utils/logger.js';
+import { publishScanUpdate } from '../routes/sse.js';
 import { sendScanSummaryEmail, sendScanFailureEmail } from '../services/email.js';
 import { computeScanDiff } from '../services/scanDiff.js';
 
 /**
  * Queue wiring for scan jobs.
- * * This module connects Express, Bull (job queue), and the Python worker:
+ * This module connects Express, Bull (job queue), and the Python worker:
  * 1. Receives scan requests from the API
  * 2. Publishes jobs to Redis for the Python worker
  * 3. Waits for results and updates the database
@@ -227,7 +229,50 @@ const isPythonWorkerAvailable = async () => {
   }
 };
 
+// Reference to Express app for SSE notifications
+let _app = null;
+export const setJobQueueApp = (app) => { _app = app; };
+const jobQueueApp = () => _app;
+
 export const configureBull = () => {
+  scanQueue.process('recurringTick', async (job) => {
+    const recurringScanId = job?.data?.recurringScanId;
+    if (!recurringScanId) return;
+
+    const recurring = await RecurringScan.findById(recurringScanId);
+    if (!recurring || !recurring.enabled) return;
+
+    const scan = await Scan.create({
+      userId: recurring.userId || null,
+      targetUrl: recurring.targetUrl,
+      targetHost: recurring.targetHost || undefined,
+      scanProfile: recurring.scanProfile || [],
+      status: 'queued',
+      scheduled: true,
+      scheduledFor: new Date(),
+      progress: 0,
+      webhookUrl: recurring.webhookUrl || undefined,
+      policy: { status: 'unknown' },
+      recurringScanId: recurring._id,
+    });
+
+    recurring.lastRunAt = new Date();
+    await recurring.save();
+
+    await scanQueue.add(
+      'start',
+      {
+        scanId: scan._id.toString(),
+        scanProfile: recurring.scanProfile || [],
+        webhookUrl: recurring.webhookUrl || undefined,
+      },
+      {
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 5000 },
+      },
+    );
+  });
+
   // Process scan jobs
   scanQueue.process('start', async (job) => {
     const { scanId, scanProfile } = job.data;
@@ -252,7 +297,6 @@ export const configureBull = () => {
     pendingScans.set(scanId, waiter);
 
     try {
-      // Update scan status to running
       scan.status = 'running';
       scan.startedAt = new Date();
       scan.progress = 5;
@@ -260,7 +304,6 @@ export const configureBull = () => {
 
       publishScanUpdate(jobQueueApp(), { type: 'progress', scanId, progress: 5 });
 
-      // Send job to Python worker with scan profile (selected modules)
       await pub.publish(JOB_CHANNEL, JSON.stringify({
         scanId,
         targetUrl: scan.targetUrl,
@@ -275,14 +318,12 @@ export const configureBull = () => {
     }
   });
 
-  // Handle completed jobs
   scanQueue.on('completed', async (job) => {
     if (job.name !== 'start') return;
 
     const { scanId, webhookUrl } = job.data;
     const scan = await Scan.findById(scanId);
 
-    // Send email notification (if enabled + user opted in).
     if (scan) {
       try {
         await sendScanSummaryEmail(scan);
@@ -291,7 +332,6 @@ export const configureBull = () => {
       }
     }
 
-    // Call webhook if configured
     if (webhookUrl) {
       try {
         await fetch(webhookUrl, {
@@ -319,18 +359,18 @@ export const configureBull = () => {
     });
   });
 
-  // Handle failed jobs
   scanQueue.on('failed', async (job, err) => {
+    if (job.name !== 'start') return;
+
     const { scanId, webhookUrl } = job.data;
     logger.warn('Scan job failed', { scanId, error: err.message });
     const scan = await Scan.findById(scanId);
 
-    // Don't overwrite a scan that already completed successfully
     if (scan && scan.status !== 'completed') {
       scan.status = 'failed';
       scan.error = err.message;
-      // Keep whatever progress was reached — don't reset to 0
       await scan.save();
+
       try {
         await sendScanFailureEmail(scan, err.message);
       } catch (e) {
@@ -344,22 +384,16 @@ export const configureBull = () => {
           await fetch(webhookUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ type: 'failed', scanId, error: err.message })            });
+            body: JSON.stringify({ type: 'failed', scanId, error: err.message }),
+          });
         } catch (e) {
-          logger.warn('Webhook failure notification failed', { webhoo  });
-
-  // Handle failed jobs
-  scanQueue.on('fail  });
+          logger.warn('Webhook failure notification failed', { webhookUrl, error: e.message });
+        }
+      }
+    }
+  });
 };
 
-// Reference to Express app for SSE notifications
-let _app = null;
-export const setJobQueueApp = (app) => { _app = app; };
-const jobQueueApp = () => _app;
-
-/**
- * Process scan results from Python worker and save to database.
- */
 async function handleResults(scan, data) {
   const results = data.results || [];
 
@@ -368,7 +402,6 @@ async function handleResults(scan, data) {
   scan.status = 'completed';
   scan.completedAt = new Date();
 
-  // Diff vs previous scan for the same host + simple policy gate.
   if (scan.targetHost) {
     try {
       const anchor = scan.completedAt || new Date();
@@ -394,45 +427,6 @@ async function handleResults(scan, data) {
           newCount: diff.newIssues.length,
           fixedCount: diff.fixedIssues.length,
           persistingCount: diff.persisting.length,
-          newBlockedCount: newBlocked.l  scan.        };
-
-        scan.policy = {
-          status: newBlocked.length ? 'fail  // Diff vs previous scan for the same h          evaluatedAt: new  if (sca        };
-
-        
-      } else {
-        scan.policy = {
-          status: 'skipped',
-          blockedSeverities: ['high', 'critical'],
-          evaluatedAt: new Date(),
-        };
-      }
-    } catch (e) {
-      logger.warn('Policy evaluation failed', { scanId: scan._id.toString(), error: e.message });
-    }
-  }
-
-  await scan.save();
-
-  publishScanUpdate(jobQueueApp(), {
-    type: 'completed',
-    scanId: scan._id.toString(),
-    progress: 100,
-    status: 'completed',
-  });
-
-  return true;
-}ritical'];
-        const newBlocked = (diff.newIssues || []).filter((v) => {
-          const sev = (v.severity || 'info').toLowerCase();
-          return blockedSeverities.includes(sev);
-        });
-
-        scan.diffSummary = {
-          compareScanId: previous._id,
-          newCount: diff.newIssues.length,
-          fixedCount: diff.fixedIssues.length,
-          persistingCount: diff.persisting.length,
           newBlockedCount: newBlocked.length,
         };
 
@@ -441,8 +435,6 @@ async function handleResults(scan, data) {
           blockedSeverities,
           evaluatedAt: new Date(),
         };
-
-        
       } else {
         scan.policy = {
           status: 'skipped',

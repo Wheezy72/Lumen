@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 
 const recurringScanSchema = new mongoose.Schema({
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true, required: true },
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
 
   targetUrl: { type: String, required: true },
   targetHost: { type: String, index: true },
