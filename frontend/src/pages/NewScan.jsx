@@ -133,7 +133,7 @@ export default function NewScan() {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-8">
-        <div className="bg-dark-200 rounded-xl border border-slate-800 p-6 shadow-neon">
+        <div className="bg-dark-200 rounded-xl border border-slate-800 p-6 shadow-soft">
           <h2 className="text-lg font-semibold text-primary-400 mb-4">Site</h2>
           <label className="block text-sm font-medium text-gray-400 mb-2">URL</label>
           <input
@@ -146,8 +146,8 @@ export default function NewScan() {
           <p className="text-sm text-gray-500 mt-2">Example: https://example.com</p>
         </div>
 
-        <div className="bg-dark-200 rounded-xl border border-slate-800 p-6 shadow-neon">
-          <h2 className="text-lg font-semibold text-primary-400 mb-4">Scan profile</h2>
+        <div className="bg-dark-200 rounded-xl border border-slate-800 p-6 shadow-soft">
+         <<h2 className="text-lg font-semibold text-primary-400 mb-4">Scan profile</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {Object.entries(SCAN_PROFILES).map(([key, profileData]) => (
               <div
@@ -178,7 +178,7 @@ export default function NewScan() {
         </div>
 
         {profile === 'custom' && (
-          <div className="bg-dark-200 rounded-xl border border-slate-800 p-6 shadow-neon animate-slide-up">
+          <div className="bg-dark-200 rounded-xl border border-slate-800 p-6 shadow-soft animate-slide-up">
             <h2 className="text-lg font-semibold text-primary-400 mb-4">Checks</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {SCAN_MODULES.map((module) => (
@@ -217,8 +217,8 @@ export default function NewScan() {
           </div>
         )}
 
-        <div className="bg-dark-200 rounded-xl border border-slate-800 p-6 shadow-neon">
-          <div className="flex items-center justify-between mb-4">
+        <div className="bg-dark-200 rounded-xl border border-slate-800 p-6 shadow-soft">
+         <<div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="text-lg font-semibold text-primary-400">Schedule</h2>
               <p className="text-sm text-gray-500 mt-1">

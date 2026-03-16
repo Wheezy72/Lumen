@@ -1,15 +1,17 @@
 import Bull from 'bull';
-import Scan from '../models/Scan.js';
-import { logger } from '../utils/logger.js';
-import { publishScanUpdate } from '../routes/sse.js';
 import fetch from 'node-fetch';
 import Redis from 'ioredis';
+
+import Scan from '../models/Scan.js';
+import RecurringScan from '../models/RecurringScan.js';
+import { logger } from '../utils/logger.js';
+import { publishScanUpdate } from '../routes/sse.js';
 import { sendScanSummaryEmail, sendScanFailureEmail } from '../services/email.js';
 import { computeScanDiff } from '../services/scanDiff.js';
 
 /**
  * Queue wiring for scan jobs.
- * * This module connects Express, Bull (job queue), and the Python worker:
+ * This module connects Express, Bull (job queue), and the Python worker:
  * 1. Receives scan requests from the API
  * 2. Publishes jobs to Redis for the Python worker
  * 3. Waits for results and updates the database
@@ -21,11 +23,65 @@ const REDIS_URL = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
 
 export const scanQueue = new Bull('scanQueue', REDIS_URL);
 
+let recurringSyncPromise = null;
+export const syncRecurringSchedules = async () => {
+  if (recurringSyncPromise) return recurringSyncPromise;
+
+  recurringSyncPromise = (async () => {
+    try {
+      const enabled = await RecurringScan.find({ enabled: true }).select('_id cron timezone').lean();
+
+      await Promise.all(
+        enabled.map((recurring) => {
+          const tz = recurring.timezone || undefined;
+          const repeat = tz ? { cron: recurring.cron, tz } : { cron: recurring.cron };
+
+          return scanQueue.add(
+            'recurringTick',
+            { recurringScanId: recurring._id.toString() },
+            {
+              jobId: `recurring:${recurring._id.toString()}`,
+              repeat,
+            },
+          );
+        }),
+      );
+
+      if (enabled.length) {
+        logger.info('Recurring scan schedules synced', { count: enabled.length });
+      }
+    } catch (e) {
+      logger.warn('Recurring scan schedule sync failed', { error: e.message });
+    }
+  })().finally(() => {
+    recurringSyncPromise = null;
+  });
+
+  return recurringSyncPromise;
+};
+
 // Redis pub/sub for Python worker communication
 const redis = new Redis(REDIS_URL);
 const pub = new Redis(REDIS_URL);
 const RESULT_CHANNEL = 'scan_results';
 const JOB_CHANNEL = 'scan_jobs';
+
+const attachRedisErrorLogging = (client, label) => {
+  client.on('error', (err) => {
+    logger.warn('Redis connection error', { label, error: err.message });
+  });
+
+  client.on('end', () => {
+    logger.warn('Redis connection ended', { label });
+  });
+};
+
+attachRedisErrorLogging(redis, 'scan_results_subscriber');
+attachRedisErrorLogging(pub, 'scan_jobs_publisher');
+
+scanQueue.on('error', (err) => {
+  logger.warn('Bull queue error', { error: err.message });
+});
 
 const PY_WORKER_HEARTBEAT_KEY = process.env.PY_WORKER_HEARTBEAT_KEY || 'scanner:python_worker:heartbeat';
 const SCAN_TIMEOUT_MS = parseInt(process.env.SCAN_TIMEOUT_MS || String(15 * 60 * 1000), 10);
@@ -190,7 +246,50 @@ const isPythonWorkerAvailable = async () => {
   }
 };
 
+// Reference to Express app for SSE notifications
+let _app = null;
+export const setJobQueueApp = (app) => { _app = app; };
+const jobQueueApp = () => _app;
+
 export const configureBull = () => {
+  scanQueue.process('recurringTick', async (job) => {
+    const recurringScanId = job?.data?.recurringScanId;
+    if (!recurringScanId) return;
+
+    const recurring = await RecurringScan.findById(recurringScanId);
+    if (!recurring || !recurring.enabled) return;
+
+    const scan = await Scan.create({
+      userId: recurring.userId || null,
+      targetUrl: recurring.targetUrl,
+      targetHost: recurring.targetHost || undefined,
+      scanProfile: recurring.scanProfile || [],
+      status: 'queued',
+      scheduled: true,
+      scheduledFor: new Date(),
+      progress: 0,
+      webhookUrl: recurring.webhookUrl || undefined,
+      policy: { status: 'unknown' },
+      recurringScanId: recurring._id,
+    });
+
+    recurring.lastRunAt = new Date();
+    await recurring.save();
+
+    await scanQueue.add(
+      'start',
+      {
+        scanId: scan._id.toString(),
+        scanProfile: recurring.scanProfile || [],
+        webhookUrl: recurring.webhookUrl || undefined,
+      },
+      {
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 5000 },
+      },
+    );
+  });
+
   // Process scan jobs
   scanQueue.process('start', async (job) => {
     const { scanId, scanProfile } = job.data;
@@ -215,7 +314,6 @@ export const configureBull = () => {
     pendingScans.set(scanId, waiter);
 
     try {
-      // Update scan status to running
       scan.status = 'running';
       scan.startedAt = new Date();
       scan.progress = 5;
@@ -223,7 +321,6 @@ export const configureBull = () => {
 
       publishScanUpdate(jobQueueApp(), { type: 'progress', scanId, progress: 5 });
 
-      // Send job to Python worker with scan profile (selected modules)
       await pub.publish(JOB_CHANNEL, JSON.stringify({
         scanId,
         targetUrl: scan.targetUrl,
@@ -238,12 +335,12 @@ export const configureBull = () => {
     }
   });
 
-  // Handle completed jobs
   scanQueue.on('completed', async (job) => {
+    if (job.name !== 'start') return;
+
     const { scanId, webhookUrl } = job.data;
     const scan = await Scan.findById(scanId);
 
-    // Send email notification (if enabled + user opted in).
     if (scan) {
       try {
         await sendScanSummaryEmail(scan);
@@ -252,7 +349,6 @@ export const configureBull = () => {
       }
     }
 
-    // Call webhook if configured
     if (webhookUrl) {
       try {
         await fetch(webhookUrl, {
@@ -280,18 +376,18 @@ export const configureBull = () => {
     });
   });
 
-  // Handle failed jobs
   scanQueue.on('failed', async (job, err) => {
+    if (job.name !== 'start') return;
+
     const { scanId, webhookUrl } = job.data;
     logger.warn('Scan job failed', { scanId, error: err.message });
     const scan = await Scan.findById(scanId);
 
-    // Don't overwrite a scan that already completed successfully
     if (scan && scan.status !== 'completed') {
       scan.status = 'failed';
       scan.error = err.message;
-      // Keep whatever progress was reached — don't reset to 0
       await scan.save();
+
       try {
         await sendScanFailureEmail(scan, err.message);
       } catch (e) {
@@ -315,14 +411,6 @@ export const configureBull = () => {
   });
 };
 
-// Reference to Express app for SSE notifications
-let _app = null;
-export const setJobQueueApp = (app) => { _app = app; };
-const jobQueueApp = () => _app;
-
-/**
- * Process scan results from Python worker and save to database.
- */
 async function handleResults(scan, data) {
   const results = data.results || [];
 
@@ -331,7 +419,6 @@ async function handleResults(scan, data) {
   scan.status = 'completed';
   scan.completedAt = new Date();
 
-  // Diff vs previous scan for the same host + simple policy gate.
   if (scan.targetHost) {
     try {
       const anchor = scan.completedAt || new Date();
@@ -365,8 +452,6 @@ async function handleResults(scan, data) {
           blockedSeverities,
           evaluatedAt: new Date(),
         };
-
-        
       } else {
         scan.policy = {
           status: 'skipped',

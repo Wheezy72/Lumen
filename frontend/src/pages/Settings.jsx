@@ -133,6 +133,8 @@ export default function Settings({ user, onUpdateUser }) {
           </label>
         </div>
 
+        
+
         <button
           type="submit"
           disabled={saving}

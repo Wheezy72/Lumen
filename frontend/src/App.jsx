@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Routes, Route, Link, useNavigate, useLocation } from "react-router-dom";
+import { Routes, Route, Link, Navigate, useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
 import Landing from "./pages/Landing.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
@@ -33,7 +33,7 @@ export default function App() {
         const { data } = await axios.get("/api/auth/me");
         setUser(data);
       } catch {
-        console.log("No active session");
+        // No active session.
       } finally {
         setLoading(false);
       }
@@ -77,12 +77,12 @@ export default function App() {
       <header className="bg-dark-200 backdrop-blur-lg border-b border-slate-800 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className={`flex justify-between items-center ${isAuthRoute ? 'h-12' : 'h-16'}`}>
-            <Link to="/" className="flex items-center space-x-3">
+            <Link to={user ? "/dashboard" : "/"} className="flex items-center space-x-3">
               <div className={`${isAuthRoute ? 'h-8 w-8 rounded-lg' : 'h-9 w-9 rounded-xl'} overflow-hidden ring-1 ring-black/10 dark:ring-white/10 shadow-soft`}>
                 <img src="/logo.jpg" alt="Logo" className="h-full w-full object-cover" />
               </div>
               <span className={`${isAuthRoute ? 'text-lg' : 'text-xl'} font-bold bg-gradient-to-r from-primary-400 to-secondary-400 bg-clip-text text-transparent`}>
-                Vulnerability scanner
+                Lumen Vulnerability Scanner
               </span>
             </Link>
 
@@ -237,7 +237,7 @@ export default function App() {
       <main className={isAuthRoute ? "min-h-[calc(100vh-4rem)]" : "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8"}>
         <div className="animate-fade-in">
           <Routes>
-            <Route path="/" element={<Landing />} />
+            <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <Landing />} />
             <Route path="/learn" element={<Vulnerabilities />} />
             <Route
               path="/dashboard"

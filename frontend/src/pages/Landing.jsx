@@ -11,11 +11,10 @@ export default function Landing() {
           Open-source · Self-hostable
         </span>
         <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold leading-tight text-slate-900 dark:text-white">
-          See your application<br className="hidden sm:block" /> the way an attacker does.
+          Quick security checks<br className="hidden sm:block" /> for your web app.
         </h1>
         <p className="mt-5 text-lg text-slate-600 dark:text-gray-400 max-w-2xl mx-auto">
-          Point it at a URL. Get results in minutes.&nbsp;
-          No setup, no enterprise contracts, no noise.
+          Paste a URL and run a scan. You’ll get a short report with the issues found and how to fix them.
         </p>
 
         <div className="mt-8 flex flex-wrap justify-center gap-4">
@@ -23,7 +22,7 @@ export default function Landing() {
             to="/register"
             className="btn btn-primary px-6 py-3 text-base font-semibold rounded-lg"
           >
-            Get started free
+            Create account
           </Link>
           <Link
             to="/login"
@@ -36,9 +35,9 @@ export default function Landing() {
         {/* Stats bar */}
         <div className="mt-12 flex flex-wrap justify-center gap-x-10 gap-y-3 text-sm text-gray-500">
           {[
-            '10 automated checks',
-            'OWASP aligned',
-            'Open source',
+            '10 checks',
+            'Live progress',
+            'PDF/CSV export',
             'Self-hostable',
           ].map((s) => (
             <span key={s} className="flex items-center gap-2">
@@ -99,17 +98,16 @@ export default function Landing() {
       <section className="max-w-5xl mx-auto px-6 py-16">
         <div className="grid md:grid-cols-2 gap-10 items-center">
           <div>
-            <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Findings you can actually act on</h2>
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Clear findings and fixes</h2>
             <p className="mt-3 text-slate-600 dark:text-gray-400 text-sm leading-relaxed">
-              Every result includes the check that ran, the evidence collected, and plain-English guidance
-              on how to fix it — not just a CVE number and a shrug.
+              Each result includes what was checked, any evidence collected, and practical guidance to reduce the risk.
             </p>
             <ul className="mt-6 space-y-3 text-sm text-slate-600 dark:text-gray-400">
               {[
-                'Grouped by severity: Critical → Low',
-                'Inline remediation steps per finding',
+                'Grouped by severity',
+                'Remediation guidance per finding',
                 'PDF and CSV export',
-                'Scan history and diffing over time',
+                'Compare against previous scans',
               ].map((item) => (
                 <li key={item} className="flex items-start gap-2">
                   <svg className="w-4 h-4 text-primary-500 mt-0.5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
@@ -148,8 +146,8 @@ export default function Landing() {
       {/* ── CTA ──────────────────────────────────────────────────────── */}
       <section className="max-w-5xl mx-auto px-6 py-16 text-center">
         <div className="rounded-2xl border border-primary-500/20 dark:border-primary-800/40 bg-primary-500/10 dark:bg-primary-900/20 px-8 py-12">
-          <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Ready to run your first scan?</h2>
-          <p className="mt-2 text-slate-600 dark:text-gray-400 text-sm">Free. No credit card. Runs locally.</p>
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Run a scan</h2>
+          <p className="mt-2 text-slate-600 dark:text-gray-400 text-sm">Runs locally. No payment setup.</p>
           <Link
             to="/register"
             className="mt-6 inline-block btn btn-primary px-8 py-3 text-base font-semibold rounded-lg"

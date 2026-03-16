@@ -24,9 +24,11 @@ import authRouter from './routes/auth.js';
 import userRouter from './routes/users.js';
 import scanRouter from './routes/scans.js';
 import reportRouter from './routes/reports.js';
+import publicApiRouter from './routes/publicApi.js';
 import { authMiddleware } from './middleware/auth.js';
+import { apiKeyAuthMiddleware } from './middleware/apiKeyAuth.js';
 import { errorHandler } from './middleware/error.js';
-import { configureBull, setJobQueueApp } from './queue/index.js';
+import { configureBull, setJobQueueApp, syncRecurringSchedules } from './queue/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -93,6 +95,8 @@ mongoose.connect(MONGODB_URI, { autoIndex: true })
     } catch (e) {
       logger.warn('User index sync failed', { error: e.message });
     }
+
+    await syncRecurringSchedules();
   })
   .catch((err) => {
     logger.error('MongoDB connection error', { error: err.message });
@@ -110,6 +114,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/users', authMiddleware, userRouter);
 app.use('/api/scans', authMiddleware, scanRouter);
 app.use('/api/reports', authMiddleware, reportRouter);
+app.use('/api/publicApi', apiKeyAuthMiddleware, publicApiRouter);
 app.use('/api/sse', sseRouter);
 
 app.get('/health', (req, res) => {

@@ -1,20 +1,22 @@
 import React, { useEffect, useRef } from "react";
+import { useTheme } from "../../theme/ThemeProvider.jsx";
 
-/**
- * Constellation background inspired by https://www.shadcn.io/background/constellation
- * (adapted for Vite + React, JS)
- */
-export function ConstellationBackground({
-  className,
-  children,
-  count = 80,
-  connectionDistance = 150,
-  nodeColor = "rgba(59, 130, 246, 0.95)", // primary-500
-  lineColor = "rgba(59, 130, 246, 0.18)",
-  nodeSize = 2,
-  mouseRadius = 110,
-  glow = true,
-}) {
+const VARIANTS = {
+  primary: {
+    dark: { node: "rgba(59, 130, 246, 0.95)", line: "rgba(59, 130, 246, 0.18)" },
+    light: { node: "rgba(37, 99, 235, 0.80)", line: "rgba(37, 99, 235, 0.14)" },
+  },
+  secondary: {
+    dark: { node: "rgba(34, 197, 94, 0.88)", line: "rgba(34, 197, 94, 0.16)" },
+    light: { node: "rgba(22, 163, 74, 0.72)", line: "rgba(22, 163, 74, 0.12)" },
+  },
+};
+
+export default function AuthBackground({ variant = "primary", className = "", children }) {
+  const { theme } = useTheme();
+  const palette = VARIANTS[variant] || VARIANTS.primary;
+  const colors = theme === "dark" ? palette.dark : palette.light;
+
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
 
@@ -26,8 +28,8 @@ export function ConstellationBackground({
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    let width = 0;
-    let height = 0;
+    let width = 1;
+    let height = 1;
 
     const resize = () => {
       const rect = container.getBoundingClientRect();
@@ -39,19 +41,23 @@ export function ConstellationBackground({
 
     resize();
 
-    let animationId;
-    let mouseX = -1000;
-    let mouseY = -1000;
+    const count = 110;
+    const connectionDistance = 165;
+    const nodeSize = 2;
+    const mouseRadius = 110;
 
     const createNode = () => ({
       x: Math.random() * width,
       y: Math.random() * height,
       vx: (Math.random() - 0.5) * 0.3,
       vy: (Math.random() - 0.5) * 0.3,
-      radius: Math.random() * nodeSize + nodeSize * 0.5,
+      r: Math.random() * nodeSize + nodeSize * 0.5,
     });
 
     const nodes = Array.from({ length: count }, createNode);
+
+    let mouseX = -1000;
+    let mouseY = -1000;
 
     const handleMouseMove = (e) => {
       const rect = container.getBoundingClientRect();
@@ -67,15 +73,23 @@ export function ConstellationBackground({
     container.addEventListener("mousemove", handleMouseMove);
     container.addEventListener("mouseleave", handleMouseLeave);
 
-    const ro = new ResizeObserver(() => {
-      resize();
-    });
+    const ro = new ResizeObserver(resize);
     ro.observe(container);
+
+    const glowColor = (() => {
+      const m = /rgba?\(([^)]+)\)/.exec(colors.node);
+      if (!m) return colors.node;
+      const parts = m[1].split(",").map((p) => p.trim());
+      if (parts.length < 3) return colors.node;
+      const [r, g, b] = parts;
+      return `rgba(${r}, ${g}, ${b}, 0.20)`;
+    })();
+
+    let animationId;
 
     const animate = () => {
       ctx.clearRect(0, 0, width, height);
 
-      // Update nodes
       for (const node of nodes) {
         if (mouseRadius > 0) {
           const dx = node.x - mouseX;
@@ -93,11 +107,9 @@ export function ConstellationBackground({
         node.vx *= 0.99;
         node.vy *= 0.99;
 
-        // subtle random drift
         node.vx += (Math.random() - 0.5) * 0.01;
         node.vy += (Math.random() - 0.5) * 0.01;
 
-        // bounce edges
         if (node.x < 0 || node.x > width) {
           node.vx *= -1;
           node.x = Math.max(0, Math.min(width, node.x));
@@ -108,8 +120,7 @@ export function ConstellationBackground({
         }
       }
 
-      // connections
-      ctx.strokeStyle = lineColor;
+      ctx.strokeStyle = colors.line;
       ctx.lineWidth = 1;
       for (let i = 0; i < nodes.length; i++) {
         for (let j = i + 1; j < nodes.length; j++) {
@@ -127,40 +138,19 @@ export function ConstellationBackground({
         }
       }
 
-      // nodes
       ctx.globalAlpha = 1;
       for (const node of nodes) {
-        if (glow) {
-          const gradient = ctx.createRadialGradient(
-            node.x,
-            node.y,
-            0,
-            node.x,
-            node.y,
-            node.radius * 4
-          );
-
-          const glowColor = (() => {
-            // Convert "rgba(r,g,b,a)" => "rgba(r,g,b,0.25)" (fallback: keep original)
-            const m = /rgba?\(([^)]+)\)/.exec(nodeColor);
-            if (!m) return nodeColor;
-            const parts = m[1].split(",").map((p) => p.trim());
-            if (parts.length < 3) return nodeColor;
-            const [r, g, b] = parts;
-            return `rgba(${r}, ${g}, ${b}, 0.25)`;
-          })();
-
-          gradient.addColorStop(0, glowColor);
-          gradient.addColorStop(1, "transparent");
-          ctx.fillStyle = gradient;
-          ctx.beginPath();
-          ctx.arc(node.x, node.y, node.radius * 4, 0, Math.PI * 2);
-          ctx.fill();
-        }
-
-        ctx.fillStyle = nodeColor;
+        const gradient = ctx.createRadialGradient(node.x, node.y, 0, node.x, node.y, node.r * 4);
+        gradient.addColorStop(0, glowColor);
+        gradient.addColorStop(1, "transparent");
+        ctx.fillStyle = gradient;
         ctx.beginPath();
-        ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
+        ctx.arc(node.x, node.y, node.r * 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = colors.node;
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, node.r, 0, Math.PI * 2);
         ctx.fill();
       }
 
@@ -175,18 +165,12 @@ export function ConstellationBackground({
       container.removeEventListener("mouseleave", handleMouseLeave);
       ro.disconnect();
     };
-  }, [count, connectionDistance, nodeColor, lineColor, nodeSize, mouseRadius, glow]);
+  }, [colors.line, colors.node]);
 
   return (
-    <div ref={containerRef} className={`relative overflow-hidden ${className || ""}`.trim()}>
+    <div ref={containerRef} className={`relative overflow-hidden ${className}`.trim()}>
       <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />
-
-      {/* Subtle radial overlay */}
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(37,99,235,0.14),transparent_55%),radial-gradient(ellipse_at_top,rgba(34,197,94,0.10),transparent_60%)] dark:bg-[radial-gradient(ellipse_at_top_left,rgba(37,99,235,0.18),transparent_55%),radial-gradient(ellipse_at_top,rgba(34,197,94,0.14),transparent_60%)]" />
-
-      {/* Vignette */}
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/0 via-white/10 to-white/45 dark:from-black/0 dark:via-black/25 dark:to-black/70" />
-
       <div className="relative">{children}</div>
     </div>
   );
