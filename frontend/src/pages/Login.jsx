@@ -1,12 +1,9 @@
 import React, { useState } from "react";
 import axios from "axios";
 import { Link, useNavigate } from "react-router-dom";
-import { ConstellationBackground } from "../components/ui/ConstellationBackground.jsx";
-import { useTheme } from "../theme/ThemeProvider.jsx";
 
 export default function Login({ onLogin, message }) {
   const navigate = useNavigate();
-  const { theme } = useTheme();
 
   const [form, setForm] = useState({ username: "", password: "" });
   const [error, setError] = useState("");
@@ -37,24 +34,15 @@ export default function Login({ onLogin, message }) {
     }
   };
 
-  const nodeColor = theme === "dark" ? "rgba(59, 130, 246, 0.95)" : "rgba(37, 99, 235, 0.8)";
-  const lineColor = theme === "dark" ? "rgba(59, 130, 246, 0.18)" : "rgba(37, 99, 235, 0.15)";
-
   return (
-    <ConstellationBackground
-      className="min-h-[calc(100vh-4rem)] flex items-center justify-center px-4"
-      nodeColor={nodeColor}
-      lineColor={lineColor}
-      count={120}
-      connectionDistance={165}
-    >
+    <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center px-4">
       <div className="w-full max-w-md">
-        <div className="bg-dark-200 border border-slate-800 rounded-lg shadow-neon p-8">
+        <div className="bg-dark-200 border border-slate-800 rounded-lg shadow-soft p-8">
           <div className="text-center mb-8">
-            <div className="w-16 h-16 rounded-2xl overflow-hidden mx-auto mb-4 ring-1 ring-black/10 dark:ring-white/10 shadow-soft cyber-glow">
+            <div className="w-16 h-16 rounded-2xl overflow-hidden mx-auto mb-4 ring-1 ring-black/10 dark:ring-white/10 shadow-soft">
               <img src="/logo.jpg" alt="Logo" className="w-full h-full object-cover" />
             </div>
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-primary-500 to-secondary-500 bg-clip-text text-transparent">Welcome back</h1>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Welcome back</h1>
             <p className="text-gray-400 mt-2">Sign in to your account</p>
           </div>
 
@@ -139,6 +127,6 @@ export default function Login({ onLogin, message }) {
           </p>
         </div>
       </div>
-    </ConstellationBackground>
+    </div>
   );
 }

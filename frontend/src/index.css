@@ -294,14 +294,7 @@ svg.text-white {
   color: #075985;
 }
 
-/* Security-themed gradients */
-.security-gradient {
-  background: linear-gradient(135deg, #0f172a 0%, #1e293b 25%, #334155 50%, #475569 75%, #64748b 100%);
-}
 
-.cyber-glow {
-  box-shadow: 0 0 20px rgba(59, 130, 246, 0.3), 0 0 40px rgba(59, 130, 246, 0.1);
-}
 
 /* Logo styling */
 .placeholder-logo {

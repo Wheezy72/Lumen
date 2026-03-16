@@ -1,12 +1,9 @@
 import React, { useState } from "react";
 import axios from "axios";
 import { Link, useNavigate } from "react-router-dom";
-import { ConstellationBackground } from "../components/ui/ConstellationBackground.jsx";
-import { useTheme } from "../theme/ThemeProvider.jsx";
 
 export default function Register({ onRegister }) {
   const navigate = useNavigate();
-  const { theme } = useTheme();
 
   const [form, setForm] = useState({
     username: "",
@@ -59,24 +56,15 @@ export default function Register({ onRegister }) {
     }
   };
 
-  const nodeColor = theme === "dark" ? "rgba(34, 197, 94, 0.85)" : "rgba(22, 163, 74, 0.7)";
-  const lineColor = theme === "dark" ? "rgba(34, 197, 94, 0.16)" : "rgba(22, 163, 74, 0.14)";
-
   return (
-    <ConstellationBackground
-      className="min-h-[calc(100vh-4rem)] flex items-center justify-center px-4 py-8"
-      nodeColor={nodeColor}
-      lineColor={lineColor}
-      count={120}
-      connectionDistance={165}
-    >
+    <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center px-4 py-8">
       <div className="w-full max-w-md">
-        <div className="bg-dark-200 border border-slate-800 rounded-lg shadow-neon p-8">
+        <div className="bg-dark-200 border border-slate-800 rounded-lg shadow-soft p-8">
           <div className="text-center mb-8">
-            <div className="w-16 h-16 rounded-2xl overflow-hidden mx-auto mb-4 ring-1 ring-black/10 dark:ring-white/10 shadow-soft cyber-glow">
+            <div className="w-16 h-16 rounded-2xl overflow-hidden mx-auto mb-4 ring-1 ring-black/10 dark:ring-white/10 shadow-soft">
               <img src="/logo.jpg" alt="Logo" className="w-full h-full object-cover" />
             </div>
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-primary-500 to-secondary-500 bg-clip-text text-transparent">Create account</h1>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Create account</h1>
             <p className="text-gray-400 mt-2">Create an account to start scanning</p>
           </div>
 
@@ -239,6 +227,6 @@ export default function Register({ onRegister }) {
           </p>
         </div>
       </div>
-    </ConstellationBackground>
+    </div>
   );
 }
