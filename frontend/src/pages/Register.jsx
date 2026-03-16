@@ -1,9 +1,7 @@
 import React, { useState } from "react";
 import axios from "axios";
 import { Link, useNavigate } from "react-router-dom";
-import AuthBackground from "../components/ui/AuthBackground.jsx";
-
-export default function Register({ onRegister }) {
+import AuthBackground from "../components/ui/A</old_code><new_code>export default function Register({ onRegister }) {
   const navigate = useNavigate();
 
   const [form, setForm] = useState({
@@ -11,13 +9,19 @@ export default function Register({ onRegister }) {
     password: "",
     confirmPassword: "",
     email: "",
-    name: "",
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
+  };
+
+  const checks = {
+    length: form.password.length >= 8,
+    lower: /[a-z]/.test(form.password),
+    upper: /[A-Z]/.test(form.password),
+    special: /[^A-Za-z0-9]/.test(form.password),
   };
 
   const handleSubmit = async (e) => {
@@ -29,8 +33,8 @@ export default function Register({ onRegister }) {
       return;
     }
 
-    if (form.password.length < 8) {
-      setError("Password must be at least 8 characters");
+    if (!checks.length || !checks.lower || !checks.upper || !checks.special) {
+      setError("Password does not meet the requirements");
       return;
     }
 
@@ -41,7 +45,6 @@ export default function Register({ onRegister }) {
         username: form.username,
         password: form.password,
         email: form.email || undefined,
-        name: form.name || undefined,
       });
 
       if (onRegister) {
@@ -106,31 +109,7 @@ export default function Register({ onRegister }) {
               </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Full Name <span className="text-gray-500 text-xs">(optional)</span>
-              </label>
-              <div className="relative">
-                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 input-icon z-10">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                  </svg>
-                </span>
-                <input
-                  type="text"
-                  name="name"
-                  value={form.name}
-                  onChange={handleChange}
-                  className="input"
-                  placeholder="Your full name"
-                />
-              </div>
-            </div>
+            
 
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -179,10 +158,20 @@ export default function Register({ onRegister }) {
                   value={form.password}
                   onChange={handleChange}
                   className="input"
-                  placeholder="At least 8 characters"
+                  placeholder="Create a password"
                   required
                   minLength={8}
                 />
+              </div>
+
+              <div className="mt-2 rounded-lg border border-slate-800 bg-black/5 dark:bg-black/25 p-3">
+                <p className="text-xs text-gray-500 mb-2">Password must include:</p>
+                <ul className="space-y-1">
+                  <PasswordRule ok={checks.length} label="At least 8 characters" />
+                  <PasswordRule ok={checks.lower} label="A lowercase letter" />
+                  <PasswordRule ok={checks.upper} label="An uppercase letter" />
+                  <PasswordRule ok={checks.special} label="A special character" />
+                </ul>
               </div>
             </div>
 
@@ -232,5 +221,22 @@ export default function Register({ onRegister }) {
         </div>
       </div>
     </AuthBackground>
+  );
+}
+
+function PasswordRule({ ok, label }) {
+  return (
+    <li className={`flex items-center gap-2 text-xs ${ok ? 'text-emerald-400' : 'text-gray-500'}`}>
+      <span className={`inline-flex items-center justify-center w-4 h-4 rounded-full border ${ok ? 'border-emerald-500/30 bg-emerald-500/10' : 'border-slate-800 bg-black/5 dark:bg-black/25'}`}>
+        {ok ? (
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+          </svg>
+        ) : (
+          <span className="w-1.5 h-1.5 rounded-full bg-gray-500/70" />
+        )}
+      </span>
+      <span>{label}</span>
+    </li>
   );
 }

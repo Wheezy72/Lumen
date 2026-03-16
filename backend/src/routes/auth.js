@@ -6,14 +6,15 @@ import { signToken, setAuthCookie, clearAuthCookie, authMiddleware } from '../mi
 
 const router = express.Router();
 
-// Registration expects a username for login, plus an optional email address for
-// notifications and an optional display name.
 const registerSchema = Joi.object({
   username: Joi.string().alphanum().min(3).max(50).required(),
   // Removed .email() completely. It will now accept any string, or nothing at all.
   email: Joi.string().allow('', null).optional(),
-  password: Joi.string().min(8).max(128).required(),
-  name: Joi.string().max(100).allow('', null).optional(),
+  password: Joi.string()
+    .min(8)
+    .max(128)
+    .pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*[^A-Za-z0-9]).+$/)
+    .required(),
 });
 
 // Login is username + password only.
@@ -24,10 +25,9 @@ const loginSchema = Joi.object({
 
 router.post('/register', async (req, res, next) => {
   try {
-    const { username, email, password, name } = await registerSchema.validateAsync(req.body, { stripUnknown: true });
+    const { username, email, password } = await registerSchema.validateAsync(req.body, { stripUnknown: true });
 
     const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
-    const normalizedName = typeof name === 'string' ? name.trim() : '';
 
     // Build the query dynamically so we don't search for empty emails
     const query = [{ username }];
@@ -45,7 +45,6 @@ router.post('/register', async (req, res, next) => {
     // Dynamically build the user object so MongoDB's partial email index ignores missing fields
     const newUserData = { username, passwordHash };
     if (normalizedEmail) newUserData.email = normalizedEmail;
-    if (normalizedName) newUserData.name = normalizedName;
 
     const user = await User.create(newUserData);
 
@@ -55,7 +54,6 @@ router.post('/register', async (req, res, next) => {
       id: user._id,
       username: user.username,
       email: user.email,
-      name: user.name,
       emailAlertsEnabled: user.emailAlertsEnabled,
       token,
     });
@@ -79,7 +77,6 @@ router.post('/login', async (req, res, next) => {
       id: user._id,
       username: user.username,
       email: user.email,
-      name: user.name,
       emailAlertsEnabled: user.emailAlertsEnabled,
       token,
     });
@@ -99,7 +96,6 @@ router.get('/me', authMiddleware, async (req, res, next) => {
       id: user._id,
       username: user.username,
       email: user.email,
-      name: user.name,
       emailAlertsEnabled: user.emailAlertsEnabled,
     });
   } catch (e) {

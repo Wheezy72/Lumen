@@ -187,7 +187,7 @@ export default function NewScan() {
                   className={
                     'flex items-start gap-3 p-3 border rounded-lg cursor-pointer transition ' +
                     (customModules.includes(module.id)
-                      ? 'border-primary-500 bg-primary-900/20'
+                      ? 'border-primary-500'
                       : 'border-slate-700 hover:border-slate-500')
                   }
                 >

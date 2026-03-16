@@ -2,14 +2,14 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 
 export default function Settings({ user, onUpdateUser }) {
-  const [form, setForm] = useState({ name: '', email: '', emailAlertsEnabled: false });
+  const [form, setForm] = useState({ username: '', email: '', emailAlertsEnabled: false });
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
 
   const hydrate = (u) => {
     setForm({
-      name: u?.name || '',
+      username: u?.username || '',
       email: u?.email || '',
       emailAlertsEnabled: Boolean(u?.emailAlertsEnabled),
     });
@@ -39,7 +39,7 @@ export default function Settings({ user, onUpdateUser }) {
 
     try {
       const payload = {
-        name: form.name,
+        username: form.username,
         email: form.email,
         emailAlertsEnabled: form.emailAlertsEnabled,
       };
@@ -82,14 +82,17 @@ export default function Settings({ user, onUpdateUser }) {
 
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-400 mb-2">Display name</label>
+              <label className="block text-sm font-medium text-gray-400 mb-2">Username</label>
               <input
                 type="text"
                 className="input input-plain"
-                value={form.name}
-                onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-                placeholder="Optional"
+                value={form.username}
+                onChange={(e) => setForm((p) => ({ ...p, username: e.target.value }))}
+                placeholder="Choose a username"
               />
+              <p className="text-xs text-gray-500 mt-2">
+                This is the name you use to sign in.
+              </p>
             </div>
 
             <div>
