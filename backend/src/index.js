@@ -24,7 +24,7 @@ import authRouter from './routes/auth.js';
 import userRouter from './routes/users.js';
 import scanRouter from './routes/scans.js';
 import reportRouter from './routes/reports.js';
-import v1Router from './routes/v1.js';
+import publicApiRouter from './routes/publicApi.js';
 import { authMiddleware } from './middleware/auth.js';
 import { apiKeyAuthMiddleware } from './middleware/apiKeyAuth.js';
 import { errorHandler } from './middleware/error.js';
@@ -114,7 +114,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/users', authMiddleware, userRouter);
 app.use('/api/scans', authMiddleware, scanRouter);
 app.use('/api/reports', authMiddleware, reportRouter);
-app.use('/api/v1', apiKeyAuthMiddleware, v1Router);
+app.use('/api/publicApi', apiKeyAuthMiddleware, publicApiRouter);
 app.use('/api/sse', sseRouter);
 
 app.get('/health', (req, res) => {

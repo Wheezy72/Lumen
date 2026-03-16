@@ -152,7 +152,7 @@ const ensureRecurringJob = async (recurring) => {
   );
 };
 
-// POST /api/v1/scans
+// POST /api/publicApi/scans
 router.post('/scans', async (req, res, next) => {
   try {
     const data = await startScanSchema.validateAsync(req.body, { stripUnknown: true });
@@ -206,7 +206,7 @@ router.post('/scans', async (req, res, next) => {
   }
 });
 
-// GET /api/v1/scans
+// GET /api/publicApi/scans
 router.get('/scans', async (req, res, next) => {
   try {
     const limit = Math.min(parseInt(req.query.limit || '50', 10) || 50, 200);
@@ -217,7 +217,7 @@ router.get('/scans', async (req, res, next) => {
   }
 });
 
-// GET /api/v1/scans/:id
+// GET /api/publicApi/scans/:id
 router.get('/scans/:id', async (req, res, next) => {
   try {
     const scan = await Scan.findOne({ _id: req.params.id, ...publicOwnerQuery });
@@ -228,7 +228,7 @@ router.get('/scans/:id', async (req, res, next) => {
   }
 });
 
-// GET /api/v1/scans/:id/report
+// GET /api/publicApi/scans/:id/report
 router.get('/scans/:id/report', async (req, res, next) => {
   try {
     const scan = await Scan.findOne({ _id: req.params.id, ...publicOwnerQuery });
@@ -243,14 +243,14 @@ router.get('/scans/:id/report', async (req, res, next) => {
       startedAt: scan.startedAt,
       completedAt: scan.completedAt,
       findings: scan.results || [],
-      reportPdfUrl: `/api/v1/scans/${scan._id.toString()}/report.pdf`,
+      reportPdfUrl: `/api/publicApi/scans/${scan._id.toString()}/report.pdf`,
     });
   } catch (err) {
     next(err);
   }
 });
 
-// GET /api/v1/scans/:id/report.pdf
+// GET /api/publicApi/scans/:id/report.pdf
 router.get('/scans/:id/report.pdf', async (req, res, next) => {
   try {
     const scan = await Scan.findOne({ _id: req.params.id, ...publicOwnerQuery });
@@ -272,7 +272,7 @@ router.get('/scans/:id/report.pdf', async (req, res, next) => {
   }
 });
 
-// POST /api/v1/schedules
+// POST /api/publicApi/schedules
 router.post('/schedules', async (req, res, next) => {
   try {
     const data = await scheduleSchema.validateAsync(req.body, { stripUnknown: true });
@@ -359,6 +359,7 @@ router.post('/schedules', async (req, res, next) => {
   }
 });
 
+// GET /api/publicApi/schedules
 router.get('/schedules', async (req, res, next) => {
   try {
     const items = await RecurringScan.find(publicOwnerQuery).sort({ createdAt: -1 }).limit(200);
@@ -368,6 +369,7 @@ router.get('/schedules', async (req, res, next) => {
   }
 });
 
+// DELETE /api/publicApi/schedules/:id
 router.delete('/schedules/:id', async (req, res, next) => {
   try {
     const schedule = await RecurringScan.findOne({ _id: req.params.id, ...publicOwnerQuery });

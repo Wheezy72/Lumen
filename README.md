@@ -131,7 +131,7 @@ python worker.py
 
 3) Call the API:
 ```bash
-curl -sS http://localhost:4000/api/v1/scans \
+curl -sS http://localhost:4000/api/publicApi/scans \
   -H "Authorization: Bearer $PUBLIC_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"target":"https://example.com","modules":["headers","cookies"]}'
