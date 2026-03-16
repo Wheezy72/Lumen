@@ -1,12 +1,13 @@
 import express from 'express';
 import Joi from 'joi';
 import User from '../models/User.js';
+import { signToken, setAuthCookie } from '../middleware/auth.js';
 
 const router = express.Router();
 
 const updateSchema = Joi.object({
+  username: Joi.string().alphanum().min(3).max(50).optional(),
   email: Joi.string().allow('', null).optional(),
-  name: Joi.string().max(100).allow('', null).optional(),
   emailAlertsEnabled: Joi.boolean().optional(),
 });
 
@@ -19,7 +20,6 @@ router.get('/me', async (req, res, next) => {
       id: user._id,
       username: user.username,
       email: user.email,
-      name: user.name,
       emailAlertsEnabled: user.emailAlertsEnabled,
     });
   } catch (e) {
@@ -34,8 +34,24 @@ router.put('/me', async (req, res, next) => {
     const user = await User.findById(req.user.id);
     if (!user) return res.status(404).json({ error: 'Account not found.' });
 
+    const prevUsername = user.username;
+
+    if (typeof payload.username === 'string') {
+      const normalizedUsername = payload.username.trim();
+      if (!normalizedUsername) {
+        return res.status(400).json({ error: 'Username cannot be empty.' });
+      }
+
+      if (normalizedUsername !== user.username) {
+        const existing = await User.findOne({ username: normalizedUsername, _id: { $ne: user._id } });
+        if (existing) {
+          return res.status(409).json({ error: 'That username is already taken.' });
+        }
+        user.username = normalizedUsername;
+      }
+    }
+
     const normalizedEmail = typeof payload.email === 'string' ? payload.email.trim().toLowerCase() : null;
-    const normalizedName = typeof payload.name === 'string' ? payload.name.trim() : null;
 
     if (normalizedEmail) {
       const existing = await User.findOne({ email: normalizedEmail, _id: { $ne: user._id } });
@@ -48,10 +64,6 @@ router.put('/me', async (req, res, next) => {
       user.emailAlertsEnabled = false;
     }
 
-    if (normalizedName !== null) {
-      user.name = normalizedName;
-    }
-
     if (typeof payload.emailAlertsEnabled === 'boolean') {
       if (payload.emailAlertsEnabled && !user.email) {
         return res.status(400).json({ error: 'Add an email address before enabling email alerts.' });
@@ -61,11 +73,15 @@ router.put('/me', async (req, res, next) => {
 
     await user.save();
 
+    if (user.username !== prevUsername) {
+      const token = signToken({ id: user._id, username: user.username });
+      setAuthCookie(res, token);
+    }
+
     res.json({
       id: user._id,
       username: user.username,
       email: user.email,
-      name: user.name,
       emailAlertsEnabled: user.emailAlertsEnabled,
     });
   } catch (e) {

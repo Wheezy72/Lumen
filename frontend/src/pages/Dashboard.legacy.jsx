@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Bar, Doughnut } from 'react-chartjs-2';
 import { Link } from 'react-router-dom';
@@ -24,25 +24,7 @@ const SEV_COLORS = {
   info: '#6b7280',
 };
 
-const HEADER_HINTS = {
-  'X-Frame-Options': 'clickjacking protection',
-  'X-Content-Type-Options': 'MIME sniffing protection',
-  'Referrer-Policy': 'referrer privacy',
-  'Strict-Transport-Security': 'HTTPS enforcement',
-  'Content-Security-Policy': 'content restrictions',
-};
 
-function displayFindingTitle(title) {
-  const raw = String(title || '');
-  const match = raw.match(/^Missing security header:\s*(.+)$/i);
-  if (!match) return raw;
-
-  const header = match[1].trim();
-  const label = HEADER_HINTS[header];
-  if (label) return `Missing ${label} header (${header})`;
-
-  return `Missing browser security header (${header})`;
-}
 
 function isRealFinding(finding) {
   if (!finding || !finding.title) return false;
@@ -57,45 +39,12 @@ function isRealFinding(finding) {
   );
 }
 
-function severityRank(sev) {
-  const s = String(sev || 'info').toLowerCase();
-  if (s === 'critical') return 4;
-  if (s === 'high') return 3;
-  if (s === 'medium') return 2;
-  if (s === 'low') return 1;
-  return 0;
-}
-
-function getTargetLabel(scan) {
-  if (!scan) return '';
-
-  if (scan.targetHost) return scan.targetHost;
-
-  try {
-    return new URL(scan.targetUrl).hostname;
-  } catch {
-    return scan.targetUrl || '';
-  }
-}
-
-function formatLocalDateTime(value) {
-  if (!value) return '—';
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return '—';
-  return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(d);
-}
-
 export default function Dashboard() {
   const { theme } = useTheme();
   const [metrics, setMetrics] = useState({ totalScans: 0, openScans: 0, success: 0, failed: 0 });
   const [vulnCounts, setVulnCounts] = useState({ low: 0, medium: 0, high: 0, critical: 0, info: 0 });
-  const [recentScans, setRecentScans] = useState([]);
-  const [topIssues, setTopIssues] = useState([]);
+  const [recent, setRecent] = useState([]);
+  const [topTargets, setTopTargets] = useState([]);
   const [barScans, setBarScans] = useState([]);
 
   const fetchData = async () => {
@@ -107,35 +56,54 @@ export default function Dashboard() {
       const failed = data.filter((scan) => scan.status === 'failed').length;
 
       const counts = { low: 0, medium: 0, high: 0, critical: 0, info: 0 };
-      const issueAgg = {};
+      const targetAgg = {};
 
-      data.slice(0, 10).forEach((scan) => {
-        (scan.results || []).filter(isRealFinding).forEach((finding) => {
-          const sev = String(finding.severity || 'info').toLowerCase();
+      data.slice(0, 20).forEach((scan) => {
+        const findings = (scan.results || []).filter(isRealFinding);
+        if (!findings.length) return;
+
+        findings.forEach((finding) => {
+          const sev = (finding.severity || 'info').toLowerCase();
           if (counts[sev] !== undefined) counts[sev] += 1;
-
-          const title = String(finding.title || '');
-          if (!issueAgg[title]) {
-            issueAgg[title] = { title, count: 0, maxSeverity: 'info' };
-          }
-          issueAgg[title].count += 1;
-          if (severityRank(sev) > severityRank(issueAgg[title].maxSeverity)) {
-            issueAgg[title].maxSeverity = sev;
-          }
         });
+
+        const targetLabel = getTargetLabel(scan);
+        if (!targetLabel) return;
+
+        if (!targetAgg[targetLabel]) {
+          targetAgg[targetLabel] = {
+            targetLabel,
+            counts: { critical: 0, high: 0, medium: 0, low: 0, info: 0 },
+            total: 0,
+            latestScanId: scan._id,
+            latestStatus: scan.status,
+            latestCreatedAt: scan.createdAt,
+          };
+        }
+
+        const entry = targetAgg[targetLabel];
+        findings.forEach((f) => {
+          const sev = (f.severity || 'info').toLowerCase();
+          if (entry.counts[sev] !== undefined) entry.counts[sev] += 1;
+        });
+        entry.total += findings.length;
       });
 
-      const sortedIssues = Object.values(issueAgg)
-        .sort((a, b) => (b.count - a.count) || (severityRank(b.maxSeverity) - severityRank(a.maxSeverity)) || a.title.localeCompare(b.title))
-        .slice(0, 5);
-
       const completed = data.filter((scan) => scan.status === 'completed').slice(0, 6).reverse();
+      setBarScans(completed);
 
       setMetrics({ totalScans: total, openScans: open, success, failed });
       setVulnCounts(counts);
-      setRecentScans(data.slice(0, 5));
-      setTopIssues(sortedIssues);
-      setBarScans(completed);
+      setRecent(data.slice(0, 5));
+
+      const sortedTargets = Object.values(targetAgg)
+        .map((t) => ({
+          ...t,
+          blocked: (t.counts.high || 0) + (t.counts.critical || 0),
+        }))
+        .sort((a, b) => (b.blocked - a.blocked) || (b.total - a.total) || String(a.targetLabel).localeCompare(String(b.targetLabel)))
+        .slice(0, 5);
+      setTopTargets(sortedTargets);
     } catch {
       // ignore — backend may not be running
     }
@@ -155,13 +123,15 @@ export default function Dashboard() {
     return () => es.close();
   }, []);
 
-  const axisText = theme === 'dark' ? '#6b7280' : 'rgba(15, 23, 42, 0.55)';
-  const legendText = theme === 'dark' ? '#9ca3af' : 'rgba(15, 23, 42, 0.55)';
-  const gridColor = theme === 'dark' ? 'rgba(148, 163, 184, 0.15)' : 'rgba(15, 23, 42, 0.10)';
+  const barLabels = barScans.map((scan) => {
+    try {
+      return new URL(scan.targetUrl).hostname;
+    } catch {
+      return scan.targetUrl?.slice(0, 18) || scan._id?.slice(-6);
+    }
+  });
 
-  const barLabels = barScans.map((scan) => getTargetLabel(scan) || scan._id?.slice(-6));
-
-  const barData = useMemo(() => ({
+  const barData = {
     labels: barLabels.length ? barLabels : ['No data yet'],
     datasets: SEV_ORDER.map((sev) => ({
       label: sev.charAt(0).toUpperCase() + sev.slice(1),
@@ -169,25 +139,41 @@ export default function Dashboard() {
       data: barScans.length
         ? barScans.map((scan) =>
             (scan.results || []).filter(isRealFinding).filter(
-              (finding) => String(finding.severity || 'info').toLowerCase() === sev,
+              (finding) => (finding.severity || 'info').toLowerCase() === sev,
             ).length,
           )
         : [0],
     })),
-  }), [barLabels.join('|'), barScans]);
+  };
 
-  const barOptions = useMemo(() => ({
+  const axisText = theme === 'dark' ? '#6b7280' : 'rgba(15, 23, 42, 0.55)';
+  const legendText = theme === 'dark' ? '#9ca3af' : 'rgba(15, 23, 42, 0.55)';
+  const gridColor = theme === 'dark' ? 'rgba(148, 163, 184, 0.15)' : 'rgba(15, 23, 42, 0.10)';
+
+  const formatLocalDateTime = (value) => {
+    if (!value) return '—';
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return '—';
+    return new Intl.DateTimeFormat(undefined, {
+      month: 'short',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(d);
+  };
+
+  const barOptions = {
     responsive: true,
     plugins: { legend: { position: 'bottom', labels: { color: legendText, boxWidth: 12, padding: 16 } } },
     scales: {
       x: { stacked: false, ticks: { color: axisText }, grid: { color: gridColor } },
       y: { beginAtZero: true, ticks: { color: axisText, precision: 0 }, grid: { color: gridColor } },
     },
-  }), [axisText, legendText, gridColor]);
+  };
 
   const doughnutTotal = Object.values(vulnCounts).reduce((a, b) => a + b, 0);
 
-  const doughnutData = useMemo(() => ({
+  const doughnutData = {
     labels: ['Low', 'Medium', 'High', 'Critical', 'Info'],
     datasets: [{
       data: [vulnCounts.low, vulnCounts.medium, vulnCounts.high, vulnCounts.critical, vulnCounts.info],
@@ -195,15 +181,15 @@ export default function Dashboard() {
       borderWidth: 2,
       borderColor: '#111827',
     }],
-  }), [vulnCounts]);
+  };
 
-  const doughnutOptions = useMemo(() => ({
+  const doughnutOptions = {
     cutout: '65%',
     responsive: true,
     plugins: { legend: { position: 'bottom', labels: { color: legendText, boxWidth: 12, padding: 12 } } },
-  }), [legendText]);
+  };
 
-  const centreTextPlugin = useMemo(() => ({
+  const centreTextPlugin = {
     id: 'centreText',
     beforeDraw(chart) {
       const { ctx, chartArea } = chart;
@@ -221,23 +207,9 @@ export default function Dashboard() {
       ctx.fillText('findings', cx, cy + 12);
       ctx.restore();
     },
-  }), [theme, doughnutTotal, axisText]);
+  };
 
-  const recentFindings = useMemo(() =>
-    recentScans
-      .flatMap((scan) =>
-        (scan.results || [])
-          .filter(isRealFinding)
-          .slice(0, 3)
-          .map((finding) => ({
-            ...finding,
-            scanId: scan._id,
-            scanTarget: getTargetLabel(scan),
-            scanCreatedAt: scan.createdAt,
-          })),
-      )
-      .slice(0, 8),
-  [recentScans]);
+  
 
   return (
     <div className="space-y-6 p-1">
@@ -255,12 +227,7 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-4">
         <div className="rounded-xl border border-slate-800 bg-dark-200 p-5">
-          <div className="flex items-start justify-between gap-4 mb-4">
-            <div>
-              <h3 className="text-sm font-semibold text-gray-200">Findings per scan</h3>
-              <p className="text-xs text-gray-600 mt-1">Severity totals across your latest completed scans.</p>
-            </div>
-          </div>
+          <h3 className="text-sm font-semibold text-white mb-4">Findings per scan</h3>
           {barScans.length === 0 ? (
             <div className="h-48 flex items-center justify-center text-gray-600 text-sm">
               No completed scans yet.
@@ -271,11 +238,8 @@ export default function Dashboard() {
         </div>
 
         <div className="rounded-xl border border-slate-800 bg-dark-200 p-5 flex flex-col items-center min-w-[240px]">
-          <div className="w-full">
-            <h3 className="text-sm font-semibold text-gray-200">Severity breakdown</h3>
-            <p className="text-xs text-gray-600 mt-1">Across the last 10 scans.</p>
-          </div>
-          <div className="w-44 h-44 mt-4">
+          <h3 className="text-sm font-semibold text-white mb-4 self-start">Severity breakdown</h3>
+          <div className="w-44 h-44">
             <Doughnut data={doughnutData} options={doughnutOptions} plugins={[centreTextPlugin]} />
           </div>
         </div>
@@ -285,42 +249,44 @@ export default function Dashboard() {
         <div className="rounded-xl border border-slate-800 bg-dark-200 p-5">
           <div className="flex items-start justify-between gap-3 mb-4">
             <div>
-              <h3 className="text-sm font-semibold text-gray-200">Top issues</h3>
-              <p className="text-xs text-gray-600 mt-1">Most common findings from recent scans.</p>
+              <h3 className="text-sm font-semibold text-white">Targets to watch</h3>
+              <p className="text-xs text-gray-600 mt-1">Most high/critical findings in recent scans.</p>
             </div>
             <Link to="/scans" className="text-xs font-semibold text-primary-400 hover:text-primary-300 transition">
-              View scans →
+              View all →
             </Link>
           </div>
 
-          {topIssues.length === 0 ? (
+          {topTargets.length === 0 ? (
             <p className="text-sm text-gray-600">No findings yet.</p>
           ) : (
-            <ul className="space-y-2">
-              {topIssues.map((issue) => {
-                const sev = String(issue.maxSeverity || 'info').toLowerCase();
-                const color = SEV_COLORS[sev] || SEV_COLORS.info;
-
-                return (
-                  <li key={issue.title} className="flex items-center justify-between gap-3">
-                    <span className="text-sm text-gray-300 truncate">
-                      {displayFindingTitle(issue.title)}
-                    </span>
-
-                    <span className="flex items-center gap-2 shrink-0">
-                      <span
-                        className="text-[11px] px-2 py-0.5 rounded-full font-semibold border"
-                        style={{ backgroundColor: color + '15', color, borderColor: color + '40' }}
+            <ul className="space-y-3">
+              {topTargets.map((t) => (
+                <li key={t.targetLabel} className="rounded-lg border border-slate-800 bg-black/5 dark:bg-black/25 p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm text-gray-200 truncate">{t.targetLabel}</p>
+                      <p className="text-xs text-gray-600 mt-0.5">
+                        {t.blocked} high/critical • {t.total} total
+                      </p>
+                    </div>
+                    {t.latestScanId && t.latestStatus === 'completed' ? (
+                      <Link
+                        to={`/report/${t.latestScanId}`}
+                        className="text-xs font-semibold text-primary-400 hover:text-primary-300 transition shrink-0"
                       >
-                        {sev}
-                      </span>
-                      <span className="text-xs bg-black/5 dark:bg-slate-700/60 border border-slate-800 text-gray-600 dark:text-gray-300 px-2 py-0.5 rounded-full font-mono">
-                        ×{issue.count}
-                      </span>
-                    </span>
-                  </li>
-                );
-              })}
+                        Report →
+                      </Link>
+                    ) : (
+                      <span className="text-xs text-gray-600 shrink-0 capitalize">{t.latestStatus}</span>
+                    )}
+                  </div>
+
+                  <div className="mt-3">
+                    <SeverityMiniBarCounts counts={t.counts} />
+                  </div>
+                </li>
+              ))}
             </ul>
           )}
         </div>
@@ -328,47 +294,41 @@ export default function Dashboard() {
         <div className="rounded-xl border border-slate-800 bg-dark-200 p-5">
           <div className="flex items-start justify-between gap-3 mb-4">
             <div>
-              <h3 className="text-sm font-semibold text-gray-200">Recent findings</h3>
-              <p className="text-xs text-gray-600 mt-1">A quick look at the latest results.</p>
+              <h3 className="text-sm font-semibold text-white">Latest activity</h3>
+              <p className="text-xs text-gray-600 mt-1">Your most recent scans and their status.</p>
             </div>
-            <Link to="/changes" className="text-xs font-semibold text-primary-400 hover:text-primary-300 transition">
-              View changes →
+            <Link to="/new" className="text-xs font-semibold text-primary-400 hover:text-primary-300 transition">
+              New scan →
             </Link>
           </div>
 
-          {recentFindings.length === 0 ? (
-            <p className="text-sm text-gray-600">No findings yet. Start a scan to see results here.</p>
+          {recent.length === 0 ? (
+            <p className="text-sm text-gray-600">No scans yet. Start a scan to see activity here.</p>
           ) : (
             <ul className="divide-y divide-slate-800">
-              {recentFindings.map((finding, idx) => {
-                const sev = String(finding.severity || 'info').toLowerCase();
-                const color = SEV_COLORS[sev] || SEV_COLORS.info;
-                return (
-                  <li key={`${finding.scanId}:${idx}`} className="py-2.5 flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm text-gray-200 truncate">{displayFindingTitle(finding.title)}</p>
-                      <p className="text-xs text-gray-600 truncate mt-0.5">
-                        {finding.scanTarget} • {formatLocalDateTime(finding.scanCreatedAt)}
-                      </p>
-                    </div>
+              {recent.map((scan) => (
+                <li key={scan._id} className="py-3 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm text-gray-200 truncate">{getTargetLabel(scan) || scan.targetUrl}</p>
+                    <p className="text-xs text-gray-600 mt-0.5 truncate">
+                      {formatLocalDateTime(scan.createdAt)}
+                      {scan.status === 'running' || scan.status === 'queued' ? ` • ${scan.progress ?? 0}%` : ''}
+                    </p>
+                  </div>
 
-                    <span className="flex items-center gap-2 shrink-0">
-                      <span
-                        className="text-xs px-2 py-0.5 rounded-full font-medium"
-                        style={{ backgroundColor: color + '25', color }}
-                      >
-                        {sev}
-                      </span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <StatusPill status={scan.status} />
+                    {scan.status === 'completed' ? (
                       <Link
-                        to={`/report/${finding.scanId}`}
+                        to={`/report/${scan._id}`}
                         className="text-xs font-semibold text-primary-400 hover:text-primary-300 transition"
                       >
                         View →
                       </Link>
-                    </span>
-                  </li>
-                );
-              })}
+                    ) : null}
+                  </div>
+                </li>
+              ))}
             </ul>
           )}
         </div>
@@ -379,7 +339,7 @@ export default function Dashboard() {
 
 function MetricCard({ label, value, color, icon }) {
   return (
-    <div className="rounded-xl border border-slate-800 bg-dark-200 p-4 flex items-center gap-4 shadow-soft">
+    <div className="rounded-xl border border-slate-800 bg-dark-200 p-4 flex items-center gap-4">
       <div className={`w-10 h-10 rounded-lg bg-black/5 dark:bg-slate-800 flex items-center justify-center ${color} shrink-0`}>
         {icon}
       </div>
@@ -420,5 +380,66 @@ function XIcon() {
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
     </svg>
+  );
+}
+
+function getTargetLabel(scan) {
+  if (!scan) return '';
+
+  if (scan.targetHost) return scan.targetHost;
+
+  try {
+    return new URL(scan.targetUrl).hostname;
+  } catch {
+    return '';
+  }
+}
+
+function SeverityMiniBarCounts({ counts }) {
+  const c = counts || { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
+  const total = Object.values(c).reduce((a, b) => a + b, 0);
+
+  if (!total) {
+    return (
+      <div className="h-1.5 rounded-full bg-slate-800 overflow-hidden" title="No findings">
+        <div className="h-full w-full bg-emerald-500/40" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-1.5 rounded-full bg-slate-800 overflow-hidden flex" title="Severity breakdown">
+      {SEV_ORDER.map((sev) => {
+        const n = c[sev] || 0;
+        if (!n) return null;
+        return (
+          <div
+            key={sev}
+            className="h-full"
+            style={{ width: `${(n / total) * 100}%`, backgroundColor: SEV_COLORS[sev] }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function StatusPill({ status }) {
+  const s = (status || 'unknown').toLowerCase();
+  const style =
+    s === 'completed'
+      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+      : s === 'running'
+        ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+        : s === 'queued' || s === 'scheduled'
+          ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+          : s === 'failed'
+            ? 'bg-red-500/10 text-red-400 border-red-500/20'
+            : 'bg-slate-500/10 text-gray-400 border-slate-800';
+
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border capitalize ${style}`}>
+      {s}
+    </span>
   );
 }

@@ -8,7 +8,6 @@ const userSchema = new mongoose.Schema({
   email: { type: String, required: false, default: undefined, trim: true, lowercase: true },
   emailAlertsEnabled: { type: Boolean, default: false },
   passwordHash: { type: String, required: true },
-  name: { type: String, required: false, default: '' },
   roles: { type: [String], default: ['user'] },
 }, { timestamps: true });
 

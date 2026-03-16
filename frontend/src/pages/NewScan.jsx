@@ -147,7 +147,7 @@ export default function NewScan() {
         </div>
 
         <div className="bg-dark-200 rounded-xl border border-slate-800 p-6 shadow-soft">
-         <<h2 className="text-lg font-semibold text-primary-400 mb-4">Scan profile</h2>
+          <h2 className="text-lg font-semibold text-primary-400 mb-4">Scan profile</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {Object.entries(SCAN_PROFILES).map(([key, profileData]) => (
               <div
@@ -187,7 +187,7 @@ export default function NewScan() {
                   className={
                     'flex items-start gap-3 p-3 border rounded-lg cursor-pointer transition ' +
                     (customModules.includes(module.id)
-                      ? 'border-primary-500 bg-primary-900/20'
+                      ? 'border-primary-500'
                       : 'border-slate-700 hover:border-slate-500')
                   }
                 >
@@ -218,7 +218,7 @@ export default function NewScan() {
         )}
 
         <div className="bg-dark-200 rounded-xl border border-slate-800 p-6 shadow-soft">
-         <<div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="text-lg font-semibold text-primary-400">Schedule</h2>
               <p className="text-sm text-gray-500 mt-1">
