@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import axios from "axios";
 import { Link, useNavigate } from "react-router-dom";
+import AuthBackground from "../components/ui/AuthBackground.jsx";
 
 export default function Register({ onRegister }) {
   const navigate = useNavigate();
@@ -57,7 +58,10 @@ export default function Register({ onRegister }) {
   };
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center px-4 py-8">
+    <AuthBackground
+      variant="secondary"
+      className="min-h-[calc(100vh-4rem)] flex items-center justify-center px-4 py-8"
+    >
       <div className="w-full max-w-md">
         <div className="bg-dark-200 border border-slate-800 rounded-lg shadow-soft p-8">
           <div className="text-center mb-8">
@@ -227,6 +231,6 @@ export default function Register({ onRegister }) {
           </p>
         </div>
       </div>
-    </div>
+    </AuthBackground>
   );
 }
