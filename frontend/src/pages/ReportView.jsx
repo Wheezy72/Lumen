@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Link, useParams } from 'react-router-dom';
 import AnimatedProgressBar from '../components/ui/AnimatedProgressBar.jsx';
@@ -197,16 +197,13 @@ export default function ReportView() {
     return 0;
   };
 
-  const topFindings = useMemo(() => {
-    return [...findings]
-      .sort((a, b) => {
-        const d = sevRank(b.severity) - sevRank(a.severity);
-        if (d) return d;
-        return String(a.title || '').localeCompare(String(b.title || ''));
-      })
-      .slice(0, 3);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [findings.length]);
+  const topFindings = [...findings]
+    .sort((a, b) => {
+      const d = sevRank(b.severity) - sevRank(a.severity);
+      if (d) return d;
+      return String(a.title || '').localeCompare(String(b.title || ''));
+    })
+    .slice(0, 3);
 
   const categories = Array.from(
     new Set(findings.map((f) => (f.category || 'other').toLowerCase())),
