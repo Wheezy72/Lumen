@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Bar, Doughnut } from 'react-chartjs-2';
+import { Link } from 'react-router-dom';
 import { useTheme } from '../theme/ThemeProvider.jsx';
 import {
   Chart,
@@ -23,25 +24,7 @@ const SEV_COLORS = {
   info: '#6b7280',
 };
 
-const HEADER_HINTS = {
-  'X-Frame-Options': 'Clickjacking protection',
-  'X-Content-Type-Options': 'MIME sniffing protection',
-  'Referrer-Policy': 'Referrer privacy',
-  'Strict-Transport-Security': 'HTTPS enforcement',
-  'Content-Security-Policy': 'Content restrictions',
-};
 
-function displayFindingTitle(title) {
-  const raw = String(title || '');
-  const match = raw.match(/^Missing security header:\s*(.+)$/i);
-  if (!match) return raw;
-
-  const header = match[1].trim();
-  const label = HEADER_HINTS[header];
-  if (label) return `Missing ${label} header (${header})`;
-
-  return `Missing browser security header (${header})`;
-}
 
 function isRealFinding(finding) {
   if (!finding || !finding.title) return false;
@@ -61,7 +44,7 @@ export default function Dashboard() {
   const [metrics, setMetrics] = useState({ totalScans: 0, openScans: 0, success: 0, failed: 0 });
   const [vulnCounts, setVulnCounts] = useState({ low: 0, medium: 0, high: 0, critical: 0, info: 0 });
   const [recent, setRecent] = useState([]);
-  const [topVulns, setTopVulns] = useState([]);
+  const [topTargets, setTopTargets] = useState([]);
   const [barScans, setBarScans] = useState([]);
 
   const fetchData = async () => {
@@ -73,14 +56,37 @@ export default function Dashboard() {
       const failed = data.filter((scan) => scan.status === 'failed').length;
 
       const counts = { low: 0, medium: 0, high: 0, critical: 0, info: 0 };
-      const titleCounts = {};
+      const targetAgg = {};
 
-      data.slice(0, 10).forEach((scan) => {
-        (scan.results || []).filter(isRealFinding).forEach((finding) => {
+      data.slice(0, 20).forEach((scan) => {
+        const findings = (scan.results || []).filter(isRealFinding);
+        if (!findings.length) return;
+
+        findings.forEach((finding) => {
           const sev = (finding.severity || 'info').toLowerCase();
           if (counts[sev] !== undefined) counts[sev] += 1;
-          titleCounts[finding.title] = (titleCounts[finding.title] || 0) + 1;
         });
+
+        const targetLabel = getTargetLabel(scan);
+        if (!targetLabel) return;
+
+        if (!targetAgg[targetLabel]) {
+          targetAgg[targetLabel] = {
+            targetLabel,
+            counts: { critical: 0, high: 0, medium: 0, low: 0, info: 0 },
+            total: 0,
+            latestScanId: scan._id,
+            latestStatus: scan.status,
+            latestCreatedAt: scan.createdAt,
+          };
+        }
+
+        const entry = targetAgg[targetLabel];
+        findings.forEach((f) => {
+          const sev = (f.severity || 'info').toLowerCase();
+          if (entry.counts[sev] !== undefined) entry.counts[sev] += 1;
+        });
+        entry.total += findings.length;
       });
 
       const completed = data.filter((scan) => scan.status === 'completed').slice(0, 6).reverse();
@@ -90,10 +96,14 @@ export default function Dashboard() {
       setVulnCounts(counts);
       setRecent(data.slice(0, 5));
 
-      const sorted = Object.entries(titleCounts)
-        .sort((a, b) => b[1] - a[1])
+      const sortedTargets = Object.values(targetAgg)
+        .map((t) => ({
+          ...t,
+          blocked: (t.counts.high || 0) + (t.counts.critical || 0),
+        }))
+        .sort((a, b) => (b.blocked - a.blocked) || (b.total - a.total) || String(a.targetLabel).localeCompare(String(b.targetLabel)))
         .slice(0, 5);
-      setTopVulns(sorted);
+      setTopTargets(sortedTargets);
     } catch {
       // ignore — backend may not be running
     }
@@ -139,6 +149,18 @@ export default function Dashboard() {
   const axisText = theme === 'dark' ? '#6b7280' : 'rgba(15, 23, 42, 0.55)';
   const legendText = theme === 'dark' ? '#9ca3af' : 'rgba(15, 23, 42, 0.55)';
   const gridColor = theme === 'dark' ? 'rgba(148, 163, 184, 0.15)' : 'rgba(15, 23, 42, 0.10)';
+
+  const formatLocalDateTime = (value) => {
+    if (!value) return '—';
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return '—';
+    return new Intl.DateTimeFormat(undefined, {
+      month: 'short',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(d);
+  };
 
   const barOptions = {
     responsive: true,
@@ -187,12 +209,7 @@ export default function Dashboard() {
     },
   };
 
-  const recentFindings = recent.flatMap((scan) =>
-    (scan.results || []).filter(isRealFinding).slice(0, 3).map((finding) => ({
-      ...finding,
-      scanTarget: scan.targetUrl,
-    })),
-  ).slice(0, 8);
+  
 
   return (
     <div className="space-y-6 p-1">
@@ -230,17 +247,44 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="rounded-xl border border-slate-800 bg-dark-200 p-5">
-          <h3 className="text-sm font-semibold text-white mb-4">Top issues</h3>
-          {topVulns.length === 0 ? (
+          <div className="flex items-start justify-between gap-3 mb-4">
+            <div>
+              <h3 className="text-sm font-semibold text-white">Targets to watch</h3>
+              <p className="text-xs text-gray-600 mt-1">Most high/critical findings in recent scans.</p>
+            </div>
+            <Link to="/scans" className="text-xs font-semibold text-primary-400 hover:text-primary-300 transition">
+              View all →
+            </Link>
+          </div>
+
+          {topTargets.length === 0 ? (
             <p className="text-sm text-gray-600">No findings yet.</p>
           ) : (
-            <ul className="space-y-2">
-              {topVulns.map(([title, count]) => (
-                <li key={title} className="flex items-center justify-between text-sm">
-                  <span className="text-gray-300 truncate mr-3">{displayFindingTitle(title)}</span>
-                  <span className="shrink-0 text-xs bg-black/5 dark:bg-slate-700/60 border border-slate-800 text-gray-600 dark:text-gray-300 px-2 py-0.5 rounded-full font-mono">
-                    ×{count}
-                  </span>
+            <ul className="space-y-3">
+              {topTargets.map((t) => (
+                <li key={t.targetLabel} className="rounded-lg border border-slate-800 bg-black/5 dark:bg-black/25 p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm text-gray-200 truncate">{t.targetLabel}</p>
+                      <p className="text-xs text-gray-600 mt-0.5">
+                        {t.blocked} high/critical • {t.total} total
+                      </p>
+                    </div>
+                    {t.latestScanId && t.latestStatus === 'completed' ? (
+                      <Link
+                        to={`/report/${t.latestScanId}`}
+                        className="text-xs font-semibold text-primary-400 hover:text-primary-300 transition shrink-0"
+                      >
+                        Report →
+                      </Link>
+                    ) : (
+                      <span className="text-xs text-gray-600 shrink-0 capitalize">{t.latestStatus}</span>
+                    )}
+                  </div>
+
+                  <div className="mt-3">
+                    <SeverityMiniBarCounts counts={t.counts} />
+                  </div>
                 </li>
               ))}
             </ul>
@@ -248,29 +292,43 @@ export default function Dashboard() {
         </div>
 
         <div className="rounded-xl border border-slate-800 bg-dark-200 p-5">
-          <h3 className="text-sm font-semibold text-white mb-4">Recent findings</h3>
-          {recentFindings.length === 0 ? (
-            <p className="text-sm text-gray-600">No findings yet. Start a scan to see results here.</p>
+          <div className="flex items-start justify-between gap-3 mb-4">
+            <div>
+              <h3 className="text-sm font-semibold text-white">Latest activity</h3>
+              <p className="text-xs text-gray-600 mt-1">Your most recent scans and their status.</p>
+            </div>
+            <Link to="/new" className="text-xs font-semibold text-primary-400 hover:text-primary-300 transition">
+              New scan →
+            </Link>
+          </div>
+
+          {recent.length === 0 ? (
+            <p className="text-sm text-gray-600">No scans yet. Start a scan to see activity here.</p>
           ) : (
             <ul className="divide-y divide-slate-800">
-              {recentFindings.map((finding, idx) => {
-                const sev = (finding.severity || 'info').toLowerCase();
-                const color = SEV_COLORS[sev] || SEV_COLORS.info;
-                return (
-                  <li key={idx} className="py-2.5 flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm text-gray-200 truncate">{displayFindingTitle(finding.title)}</p>
-                      <p className="text-xs text-gray-600 truncate mt-0.5">{finding.scanTarget}</p>
-                    </div>
-                    <span
-                      className="shrink-0 text-xs px-2 py-0.5 rounded-full font-medium mt-0.5"
-                      style={{ backgroundColor: color + '25', color }}
-                    >
-                      {sev}
-                    </span>
-                  </li>
-                );
-              })}
+              {recent.map((scan) => (
+                <li key={scan._id} className="py-3 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm text-gray-200 truncate">{getTargetLabel(scan) || scan.targetUrl}</p>
+                    <p className="text-xs text-gray-600 mt-0.5 truncate">
+                      {formatLocalDateTime(scan.createdAt)}
+                      {scan.status === 'running' || scan.status === 'queued' ? ` • ${scan.progress ?? 0}%` : ''}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <StatusPill status={scan.status} />
+                    {scan.status === 'completed' ? (
+                      <Link
+                        to={`/report/${scan._id}`}
+                        className="text-xs font-semibold text-primary-400 hover:text-primary-300 transition"
+                      >
+                        View →
+                      </Link>
+                    ) : null}
+                  </div>
+                </li>
+              ))}
             </ul>
           )}
         </div>
@@ -322,5 +380,66 @@ function XIcon() {
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
     </svg>
+  );
+}
+
+function getTargetLabel(scan) {
+  if (!scan) return '';
+
+  if (scan.targetHost) return scan.targetHost;
+
+  try {
+    return new URL(scan.targetUrl).hostname;
+  } catch {
+    return '';
+  }
+}
+
+function SeverityMiniBarCounts({ counts }) {
+  const c = counts || { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
+  const total = Object.values(c).reduce((a, b) => a + b, 0);
+
+  if (!total) {
+    return (
+      <div className="h-1.5 rounded-full bg-slate-800 overflow-hidden" title="No findings">
+        <div className="h-full w-full bg-emerald-500/40" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-1.5 rounded-full bg-slate-800 overflow-hidden flex" title="Severity breakdown">
+      {SEV_ORDER.map((sev) => {
+        const n = c[sev] || 0;
+        if (!n) return null;
+        return (
+          <div
+            key={sev}
+            className="h-full"
+            style={{ width: `${(n / total) * 100}%`, backgroundColor: SEV_COLORS[sev] }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function StatusPill({ status }) {
+  const s = (status || 'unknown').toLowerCase();
+  const style =
+    s === 'completed'
+      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+      : s === 'running'
+        ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+        : s === 'queued' || s === 'scheduled'
+          ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+          : s === 'failed'
+            ? 'bg-red-500/10 text-red-400 border-red-500/20'
+            : 'bg-slate-500/10 text-gray-400 border-slate-800';
+
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border capitalize ${style}`}>
+      {s}
+    </span>
   );
 }
