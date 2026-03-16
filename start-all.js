@@ -5,17 +5,24 @@ import fs from 'node:fs';
 
 const rootDir = path.resolve(process.cwd());
 
+const args = process.argv.slice(2);
+const withBackendWorker = args.includes('--with-backend-worker');
+
 const services = [
   {
     name: 'backend-api',
     cwd: path.join(rootDir, 'backend'),
     cmd: 'npm run dev',
   },
-  {
-    name: 'backend-worker',
-    cwd: path.join(rootDir, 'backend'),
-    cmd: 'npm run worker',
-  },
+  ...(withBackendWorker
+    ? [
+        {
+          name: 'backend-worker',
+          cwd: path.join(rootDir, 'backend'),
+          cmd: 'npm run worker',
+        },
+      ]
+    : []),
   {
     name: 'python-worker',
     cwd: path.join(rootDir, 'python'),

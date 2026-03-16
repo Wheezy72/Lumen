@@ -112,6 +112,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/users', authMiddleware, userRouter);
 app.use('/api/scans', authMiddleware, scanRouter);
 app.use('/api/reports', authMiddleware, reportRouter);
+app.use('/api/v1', authMiddleware, v1Router);
 app.use('/api/sse', sseRouter);
 
 app.get('/health', (req, res) => {
