@@ -145,10 +145,27 @@ function headerHintForTitle(title = '') {
   };
 }
 
+function rewriteGenericTitle(vuln = {}) {
+  const title = String(vuln.title || '');
+  const category = String(vuln.category || '').toLowerCase();
+
+  if (category === 'rate_limit' && /no obvious rate limiting/i.test(title)) return 'No rate limiting detected';
+  if (category === 'cookies' && /cookies missing security flags/i.test(title)) return 'Cookie security flags missing';
+  if (category === 'sqli' && /potential sql injection/i.test(title)) return 'Possible SQL injection';
+  if (category === 'xss' && /reflected xss/i.test(title)) return 'Possible reflected XSS';
+  if (category === 'traversal' && /directory traversal/i.test(title)) return 'Possible path traversal';
+  if (category === 'subdomain' && /^Subdomain found:/i.test(title)) return title.replace(/^Subdomain found:/i, 'Public subdomain found:');
+  if (category === 'ssl' && /handshake error/i.test(title)) return 'TLS/SSL connection problem';
+
+  return title;
+}
+
 function displayFindingTitle(vuln = {}) {
   const hint = headerHintForTitle(vuln.title);
-  if (!hint) return vuln.title || 'Untitled';
-  return `Missing ${hint.label} header (${hint.header})`;
+  if (hint) return `Missing ${hint.label} header (${hint.header})`;
+
+  const rewritten = rewriteGenericTitle(vuln);
+  return rewritten || 'Untitled';
 }
 
 // Serve: GET /api/reports/file/:name (sets content-disposition)
@@ -185,7 +202,11 @@ router.post('/pdf', async (req, res, next) => {
 
     const headerY = doc.y;
     doc.rect(0, headerY, doc.page.width, 92).fill('#0b1220');
-    doc.fillColor('#ffffff');
+    doc.rect(0, headerY + 90, doc.page.width / 2, 2).fill('#2563eb');
+    doc.rect(doc.page.width / 2, headerY + 90, doc.page.width / 2, 2).fill('#10b981');
+    doc.fillColor('#ffffff'); = doc.y;
+    doc.rect(0, headerY, doc.page.width, 92).fill('#0b1220');
+    doc.rect(0, headerY + 90, doc.page.width /
 
     let logoWidth = 0;
     try {
@@ -284,27 +305,56 @@ router.post('/pdf', async (req, res, next) => {
 
     results.forEach((v, idx) => {
       const headerHint = headerHintForTitle(v.title);
+      const friendlyTitle = displayFindingTitle(v);
+      const technicalTitle = String(v.title || '');
+      const severity = (v.severity || 'low').toUpperCase();
 
-      doc.moveDown(0.4);
-      doc.fillColor(sevColor(v.severity)).fontSize(12)
-        .text(`${idx + 1}. ${displayFindingTitle(v)}  [${(v.severity || 'low').toUpperCase()}]`);
-      doc.fillColor('#374151').fontSize(10);
-      if (v.cve) doc.text(`CVE: ${v.cve}`);
-      if (typeof v.epss !== 'undefined') doc.text(`EPSS: ${v.epss}`);
-      if (v.description) doc.text(v.description);
-      if (headerHint) doc.text(`What it means: ${headerHint.meaning}`);
-      if (v.evidence) doc.text(`Evidence: ${v.evidence}`);
-      doc.text(`Category: ${v.category || 'general'}`);
+      doc.moveDown(0.6);
+
+      doc.font('Helvetica-Bold').fillColor('#111827').fontSize(12)
+        .text(`${idx + 1}. ${friendlyTitle}`);
+      doc.font('Helvetica-Bold').fillColor(sevColor(v.severity)).fontSize(10)
+        .text(severity, { align: 'right' });
+
+      if (technicalTitle && technicalTitle !== friendlyTitle) {
+        doc.font('Helvetica').fillColor('#6b7280').fontSize(9)
+          .text(`Technical: ${technicalTitle}`);
+      }
+
+      const metaParts = [];
+      if (v.category) metaParts.push(`Category: ${String(v.category).replace(/_/g, ' ')}`);
+      if (v.cve) metaParts.push(`CVE: ${v.cve}`);
+      if (typeof v.epss !== 'undefined') metaParts.push(`EPSS: ${v.epss}`);
+
+      if (metaParts.length) {
+        doc.font('Helvetica').fillColor('#374151').fontSize(10).text(metaParts.join(' • '));
+      }
+
+      if (v.description) {
+        doc.moveDown(0.2);
+        doc.font('Helvetica').fillColor('#374151').fontSize(10).text(v.description);
+      }
+
+      if (headerHint) {
+        doc.moveDown(0.15);
+        doc.font('Helvetica').fillColor('#374151').fontSize(10).text(`What it means: ${headerHint.meaning}`);
+      }
+
+      if (v.evidence) {
+        doc.moveDown(0.2);
+        doc.font('Helvetica-Bold').fillColor('#111827').fontSize(10).text('Evidence');
+        doc.font('Helvetica').fillColor('#374151').fontSize(9).text(v.evidence, { indent: 12 });
+      }
 
       doc.moveDown(0.2);
-      doc.font('Helvetica-Bold').fillColor('#111827').text('Detection method');
-      doc.font('Helvetica').fillColor('#374151').text(describeDetection(v));
+      doc.font('Helvetica-Bold').fillColor('#111827').fontSize(10).text('Detection method');
+      doc.font('Helvetica').fillColor('#374151').fontSize(10).text(describeDetection(v));
 
       doc.moveDown(0.15);
-      doc.font('Helvetica-Bold').fillColor('#111827').text('How to reduce the risk');
-      doc.font('Helvetica').fillColor('#374151').text(mitigationAdvice(v));
+      doc.font('Helvetica-Bold').fillColor('#111827').fontSize(10).text('How to reduce the risk');
+      doc.font('Helvetica').fillColor('#374151').fontSize(10).text(mitigationAdvice(v));
 
-      doc.moveDown(0.2);
+      doc.moveDown(0.35);
       doc.strokeColor('#e5e7eb').moveTo(40, doc.y).lineTo(doc.page.width - 40, doc.y).stroke();
       doc.strokeColor('#000');
     });
