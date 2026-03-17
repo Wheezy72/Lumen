@@ -26,25 +26,7 @@ const SEV_COLORS = {
   info: '#6b7280',
 };
 
-const HEADER_HINTS = {
-  'X-Frame-Options': 'clickjacking protection',
-  'X-Content-Type-Options': 'MIME sniffing protection',
-  'Referrer-Policy': 'referrer privacy',
-  'Strict-Transport-Security': 'HTTPS enforcement',
-  'Content-Security-Policy': 'content restrictions',
-};
 
-function displayFindingTitle(title) {
-  const raw = String(title || '');
-  const match = raw.match(/^Missing security header:\s*(.+)$/i);
-  if (!match) return raw;
-
-  const header = match[1].trim();
-  const label = HEADER_HINTS[header];
-  if (label) return `Missing ${label} header (${header})`;
-
-  return `Missing browser security header (${header})`;
-}
 
 function isRealFinding(finding) {
   if (!finding || !finding.title) return false;
