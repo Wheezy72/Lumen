@@ -8,33 +8,6 @@ const rootDir = path.resolve(process.cwd());
 const args = process.argv.slice(2);
 const withBackendWorker = args.includes('--with-backend-worker');
 
-const services = [
-  {
-    name: 'backend-api',
-    cwd: path.join(rootDir, 'backend'),
-    cmd: 'npm run dev',
-  },
-  ...(withBackendWorker
-    ? [
-        {
-          name: 'backend-worker',
-          cwd: path.join(rootDir, 'backend'),
-          cmd: 'npm run worker',
-        },
-      ]
-    : []),
-  {
-    name: 'python-worker',
-    cwd: path.join(rootDir, 'python'),
-    cmd: `${process.env.PYTHON || 'python'} worker.py`,
-  },
-  {
-    name: 'frontend',
-    cwd: path.join(rootDir, 'frontend'),
-    cmd: 'npm run dev',
-  },
-];
-
 const children = [];
 
 const ensureDir = (dir) => {
@@ -44,11 +17,9 @@ const ensureDir = (dir) => {
   }
 };
 
-for (const svc of services) {
-  ensureDir(svc.cwd);
-}
-
 const startService = (svc) => {
+  ensureDir(svc.cwd);
+
   console.log(`[start-all] starting ${svc.name}: ${svc.cmd} (cwd: ${path.relative(rootDir, svc.cwd) || '.'})`);
 
   const child = spawn(svc.cmd, {
@@ -78,8 +49,6 @@ const startService = (svc) => {
   children.push({ name: svc.name, child });
 };
 
-for (const svc of services) startService(svc);
-
 const shutdown = (reason) => {
   console.log(`[start-all] shutting down (${reason})`);
 
@@ -104,4 +73,69 @@ const shutdown = (reason) => {
 process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 
-console.log('[start-all] running. Press Ctrl+C to stop all services.');
+const waitForBackend = async ({ url, timeoutMs = 30000, intervalMs = 500 }) => {
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 800);
+
+      const res = await fetch(url, { signal: controller.signal });
+      clearTimeout(timer);
+
+      if (res.ok || res.status) return true;
+    } catch {
+      // ignore
+    }
+
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+
+  return false;
+};
+
+const main = async () => {
+  // Start backend first so Vite proxy doesn't spam ECONNREFUSED.
+  startService({
+    name: 'backend-api',
+    cwd: path.join(rootDir, 'backend'),
+    cmd: 'npm run dev',
+  });
+
+  if (withBackendWorker) {
+    startService({
+      name: 'backend-worker',
+      cwd: path.join(rootDir, 'backend'),
+      cmd: 'npm run worker',
+    });
+  }
+
+  startService({
+    name: 'python-worker',
+    cwd: path.join(rootDir, 'python'),
+    cmd: `${process.env.PYTHON || 'python'} worker.py`,
+  });
+
+  const backendHealthUrl = process.env.START_ALL_BACKEND_HEALTH_URL || 'http://127.0.0.1:4000/health';
+  const ok = await waitForBackend({ url: backendHealthUrl, timeoutMs: 30000 });
+
+  if (!ok) {
+    console.log(`[start-all] backend not reachable at ${backendHealthUrl} yet (starting frontend anyway)`);
+  } else {
+    console.log(`[start-all] backend reachable (${backendHealthUrl})`);
+  }
+
+  startService({
+    name: 'frontend',
+    cwd: path.join(rootDir, 'frontend'),
+    cmd: 'npm run dev',
+  });
+
+  console.log('[start-all] running. Press Ctrl+C to stop all services.');
+};
+
+main().catch((err) => {
+  console.error(`[start-all] failed to start: ${err.message}`);
+  shutdown('startup failure');
+});
