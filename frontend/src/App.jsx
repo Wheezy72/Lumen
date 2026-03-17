@@ -74,13 +74,13 @@ export default function App() {
 
   return (
     <div className="min-h-screen app-shell text-white">
-      <header className="bg-dark-200 backdrop-blur-lg border-b border-slate-800 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          {isAuthRoute ? (
-            <div className="flex justify-end items-center h-16">
-              <ThemeToggleButton theme={theme} toggleTheme={toggleTheme} iconOnly />
-            </div>
-          ) : (
+      {isAuthRoute ? (
+        <div className="fixed top-5 right-5 z-50">
+          <ThemeToggleButton theme={theme} toggleTheme={toggleTheme} iconOnly />
+        </div>
+      ) : (
+        <header className="bg-dark-200 backdrop-blur-lg border-b border-slate-800 sticky top-0 z-50">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <>
               <div className="flex justify-between items-center h-16">
                 <Link to={user ? "/dashboard" : "/"} className="flex items-center space-x-3">
@@ -88,7 +88,7 @@ export default function App() {
                     <img src="/logo.jpg" alt="Logo" className="h-full w-full object-cover" />
                   </div>
                   <span className="text-xl font-bold bg-gradient-to-r from-primary-400 to-secondary-400 bg-clip-text text-transparent">
-                    Lumen Vulnerability Scanner
+                    Lumen
                   </span>
                 </Link>
 
@@ -233,11 +233,11 @@ export default function App() {
                 </div>
               )}
             </>
-          )}
-        </div>
-      </header>
+          </div>
+        </header>
+      )}
 
-      <main className={isAuthRoute ? "min-h-[calc(100vh-4rem)]" : "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8"}>
+      <main className={isAuthRoute ? "min-h-screen" : "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8"}>
         <div className="animate-fade-in">
           <Routes>
             <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <Landing />} />

@@ -199,6 +199,17 @@ svg.text-white {
   border-color: rgba(59, 130, 246, 0.55);
 }
 
+.input:-webkit-autofill,
+.input:-webkit-autofill:hover,
+.input:-webkit-autofill:focus,
+.input:-webkit-autofill:active {
+  -webkit-text-fill-color: var(--app-input-text);
+  caret-color: var(--app-input-text);
+  box-shadow: 0 0 0px 1000px var(--app-input-bg) inset;
+  border: 1px solid var(--app-input-border);
+  transition: background-color 9999s ease-out 0s;
+}
+
 
 
 /* Loading animations */

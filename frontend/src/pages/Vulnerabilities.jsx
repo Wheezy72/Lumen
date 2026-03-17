@@ -144,6 +144,14 @@ export default function Vulnerabilities() {
 
   const breaches = [
     {
+      name: 'Kenya Airways (2023)',
+      affected: 'Passenger and staff data',
+      type: 'Ransomware',
+      impact: 'Service disruption and data exposure',
+      description:
+        'Kenya Airways reported a ransomware incident that disrupted services and led to a data breach impacting passenger and staff information.'
+    },
+    {
       name: 'Equifax (2017)',
       affected: '147M users',
       type: 'Injection & Unpatched Software',
@@ -158,14 +166,6 @@ export default function Vulnerabilities() {
       impact: 'Significant valuation impact',
       description:
         'Passwords and personal details were exposed at massive scale, and the breaches went undetected for a long period.'
-    },
-    {
-      name: 'Target (2013)',
-      affected: '40M payment cards',
-      type: 'Supply Chain & Network Intrusion',
-      impact: '$160M+ in direct costs',
-      description:
-        'Attackers compromised a third-party vendor and installed point-of-sale malware, capturing card data during peak shopping season.'
     }
   ];
 

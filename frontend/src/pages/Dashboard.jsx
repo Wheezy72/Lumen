@@ -3,6 +3,8 @@ import axios from 'axios';
 import { Bar, Doughnut } from 'react-chartjs-2';
 import { Link } from 'react-router-dom';
 import { useTheme } from '../theme/ThemeProvider.jsx';
+import { Card } from '../components/ui/Card.jsx';
+import { displayFindingTitle } from '../utils/findingTitle.js';
 import {
   Chart,
   ArcElement,
@@ -254,7 +256,7 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-4">
-        <div className="rounded-xl border border-slate-800 bg-dark-200 p-5">
+        <Card className="p-5">
           <div className="flex items-start justify-between gap-4 mb-4">
             <div>
               <h3 className="text-sm font-semibold text-gray-200">Findings per scan</h3>
@@ -268,9 +270,9 @@ export default function Dashboard() {
           ) : (
             <Bar data={barData} options={barOptions} />
           )}
-        </div>
+        </Card>
 
-        <div className="rounded-xl border border-slate-800 bg-dark-200 p-5 flex flex-col items-center min-w-[240px]">
+        <Card className="p-5 flex flex-col items-center min-w-[240px]">
           <div className="w-full">
             <h3 className="text-sm font-semibold text-gray-200">Severity breakdown</h3>
             <p className="text-xs text-gray-600 mt-1">Across the last 10 scans.</p>
@@ -278,11 +280,11 @@ export default function Dashboard() {
           <div className="w-44 h-44 mt-4">
             <Doughnut data={doughnutData} options={doughnutOptions} plugins={[centreTextPlugin]} />
           </div>
-        </div>
+        </Card>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="rounded-xl border border-slate-800 bg-dark-200 p-5">
+        <Card className="p-5">
           <div className="flex items-start justify-between gap-3 mb-4">
             <div>
               <h3 className="text-sm font-semibold text-gray-200">Top issues</h3>
@@ -323,9 +325,9 @@ export default function Dashboard() {
               })}
             </ul>
           )}
-        </div>
+        </Card>
 
-        <div className="rounded-xl border border-slate-800 bg-dark-200 p-5">
+        <Card className="p-5">
           <div className="flex items-start justify-between gap-3 mb-4">
             <div>
               <h3 className="text-sm font-semibold text-gray-200">Recent findings</h3>
@@ -346,7 +348,7 @@ export default function Dashboard() {
                 return (
                   <li key={`${finding.scanId}:${idx}`} className="py-2.5 flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="text-sm text-gray-200 truncate">{displayFindingTitle(finding.title)}</p>
+                      <p className="text-sm text-gray-200 truncate">{displayFindingTitle(finding)}</p>
                       <p className="text-xs text-gray-600 truncate mt-0.5">
                         {finding.scanTarget} • {formatLocalDateTime(finding.scanCreatedAt)}
                       </p>
@@ -371,7 +373,7 @@ export default function Dashboard() {
               })}
             </ul>
           )}
-        </div>
+        </Card>
       </div>
     </div>
   );

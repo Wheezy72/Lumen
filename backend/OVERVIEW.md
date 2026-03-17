@@ -33,7 +33,6 @@ This folder contains the Node/Express API that powers the UI.
   - Examples:
     - `email.js`: sends summary/failure emails when alerts are enabled
     - `scanDiff.js`: computes "new vs fixed" changes between scans
-    - `threatIntel.js`: enrichment helpers (CVEs/EPSS/etc)
 
 - `src/middleware/`
   - `auth.js`: verifies the JWT cookie/bearer token and sets `req.user`

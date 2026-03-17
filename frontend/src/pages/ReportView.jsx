@@ -3,6 +3,7 @@ import axios from 'axios';
 import { Link, useParams } from 'react-router-dom';
 import AnimatedProgressBar from '../components/ui/AnimatedProgressBar.jsx';
 import EmptyState from '../components/ui/EmptyState.jsx';
+import { displayFindingTitle, getHeaderHint } from '../utils/findingTitle.js';
 
 const SEV = {
   critical: { bg: 'bg-purple-500/15 text-purple-400 border border-purple-500/30', dot: 'bg-purple-400' },
@@ -287,7 +288,7 @@ export default function ReportView() {
               {topFindings.map((f, i) => (
                 <li key={i} className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-sm text-gray-200 truncate">{f.title}</p>
+                    <p className="text-sm text-gray-200 truncate">{displayFindingTitle(f)}</p>
                     <p className="text-xs text-gray-600 mt-0.5 capitalize">{(f.category || 'other').toLowerCase()}</p>
                   </div>
                   <SeverityBadge severity={(f.severity || 'info').toLowerCase()} />

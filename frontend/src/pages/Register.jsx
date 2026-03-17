@@ -63,7 +63,7 @@ import AuthBackground from "../components/ui/A</old_code><new_code>export defaul
   return (
     <AuthBackground
       variant="secondary"
-      className="min-h-[calc(100vh-4rem)] flex items-center justify-center px-4 py-8"
+      className="min-h-screen flex items-center justify-center px-4 py-8"
     >
       <div className="w-full max-w-md">
         <div className="bg-dark-200 border border-slate-800 rounded-lg shadow-soft p-8">
