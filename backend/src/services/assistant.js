@@ -1,91 +1,137 @@
-import { chatCompletion, isAiConfigured } from './ai.js';
-
 function safeText(value, maxLen) {
   const s = String(value || '').replace(/\s+/g, ' ').trim();
   if (s.length <= maxLen) return s;
   return s.slice(0, maxLen) + '…';
 }
 
-export function buildAssistantContext(scan, finding) {
-  const parts = [
-    `Target: ${safeText(scan?.targetUrl, 300)}`,
-    `Severity: ${safeText(finding?.severity, 30)}`,
-    `Category: ${safeText(finding?.category, 50)}`,
-    `Title: ${safeText(finding?.title, 300)}`,
-  ];
+const HEADER_HINTS = {
+  'X-Frame-Options': 'Stops other sites from embedding your pages (clickjacking defense).',
+  'X-Content-Type-Options': 'Prevents browsers from guessing file types (reduces some injection risks).',
+  'Referrer-Policy': 'Controls how much URL info is shared when users navigate away.',
+  'Strict-Transport-Security': 'Forces HTTPS (helps prevent downgrade attacks).',
+  'Content-Security-Policy': 'Restricts where scripts/styles can load from (reduces XSS impact).',
+};
 
-  if (finding?.description) parts.push(`Description: ${safeText(finding.description, 800)}`);
-  if (finding?.evidence) parts.push(`Evidence: ${safeText(finding.evidence, 800)}`);
-  if (finding?.cve) parts.push(`CVE: ${safeText(finding.cve, 40)}`);
-  if (typeof finding?.epss !== 'undefined') parts.push(`EPSS: ${safeText(finding.epss, 40)}`);
+function headerMeaningFromTitle(title = '') {
+  const raw = String(title || '');
+  const match = raw.match(/^Missing security header:\s*(.+)$/i);
+  if (!match) return null;
 
-  return parts.join('\n');
+  const header = match[1].trim();
+  const meaning = HEADER_HINTS[header];
+  if (!meaning) return null;
+
+  return { header, meaning };
 }
 
-export function fallbackAssistantAnswer(scan, finding, question) {
-  const title = safeText(finding?.title, 200) || 'Finding';
-  const category = String(finding?.category || '').toLowerCase();
-  const severity = String(finding?.severity || 'info').toUpperCase();
-
-  const baseline =
-    `(${severity}) ${title}\n\n` +
-    `What it means: This is an automated finding from the ${category || 'general'} checks.\n` +
-    `Why it matters: It may increase the risk of data exposure or account compromise if it is real.\n\n`;
+function remediationForCategory(category) {
+  const c = String(category || '').toLowerCase();
 
   const fixes = {
-    xss: 'Fix: HTML-encode untrusted output, validate input, and add a strict Content-Security-Policy. Verify by re-running the scan and confirming the payload is not reflected.',
-    sqli: 'Fix: Use parameterized queries/ORM, validate input, and remove error leakage. Verify by re-running the scan and confirming no SQL error behavior.',
-    headers: 'Fix: Add missing security headers (CSP, X-Frame-Options, HSTS, etc.) at your web server/reverse proxy. Verify by checking response headers in DevTools/curl.',
-    cookies: 'Fix: Set HttpOnly + Secure + SameSite on session cookies. Verify in the Set-Cookie header.',
-    traversal: 'Fix: Normalize paths, use allow-lists, and never map user input directly to filesystem paths. Verify traversal payloads do not access sensitive files.',
-    access_control: 'Fix: Enforce authorization checks server-side for every object/resource. Verify by attempting the same ID changes as the scanner.',
-    rate_limit: 'Fix: Add rate limiting / throttling to sensitive endpoints (login, password reset). Verify by sending bursts and expecting 429/Retry-After.',
-    ssl: 'Fix: Enable TLS 1.2+ only, use a valid certificate, and modern ciphers. Verify via browser/security scanner.',
-    tls: 'Fix: Enable TLS 1.2+ only, use a valid certificate, and modern ciphers. Verify via browser/security scanner.',
-    subdomain: 'Fix: Review the discovered subdomain; remove exposure or enforce auth. Verify via DNS and access controls.',
-    error: 'Fix: Disable verbose errors/stack traces in production; log server-side only. Verify by triggering errors and checking responses.',
+    xss: {
+      fix: 'Encode/escape untrusted output, validate input, and add a strict Content-Security-Policy.',
+      verify: 'Re-run the scan and confirm the injected payload is not reflected/executed.',
+    },
+    sqli: {
+      fix: 'Use parameterized queries/ORM and avoid string concatenation in SQL.',
+      verify: 'Re-run the scan and confirm the test payload no longer triggers SQL-like behavior/errors.',
+    },
+    headers: {
+      fix: 'Add missing security headers at your reverse proxy/web server (Helmet, Nginx, Apache, CDN).',
+      verify: 'Check response headers in DevTools or curl and confirm the headers are present.',
+    },
+    cookies: {
+      fix: 'Set session cookies with HttpOnly + Secure + SameSite, and avoid storing secrets in client-readable cookies.',
+      verify: 'Inspect Set-Cookie headers and confirm flags are present.',
+    },
+    traversal: {
+      fix: 'Never map user input directly to filesystem paths; normalize + allow-list paths.',
+      verify: 'Confirm traversal payloads no longer return sensitive files.',
+    },
+    subdomain: {
+      fix: 'Audit the discovered subdomain; remove exposure or add authentication / IP allow-listing.',
+      verify: 'Confirm the host is intended to be public and protected appropriately.',
+    },
+    error: {
+      fix: 'Disable verbose errors/stack traces in production; log details server-side only.',
+      verify: 'Trigger errors and confirm responses are generic.',
+    },
+    access_control: {
+      fix: 'Enforce authorization checks server-side for every object/resource (do not trust IDs from the client).',
+      verify: 'Try the same ID changes as the scan; access should be denied.',
+    },
+    rate_limit: {
+      fix: 'Add rate limiting/throttling to sensitive endpoints (login, password reset).',
+      verify: 'Send bursts of requests and confirm 429/Retry-After behavior.',
+    },
+    ssl: {
+      fix: 'Use TLS 1.2+ only, keep certificates valid, and use modern ciphers.',
+      verify: 'Re-run the scan and confirm TLS checks pass.',
+    },
+    tls: {
+      fix: 'Use TLS 1.2+ only, keep certificates valid, and use modern ciphers.',
+      verify: 'Re-run the scan and confirm TLS checks pass.',
+    },
   };
 
-  const fix = fixes[category] || 'Fix: Review the evidence, confirm the finding, then apply an appropriate code/config change. Verify by re-running the scan.';
-
-  if (!question) return baseline + fix;
-
-  return (
-    baseline +
-    fix +
-    `\n\nQuestion: ${safeText(question, 400)}\n` +
-    'Answer: AI is not configured on this server, so this is a best-effort built-in explanation. If you enable AI_API_KEY, I can answer in more detail.'
-  );
+  return fixes[c] || {
+    fix: 'Review the evidence, confirm the finding, then apply an appropriate code/config change.',
+    verify: 'Re-run the scan and confirm the finding is gone.',
+  };
 }
 
-export async function assistantChat({ scan, finding, messages }) {
-  const system =
-    'You are Lumen Assistant, a web application security helper. ' +
-    'Explain findings from automated scans for developers/students. ' +
-    'Be practical and concise. Provide: what it is, why it matters, how to fix, how to verify. ' +
-    'If evidence is weak, say so. Do not invent details.';
+export function localAssistantExplanation(scan, finding) {
+  const title = safeText(finding?.title, 200) || 'Finding';
+  const severity = String(finding?.severity || 'info').toUpperCase();
+  const category = String(finding?.category || 'other').toLowerCase();
 
-  const context = buildAssistantContext(scan, finding);
+  const headerMeaning = headerMeaningFromTitle(finding?.title);
+  const remediation = remediationForCategory(category);
 
-  if (!isAiConfigured()) {
-    const lastUser = [...messages].reverse().find((m) => m.role === 'user')?.content;
-    return {
-      usedAI: false,
-      assistant: { role: 'assistant', content: fallbackAssistantAnswer(scan, finding, lastUser) },
-    };
+  const lines = [];
+  lines.push(`${severity}: ${title}`);
+
+  lines.push('');
+  lines.push('What it means');
+  if (headerMeaning) {
+    lines.push(`- Missing header: ${headerMeaning.header}`);
+    lines.push(`- ${headerMeaning.meaning}`);
+  } else if (finding?.description) {
+    lines.push(`- ${safeText(finding.description, 700)}`);
+  } else {
+    lines.push(`- The scanner flagged a potential ${category.replace(/_/g, ' ')} issue.`);
   }
 
-  const assistantText = await chatCompletion(
-    [
-      { role: 'system', content: system },
-      { role: 'system', content: context },
-      ...messages.map((m) => ({ role: m.role, content: m.content })),
-    ],
-    { temperature: 0.2, maxTokens: 600 },
-  );
+  lines.push('');
+  lines.push('Why it matters');
+  lines.push('- If real, this can make the application easier to attack or harder to defend.');
 
+  lines.push('');
+  lines.push('How to fix');
+  lines.push(`- ${remediation.fix}`);
+
+  lines.push('');
+  lines.push('How to verify');
+  lines.push(`- ${remediation.verify}`);
+
+  if (finding?.evidence) {
+    lines.push('');
+    lines.push('Evidence (from the scan)');
+    lines.push(safeText(finding.evidence, 900));
+  }
+
+  const target = scan?.targetUrl ? safeText(scan.targetUrl, 300) : null;
+  if (target) {
+    lines.push('');
+    lines.push(`Target: ${target}`);
+  }
+
+  return lines.join('\n');
+}
+
+export async function assistantChat({ scan, finding }) {
   return {
-    usedAI: true,
-    assistant: { role: 'assistant', content: assistantText },
+    usedAI: false,
+    assistant: { role: 'assistant', content: localAssistantExplanation(scan, finding) },
   };
 }

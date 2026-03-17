@@ -27,35 +27,8 @@ router.post('/chat', async (req, res, next) => {
     const finding = results[findingIndex];
     if (!finding) return res.status(404).json({ error: 'Finding not found.' });
 
-    const system =
-      'You are Lumen Assistant, a web application security helper. ' +
-      'Explain findings from automated scans for developers/students. ' +
-      'Be practical and concise. Provide: what it is, why it matters, how to fix, how to verify. ' +
-      'If evidence is weak, say so. Do not invent details.';
-
-    const context = buildContext(scan, finding);
-
-    if (!isAiConfigured()) {
-      const lastUser = [...messages].reverse().find((m) => m.role === 'user')?.content;
-      return res.json({
-        usedAI: false,
-        assistant: { role: 'assistant', content: fallbackAnswer(scan, finding, lastUser) },
-      });
-    }
-
-    const assistantText = await chatCompletion(
-      [
-        { role: 'system', content: system },
-        { role: 'system', content: context },
-        ...messages.map((m) => ({ role: m.role, content: m.content })),
-      ],
-      { temperature: 0.2, maxTokens: 600 },
-    );
-
-    res.json({
-      usedAI: true,
-      assistant: { role: 'assistant', content: assistantText },
-    });
+    const result = await assistantChat({ scan, finding, messages });
+    res.json(result);
   } catch (err) {
     next(err);
   }
