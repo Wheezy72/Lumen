@@ -3,6 +3,7 @@ import axios from 'axios';
 import { Link, useParams } from 'react-router-dom';
 import AnimatedProgressBar from '../components/ui/AnimatedProgressBar.jsx';
 import EmptyState from '../components/ui/EmptyState.jsx';
+import Modal from '../components/ui/Modal.jsx';
 import { displayFindingTitle, getHeaderHint } from '../utils/findingTitle.js';
 
 const SEV = {
@@ -13,49 +14,7 @@ const SEV = {
   info:     { bg: 'bg-slate-500/15 text-slate-400 border border-slate-500/30',     dot: 'bg-slate-400' },
 };
 
-const HEADER_HINTS = {
-  'X-Frame-Options': {
-    label: 'clickjacking protection',
-    meaning: 'Helps stop other sites from embedding your pages inside hidden iframes (a common clickjacking trick).',
-  },
-  'X-Content-Type-Options': {
-    label: 'MIME sniffing protection',
-    meaning: 'Helps browsers avoid guessing file types in a way that can enable script injection in edge cases.',
-  },
-  'Referrer-Policy': {
-    label: 'referrer privacy',
-    meaning: 'Controls how much URL information is shared in the Referer header when users navigate away from your site.',
-  },
-  'Strict-Transport-Security': {
-    label: 'HTTPS enforcement',
-    meaning: 'Tells browsers to use HTTPS only for this site, helping prevent downgrade attacks.',
-  },
-  'Content-Security-Policy': {
-    label: 'script and content restrictions',
-    meaning: 'Limits where scripts/styles can load from, reducing the impact of XSS if a bug exists.',
-  },
-};
 
-function getHeaderHint(finding) {
-  const title = String(finding?.title || '');
-  const match = title.match(/^Missing security header:\s*(.+)$/i);
-  if (!match) return null;
-
-  const header = match[1].trim();
-  const info = HEADER_HINTS[header];
-
-  return {
-    header,
-    label: info?.label || 'browser security',
-    meaning: info?.meaning || 'A recommended browser security header was not present in the HTTP response.',
-  };
-}
-
-function displayFindingTitle(finding) {
-  const hint = getHeaderHint(finding);
-  if (!hint) return finding?.title;
-  return `Missing ${hint.label} header (${hint.header})`;
-}
 
 
 
@@ -72,6 +31,13 @@ export default function ReportView() {
 
   const [diffLoading, setDiffLoading] = useState(false);
   const [diffData, setDiffData] = useState(null);
+
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [assistantLoading, setAssistantLoading] = useState(false);
+  const [assistantError, setAssistantError] = useState('');
+  const [assistantUsedAI, setAssistantUsedAI] = useState(null);
+  const [assistantInput, setAssistantInput] = useState('');
+  const [assistantMessages, setAssistantMessages] = useState([]);
 
   const loadScan = async () => {
     try {
@@ -188,6 +154,7 @@ export default function ReportView() {
   }
 
   const findings = scan?.results || [];
+  const findingsWithIndex = findings.map((f, idx) => ({ ...f, __index: idx }));
 
   const sevRank = (sev) => {
     const s = (sev || 'info').toLowerCase();
@@ -198,7 +165,7 @@ export default function ReportView() {
     return 0;
   };
 
-  const topFindings = [...findings]
+  const topFindings = [...findingsWithIndex]
     .sort((a, b) => {
       const d = sevRank(b.severity) - sevRank(a.severity);
       if (d) return d;
@@ -207,10 +174,10 @@ export default function ReportView() {
     .slice(0, 3);
 
   const categories = Array.from(
-    new Set(findings.map((f) => (f.category || 'other').toLowerCase())),
+    new Set(findingsWithIndex.map((f) => (f.category || 'other').toLowerCase())),
   ).sort();
 
-  const filteredFindings = findings
+  const filteredFindings = findingsWithIndex
     .filter((f) => {
       const category = (f.category || 'other').toLowerCase();
       const sev = (f.severity || 'info').toLowerCase();
@@ -227,6 +194,7 @@ export default function ReportView() {
     });
 
   const selectedVuln = filteredFindings[selectedIndex];
+  const selectedFindingIndex = typeof selectedVuln?.__index === 'number' ? selectedVuln.__index : null;
 
   const sevCounts = findings.reduce((acc, f) => {
     const s = (f.severity || 'info').toLowerCase();
@@ -247,8 +215,68 @@ export default function ReportView() {
 
   const running = scan?.status === 'running' || scan?.status === 'queued' || scan?.status === 'scheduled';
 
+  const openAssistantForFinding = async (initialPrompt) => {
+    if (selectedFindingIndex === null) return;
+
+    setAssistantOpen(true);
+    setAssistantError('');
+    setAssistantUsedAI(null);
+
+    const seed = initialPrompt || 'Explain this finding in simple terms. Include what it means, why it matters, how to fix it, and how to verify the fix.';
+    const nextMessages = [{ role: 'user', content: seed }];
+
+    setAssistantMessages(nextMessages);
+    setAssistantInput('');
+
+    setAssistantLoading(true);
+    try {
+      const { data } = await axios.post('/api/ai/chat', {
+        scanId,
+        findingIndex: selectedFindingIndex,
+        messages: nextMessages,
+      });
+
+      setAssistantUsedAI(Boolean(data.usedAI));
+      setAssistantMessages([...nextMessages, data.assistant]);
+    } catch (e) {
+      const msg = e?.response?.data?.error || 'Failed to load assistant response.';
+      setAssistantError(msg);
+    } finally {
+      setAssistantLoading(false);
+    }
+  };
+
+  const sendAssistantMessage = async () => {
+    if (!assistantInput.trim() || selectedFindingIndex === null || assistantLoading) return;
+
+    const userMessage = { role: 'user', content: assistantInput.trim() };
+    const nextMessages = [...assistantMessages, userMessage].slice(-12);
+
+    setAssistantMessages(nextMessages);
+    setAssistantInput('');
+    setAssistantError('');
+
+    setAssistantLoading(true);
+    try {
+      const { data } = await axios.post('/api/ai/chat', {
+        scanId,
+        findingIndex: selectedFindingIndex,
+        messages: nextMessages,
+      });
+
+      setAssistantUsedAI(Boolean(data.usedAI));
+      setAssistantMessages([...nextMessages, data.assistant]);
+    } catch (e) {
+      const msg = e?.response?.data?.error || 'Failed to load assistant response.';
+      setAssistantError(msg);
+    } finally {
+      setAssistantLoading(false);
+    }
+  };
+
   return (
-    <div className="space-y-5">
+    <>
+      <div className="space-y-5">
       {/* ── Header ─────────────────────────────────────────────── */}
       <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
         <div>
@@ -482,7 +510,7 @@ export default function ReportView() {
                 const active = i === selectedIndex;
                 return (
                   <li
-                    key={i}
+                    key={typeof f.__index === 'number' ? f.__index : i}
                     onClick={() => setSelectedIndex(i)}
                     className={`p-3 rounded-lg cursor-pointer transition border ${
                       active
@@ -507,7 +535,17 @@ export default function ReportView() {
 
         {/* Detail panel */}
         <div className="lg:col-span-2 rounded-xl border border-slate-800 bg-dark-200 p-5">
-          <h2 className="font-semibold text-white mb-4 text-sm">Finding details</h2>
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <h2 className="font-semibold text-white text-sm">Finding details</h2>
+            <button
+              type="button"
+              onClick={() => openAssistantForFinding()}
+              disabled={!selectedVuln || selectedFindingIndex === null}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-800 bg-black/5 dark:bg-black/30 hover:bg-black/10 dark:hover:bg-black/50 transition disabled:opacity-50 disabled:cursor-not-allowed text-gray-200"
+            >
+              Ask Lumen
+            </button>
+          </div>
 
           {!selectedVuln ? (
             <div className="py-16 text-center text-gray-600 text-sm">Select a finding from the list.</div>
@@ -581,6 +619,80 @@ export default function ReportView() {
         </div>
       </div>
     </div>
+
+      <Modal
+        open={assistantOpen}
+        title="Lumen Assistant"
+        onClose={() => {
+          setAssistantOpen(false);
+          setAssistantError('');
+          setAssistantLoading(false);
+        }}
+        maxWidthClass="max-w-3xl"
+        footer={
+          <div className="flex items-end gap-2">
+            <textarea
+              rows={2}
+              value={assistantInput}
+              onChange={(e) => setAssistantInput(e.target.value)}
+              placeholder="Ask a follow-up question…"
+              className="flex-1 input input-plain resize-none"
+              disabled={assistantLoading}
+            />
+            <button
+              type="button"
+              onClick={sendAssistantMessage}
+              disabled={assistantLoading || !assistantInput.trim()}
+              className="px-4 py-2 rounded-lg text-sm font-semibold btn btn-primary disabled:opacity-50"
+            >
+              Send
+            </button>
+          </div>
+        }
+      >
+        {assistantUsedAI === false ? (
+          <div className="mb-3 text-xs text-gray-500">
+            AI is not configured on this server. Showing the built-in explanation.
+          </div>
+        ) : null}
+
+        {assistantError ? (
+          <div className="mb-3 p-3 rounded-lg border border-red-500/30 bg-red-900/20 text-red-400 text-sm">
+            {assistantError}
+          </div>
+        ) : null}
+
+        <div className="space-y-3 max-h-[55vh] overflow-y-auto pr-1">
+          {assistantMessages.map((m, idx) => (
+            <div
+              key={idx}
+              className={
+                m.role === 'assistant'
+                  ? 'rounded-lg border border-slate-800 bg-black/5 dark:bg-black/30 p-3 text-sm text-gray-200'
+                  : 'rounded-lg border border-primary-500/20 bg-primary-500/10 p-3 text-sm text-gray-200'
+              }
+            >
+              <div className="text-[11px] uppercase tracking-wide text-gray-500 mb-1">
+                {m.role === 'assistant' ? 'Assistant' : 'You'}
+              </div>
+              <div className="whitespace-pre-wrap leading-relaxed">{m.content}</div>
+            </div>
+          ))}
+
+          {assistantLoading ? (
+            <div className="rounded-lg border border-slate-800 bg-black/5 dark:bg-black/30 p-3 text-sm text-gray-400">
+              Thinking…
+            </div>
+          ) : null}
+
+          {!assistantLoading && assistantMessages.length === 0 ? (
+            <div className="text-sm text-gray-600">
+              Select a finding and click <span className="text-gray-300 font-semibold">Ask Lumen</span>.
+            </div>
+          ) : null}
+        </div>
+      </Modal>
+    </>
   );
 }
 

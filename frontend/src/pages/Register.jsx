@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import axios from "axios";
 import { Link, useNavigate } from "react-router-dom";
-import AuthBackground from "../components/ui/AuthBackground";
+import AuthBackground from "../components/ui/AuthBackground.jsx";
 
 export default function Register({ onRegister }) {
   const navigate = useNavigate();

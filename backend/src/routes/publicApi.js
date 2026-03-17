@@ -8,6 +8,8 @@ import PDFDocument from 'pdfkit';
 import Scan from '../models/Scan.js';
 import RecurringScan from '../models/RecurringScan.js';
 import { scanQueue } from '../queue/index.js';
+import { assistantChat } from '../services/assistant.js';
+import { displayFindingTitle } from '../services/findingTitle.js';
 
 const router = express.Router();
 
@@ -105,7 +107,7 @@ async function writePdfReport(scan, filePath) {
         .font('Helvetica-Bold')
         .fontSize(11)
         .fillColor('#111827')
-        .text(`${idx + 1}. [${String(v.severity || 'info').toUpperCase()}] ${v.title || 'Untitled'}`);
+        .text(`${idx + 1}. [${String(v.severity || 'info').toUpperCase()}] ${displayFindingTitle(v)}`);
 
       doc.font('Helvetica').fontSize(10).fillColor('#374151');
       if (v.category) doc.text(`Category: ${v.category}`);
@@ -136,6 +138,16 @@ const scheduleSchema = Joi.object({
   timezone: Joi.string().optional(),
   webhookUrl: Joi.string().uri({ allowRelative: false }).optional(),
   runNow: Joi.boolean().optional().default(false),
+});
+
+const messageSchema = Joi.object({
+  role: Joi.string().valid('user', 'assistant').required(),
+  content: Joi.string().min(1).max(2000).required(),
+});
+
+const publicChatSchema = Joi.object({
+  findingIndex: Joi.number().integer().min(0).required(),
+  messages: Joi.array().items(messageSchema).min(1).max(12).required(),
 });
 
 const ensureRecurringJob = async (recurring) => {
@@ -228,6 +240,25 @@ router.get('/scans/:id', async (req, res, next) => {
   }
 });
 
+// POST /api/publicApi/scans/:id/chat
+router.post('/scans/:id/chat', async (req, res, next) => {
+  try {
+    const { findingIndex, messages } = await publicChatSchema.validateAsync(req.body, { stripUnknown: true });
+
+    const scan = await Scan.findOne({ _id: req.params.id, ...publicOwnerQuery });
+    if (!scan) return res.status(404).json({ error: 'Scan not found' });
+
+    const results = Array.isArray(scan.results) ? scan.results : [];
+    const finding = results[findingIndex];
+    if (!finding) return res.status(404).json({ error: 'Finding not found' });
+
+    const result = await assistantChat({ scan, finding, messages });
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/publicApi/scans/:id/report
 router.get('/scans/:id/report', async (req, res, next) => {
   try {
@@ -242,8 +273,9 @@ router.get('/scans/:id/report', async (req, res, next) => {
       createdAt: scan.createdAt,
       startedAt: scan.startedAt,
       completedAt: scan.completedAt,
-      findings: scan.results || [],
+      findings: (scan.results || []).map((f) => ({ ...f, displayTitle: displayFindingTitle(f) })),
       reportPdfUrl: `/api/publicApi/scans/${scan._id.toString()}/report.pdf`,
+      reportCsvUrl: `/api/publicApi/scans/${scan._id.toString()}/report.csv`,
     });
   } catch (err) {
     next(err);
@@ -267,6 +299,55 @@ router.get('/scans/:id/report.pdf', async (req, res, next) => {
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
     res.sendFile(filePath);
+  } catch (err) {
+    next(err);
+  }
+});
+
+function escapeCsv(value) {
+  const raw = String(value ?? '');
+  if (raw.includes('"') || raw.includes(',') || raw.includes('\n') || raw.includes('\r')) {
+    return `"${raw.replace(/"/g, '""')}"`;
+  }
+  return raw;
+}
+
+// GET /api/publicApi/scans/:id/report.csv
+router.get('/scans/:id/report.csv', async (req, res, next) => {
+  try {
+    const scan = await Scan.findOne({ _id: req.params.id, ...publicOwnerQuery });
+    if (!scan) return res.status(404).json({ error: 'Scan not found' });
+
+    const host = (() => {
+      try {
+        return new URL(scan.targetUrl).hostname || 'site';
+      } catch {
+        return 'site';
+      }
+    })();
+
+    const fileName = `${sanitizeName(host)}_${scan._id.toString()}_findings.csv`;
+
+    const rows = Array.isArray(scan.results) ? scan.results : [];
+    const header = ['Title', 'TechnicalTitle', 'Category', 'Severity', 'EPSS', 'CVE', 'Description', 'Evidence'];
+
+    const csv = [
+      header.join(','),
+      ...rows.map((v) => [
+        escapeCsv(displayFindingTitle(v)),
+        escapeCsv(v.title || ''),
+        escapeCsv(v.category || ''),
+        escapeCsv(v.severity || ''),
+        escapeCsv(typeof v.epss !== 'undefined' ? v.epss : ''),
+        escapeCsv(v.cve || ''),
+        escapeCsv(v.description || ''),
+        escapeCsv(v.evidence || ''),
+      ].join(',')),
+    ].join('\n');
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.send(csv);
   } catch (err) {
     next(err);
   }
