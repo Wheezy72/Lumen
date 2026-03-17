@@ -204,9 +204,7 @@ router.post('/pdf', async (req, res, next) => {
     doc.rect(0, headerY, doc.page.width, 92).fill('#0b1220');
     doc.rect(0, headerY + 90, doc.page.width / 2, 2).fill('#2563eb');
     doc.rect(doc.page.width / 2, headerY + 90, doc.page.width / 2, 2).fill('#10b981');
-    doc.fillColor('#ffffff'); = doc.y;
-    doc.rect(0, headerY, doc.page.width, 92).fill('#0b1220');
-    doc.rect(0, headerY + 90, doc.page.width /
+    doc.fillColor('#ffffff');
 
     let logoWidth = 0;
     try {
