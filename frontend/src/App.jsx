@@ -88,7 +88,7 @@ export default function App() {
                     <img src="/logo.jpg" alt="Logo" className="h-full w-full object-cover" />
                   </div>
                   <span className="text-xl font-bold bg-gradient-to-r from-primary-400 to-secondary-400 bg-clip-text text-transparent">
-                    Lumen Vulnerability Scanner
+                    Lumen
                   </span>
                 </Link>
 
