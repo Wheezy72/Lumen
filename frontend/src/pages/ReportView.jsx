@@ -35,9 +35,7 @@ export default function ReportView() {
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [assistantLoading, setAssistantLoading] = useState(false);
   const [assistantError, setAssistantError] = useState('');
-  const [assistantUsedAI, setAssistantUsedAI] = useState(null);
-  const [assistantInput, setAssistantInput] = useState('');
-  const [assistantMessages, setAssistantMessages] = useState([]);
+  const [assistantText, setAssistantText] = useState('');
 
   const loadScan = async () => {
     try {
@@ -215,59 +213,27 @@ export default function ReportView() {
 
   const running = scan?.status === 'running' || scan?.status === 'queued' || scan?.status === 'scheduled';
 
-  const openAssistantForFinding = async (initialPrompt) => {
+  const openAssistantForFinding = async () => {
     if (selectedFindingIndex === null) return;
 
     setAssistantOpen(true);
     setAssistantError('');
-    setAssistantUsedAI(null);
-
-    const seed = initialPrompt || 'Explain this finding in simple terms. Include what it means, why it matters, how to fix it, and how to verify the fix.';
-    const nextMessages = [{ role: 'user', content: seed }];
-
-    setAssistantMessages(nextMessages);
-    setAssistantInput('');
+    setAssistantText('');
 
     setAssistantLoading(true);
     try {
       const { data } = await axios.post('/api/ai/chat', {
         scanId,
         findingIndex: selectedFindingIndex,
-        messages: nextMessages,
+        messages: [{
+          role: 'user',
+          content: 'Explain this finding in simple terms. Include what it means, why it matters, how to fix it, and how to verify the fix.',
+        }],
       });
 
-      setAssistantUsedAI(Boolean(data.usedAI));
-      setAssistantMessages([...nextMessages, data.assistant]);
+      setAssistantText(data?.assistant?.content || '');
     } catch (e) {
-      const msg = e?.response?.data?.error || 'Failed to load assistant response.';
-      setAssistantError(msg);
-    } finally {
-      setAssistantLoading(false);
-    }
-  };
-
-  const sendAssistantMessage = async () => {
-    if (!assistantInput.trim() || selectedFindingIndex === null || assistantLoading) return;
-
-    const userMessage = { role: 'user', content: assistantInput.trim() };
-    const nextMessages = [...assistantMessages, userMessage].slice(-12);
-
-    setAssistantMessages(nextMessages);
-    setAssistantInput('');
-    setAssistantError('');
-
-    setAssistantLoading(true);
-    try {
-      const { data } = await axios.post('/api/ai/chat', {
-        scanId,
-        findingIndex: selectedFindingIndex,
-        messages: nextMessages,
-      });
-
-      setAssistantUsedAI(Boolean(data.usedAI));
-      setAssistantMessages([...nextMessages, data.assistant]);
-    } catch (e) {
-      const msg = e?.response?.data?.error || 'Failed to load assistant response.';
+      const msg = e?.response?.data?.error || 'Failed to load the explanation.';
       setAssistantError(msg);
     } finally {
       setAssistantLoading(false);
@@ -543,7 +509,7 @@ export default function ReportView() {
               disabled={!selectedVuln || selectedFindingIndex === null}
               className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-800 bg-black/5 dark:bg-black/30 hover:bg-black/10 dark:hover:bg-black/50 transition disabled:opacity-50 disabled:cursor-not-allowed text-gray-200"
             >
-              Ask Lumen
+              Explain
             </button>
           </div>
 
@@ -622,74 +588,40 @@ export default function ReportView() {
 
       <Modal
         open={assistantOpen}
-        title="Lumen Assistant"
+        title="Explanation"
         onClose={() => {
           setAssistantOpen(false);
           setAssistantError('');
           setAssistantLoading(false);
+          setAssistantText('');
         }}
         maxWidthClass="max-w-3xl"
         footer={
-          <div className="flex items-end gap-2">
-            <textarea
-              rows={2}
-              value={assistantInput}
-              onChange={(e) => setAssistantInput(e.target.value)}
-              placeholder="Ask a follow-up question…"
-              className="flex-1 input input-plain resize-none"
-              disabled={assistantLoading}
-            />
+          <div className="flex justify-end">
             <button
               type="button"
-              onClick={sendAssistantMessage}
-              disabled={assistantLoading || !assistantInput.trim()}
-              className="px-4 py-2 rounded-lg text-sm font-semibold btn btn-primary disabled:opacity-50"
+              onClick={() => setAssistantOpen(false)}
+              className="px-4 py-2 rounded-lg text-sm font-semibold border border-slate-800 bg-black/5 dark:bg-black/30 hover:bg-black/10 dark:hover:bg-black/50 transition text-gray-200"
             >
-              Send
+              Close
             </button>
           </div>
         }
       >
-        {assistantUsedAI === false ? (
-          <div className="mb-3 text-xs text-gray-500">
-            AI is not configured on this server. Showing the built-in explanation.
-          </div>
-        ) : null}
-
         {assistantError ? (
           <div className="mb-3 p-3 rounded-lg border border-red-500/30 bg-red-900/20 text-red-400 text-sm">
             {assistantError}
           </div>
         ) : null}
 
-        <div className="space-y-3 max-h-[55vh] overflow-y-auto pr-1">
-          {assistantMessages.map((m, idx) => (
-            <div
-              key={idx}
-              className={
-                m.role === 'assistant'
-                  ? 'rounded-lg border border-slate-800 bg-black/5 dark:bg-black/30 p-3 text-sm text-gray-200'
-                  : 'rounded-lg border border-primary-500/20 bg-primary-500/10 p-3 text-sm text-gray-200'
-              }
-            >
-              <div className="text-[11px] uppercase tracking-wide text-gray-500 mb-1">
-                {m.role === 'assistant' ? 'Assistant' : 'You'}
-              </div>
-              <div className="whitespace-pre-wrap leading-relaxed">{m.content}</div>
-            </div>
-          ))}
-
+        <div className="rounded-lg border border-slate-800 bg-black/5 dark:bg-black/30 p-4 max-h-[60vh] overflow-y-auto">
           {assistantLoading ? (
-            <div className="rounded-lg border border-slate-800 bg-black/5 dark:bg-black/30 p-3 text-sm text-gray-400">
-              Thinking…
-            </div>
-          ) : null}
-
-          {!assistantLoading && assistantMessages.length === 0 ? (
-            <div className="text-sm text-gray-600">
-              Select a finding and click <span className="text-gray-300 font-semibold">Ask Lumen</span>.
-            </div>
-          ) : null}
+            <div className="text-sm text-gray-400">Generating explanation…</div>
+          ) : assistantText ? (
+            <div className="whitespace-pre-wrap leading-relaxed text-sm text-gray-200">{assistantText}</div>
+          ) : (
+            <div className="text-sm text-gray-600">Select a finding and click <span className="text-gray-300 font-semibold">Explain</span>.</div>
+          )}
         </div>
       </Modal>
     </>
