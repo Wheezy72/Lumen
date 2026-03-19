@@ -21,6 +21,10 @@ const {
 
 let transporter = null;
 
+function isEmailEnabled() {
+  return ['true', '1', 'yes', 'on'].includes(String(EMAIL_ENABLED || '').toLowerCase());
+}
+
 function getTransporter() {
   if (!transporter) {
     const port = parseInt(SMTP_PORT, 10);
@@ -36,7 +40,7 @@ function getTransporter() {
 }
 
 export async function sendScanSummaryEmail(scan) {
-  if (EMAIL_ENABLED !== 'true') return;
+  if (!isEmailEnabled()) return;
 
   try {
     const user = await User.findById(scan.userId);
@@ -186,6 +190,13 @@ export async function sendScanSummaryEmail(scan) {
     lines.push('');
     lines.push('Open the Lumen dashboard to view the full report and export a PDF/CSV if needed.');
 
+    logger.debug('Sending scan summary email', {
+      to: user.email,
+      scanId: scan?._id?.toString(),
+      target: scan.targetUrl,
+      totalFindings: total,
+    });
+
     await getTransporter().sendMail({
       from: EMAIL_FROM,
       to: user.email,
@@ -193,12 +204,17 @@ export async function sendScanSummaryEmail(scan) {
       text: lines.join('\n'),
     });
   } catch (e) {
-    logger.warn('Failed to send scan summary email', { error: e.message });
+    logger.warn('Failed to send scan summary email', {
+      error: e.message,
+      code: e.code,
+      response: e.response,
+      command: e.command,
+    });
   }
 }
 
 export async function sendScanFailureEmail(scan, errorMessage) {
-  if (EMAIL_ENABLED !== 'true') return;
+  if (!isEmailEnabled()) return;
 
   try {
     const user = await User.findById(scan.userId);
@@ -220,12 +236,17 @@ export async function sendScanFailureEmail(scan, errorMessage) {
       text,
     });
   } catch (e) {
-    logger.warn('Failed to send scan failure email', { error: e.message });
+    logger.warn('Failed to send scan failure email', {
+      error: e.message,
+      code: e.code,
+      response: e.response,
+      command: e.command,
+    });
   }
 }
 
 export async function sendScheduledScanDiffEmail(scan, diff) {
-  if (EMAIL_ENABLED !== 'true') return;
+  if (!isEmailEnabled()) return;
 
   try {
     const user = await User.findById(scan.userId);
@@ -299,6 +320,11 @@ export async function sendScheduledScanDiffEmail(scan, diff) {
       text: lines.join('\n'),
     });
   } catch (e) {
-    logger.warn('Failed to send scheduled scan diff email', { error: e.message });
+    logger.warn('Failed to send scheduled scan diff email', {
+      error: e.message,
+      code: e.code,
+      response: e.response,
+      command: e.command,
+    });
   }
 }

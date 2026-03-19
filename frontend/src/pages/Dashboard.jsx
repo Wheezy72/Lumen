@@ -17,7 +17,7 @@ import {
 
 Chart.register(ArcElement, BarElement, CategoryScale, LinearScale, Tooltip, Legend);
 
-const SEV_ORDER = ['critical', 'high', 'medium', 'low', 'info'];
+
 const SEV_COLORS = {
   critical: '#7c3aed',
   high: '#ef4444',
@@ -80,7 +80,7 @@ export default function Dashboard() {
   const [vulnCounts, setVulnCounts] = useState({ low: 0, medium: 0, high: 0, critical: 0, info: 0 });
   const [recentScans, setRecentScans] = useState([]);
   const [topIssues, setTopIssues] = useState([]);
-  const [barScans, setBarScans] = useState([]);
+  const [topSites, setTopSites] = useState([]);
 
   const fetchData = async () => {
     try {
@@ -113,13 +113,23 @@ export default function Dashboard() {
         .sort((a, b) => (b.count - a.count) || (severityRank(b.maxSeverity) - severityRank(a.maxSeverity)) || a.title.localeCompare(b.title))
         .slice(0, 5);
 
-      const completed = data.filter((scan) => scan.status === 'completed').slice(0, 6).reverse();
+      const siteAgg = {};
+      data.forEach((scan) => {
+        const label = getTargetLabel(scan);
+        if (!label) return;
+        siteAgg[label] = (siteAgg[label] || 0) + 1;
+      });
+
+      const sites = Object.entries(siteAgg)
+        .map(([label, count]) => ({ label, count }))
+        .sort((a, b) => (b.count - a.count) || a.label.localeCompare(b.label))
+        .slice(0, 8);
 
       setMetrics({ totalScans: total, openScans: open, success, failed });
       setVulnCounts(counts);
       setRecentScans(data.slice(0, 5));
       setTopIssues(sortedIssues);
-      setBarScans(completed);
+      setTopSites(sites);
     } catch {
       // ignore — backend may not be running
     }
@@ -143,28 +153,24 @@ export default function Dashboard() {
   const legendText = theme === 'dark' ? '#9ca3af' : 'rgba(15, 23, 42, 0.55)';
   const gridColor = theme === 'dark' ? 'rgba(148, 163, 184, 0.15)' : 'rgba(15, 23, 42, 0.10)';
 
-  const barLabels = barScans.map((scan) => getTargetLabel(scan) || scan._id?.slice(-6));
+  const barLabels = topSites.map((s) => s.label);
 
   const barData = useMemo(() => ({
     labels: barLabels.length ? barLabels : ['No data yet'],
-    datasets: SEV_ORDER.map((sev) => ({
-      label: sev.charAt(0).toUpperCase() + sev.slice(1),
-      backgroundColor: SEV_COLORS[sev],
-      data: barScans.length
-        ? barScans.map((scan) =>
-            (scan.results || []).filter(isRealFinding).filter(
-              (finding) => String(finding.severity || 'info').toLowerCase() === sev,
-            ).length,
-          )
-        : [0],
-    })),
-  }), [barLabels.join('|'), barScans]);
+    datasets: [{
+      label: 'Scans',
+      backgroundColor: theme === 'dark' ? 'rgba(59, 130, 246, 0.55)' : 'rgba(37, 99, 235, 0.55)',
+      borderColor: theme === 'dark' ? 'rgba(59, 130, 246, 0.9)' : 'rgba(37, 99, 235, 0.9)',
+      borderWidth: 1,
+      data: topSites.length ? topSites.map((s) => s.count) : [0],
+    }],
+  }), [barLabels.join('|'), topSites, theme]);
 
   const barOptions = useMemo(() => ({
     responsive: true,
     plugins: { legend: { position: 'bottom', labels: { color: legendText, boxWidth: 12, padding: 16 } } },
     scales: {
-      x: { stacked: false, ticks: { color: axisText }, grid: { color: gridColor } },
+      x: { ticks: { color: axisText }, grid: { color: gridColor } },
       y: { beginAtZero: true, ticks: { color: axisText, precision: 0 }, grid: { color: gridColor } },
     },
   }), [axisText, legendText, gridColor]);
@@ -241,13 +247,13 @@ export default function Dashboard() {
         <Card className="p-5">
           <div className="flex items-start justify-between gap-4 mb-4">
             <div>
-              <h3 className="text-sm font-semibold text-gray-200">Findings per scan</h3>
-              <p className="text-xs text-gray-600 mt-1">Severity totals across your latest completed scans.</p>
+              <h3 className="text-sm font-semibold text-gray-200">Most scanned sites</h3>
+              <p className="text-xs text-gray-600 mt-1">How many scans you’ve run per site (latest 100 scans).</p>
             </div>
           </div>
-          {barScans.length === 0 ? (
+          {topSites.length === 0 ? (
             <div className="h-48 flex items-center justify-center text-gray-600 text-sm">
-              No completed scans yet.
+              No scans yet.
             </div>
           ) : (
             <Bar data={barData} options={barOptions} />
