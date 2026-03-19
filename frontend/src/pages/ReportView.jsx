@@ -14,18 +14,12 @@ const SEV = {
   info:     { bg: 'bg-slate-500/15 text-slate-400 border border-slate-500/30',     dot: 'bg-slate-400' },
 };
 
-
-
-
-
 export default function ReportView() {
   const { scanId } = useParams();
   const [scan, setScan] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [severityFilter, setSeverityFilter] = useState('all');
-  const [categoryFilter, setCategoryFilter] = useState('all');
   const [pdfLoading, setPdfLoading] = useState(false);
   const [csvLoading, setCsvLoading] = useState(false);
 
@@ -61,8 +55,6 @@ export default function ReportView() {
       setDiffLoading(false);
     }
   };
-
-  
 
   const generatePdf = async () => {
     try {
@@ -113,7 +105,7 @@ export default function ReportView() {
 
   useEffect(() => {
     setSelectedIndex(0);
-  }, [severityFilter, categoryFilter, scanId]);
+  }, [scanId]);
 
   const formatLocalDateTime = (value) => {
     if (!value) return '—';
@@ -163,48 +155,17 @@ export default function ReportView() {
     return 0;
   };
 
-  const topFindings = [...findingsWithIndex]
-    .sort((a, b) => {
-      const d = sevRank(b.severity) - sevRank(a.severity);
-      if (d) return d;
-      return String(a.title || '').localeCompare(String(b.title || ''));
-    })
-    .slice(0, 3);
+  const sortedFindings = [...findingsWithIndex].sort((a, b) => {
+    const d = sevRank(b.severity) - sevRank(a.severity);
+    if (d) return d;
+    return String(a.title || '').localeCompare(String(b.title || ''));
+  });
 
-  const categories = Array.from(
-    new Set(findingsWithIndex.map((f) => (f.category || 'other').toLowerCase())),
-  ).sort();
+  const topFindings = sortedFindings.slice(0, 3);
 
-  const filteredFindings = findingsWithIndex
-    .filter((f) => {
-      const category = (f.category || 'other').toLowerCase();
-      const sev = (f.severity || 'info').toLowerCase();
-
-      if (severityFilter !== 'all' && sev !== severityFilter) return false;
-      if (categoryFilter !== 'all' && category !== categoryFilter) return false;
-
-      return true;
-    })
-    .sort((a, b) => {
-      const d = sevRank(b.severity) - sevRank(a.severity);
-      if (d) return d;
-      return String(a.title || '').localeCompare(String(b.title || ''));
-    });
-
-  const selectedVuln = filteredFindings[selectedIndex];
+  const safeSelectedIndex = Math.min(selectedIndex, Math.max(sortedFindings.length - 1, 0));
+  const selectedVuln = sortedFindings[safeSelectedIndex];
   const selectedFindingIndex = typeof selectedVuln?.__index === 'number' ? selectedVuln.__index : null;
-
-  const sevCounts = findings.reduce((acc, f) => {
-    const s = (f.severity || 'info').toLowerCase();
-    acc[s] = (acc[s] || 0) + 1;
-    return acc;
-  }, {});
-
-  const categoryCounts = findings.reduce((acc, f) => {
-    const c = (f.category || 'other').toLowerCase();
-    acc[c] = (acc[c] || 0) + 1;
-    return acc;
-  }, {});
 
   const statusColor = scan?.status === 'completed' ? 'text-emerald-400'
     : scan?.status === 'running' ? 'text-blue-400'
@@ -268,13 +229,13 @@ export default function ReportView() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Executive summary */}
+        {/* Summary */}
         <div className="lg:col-span-2 rounded-xl border border-slate-800 bg-dark-200 p-5">
-          <h2 className="text-sm font-semibold text-white">Executive summary</h2>
+          <h2 className="text-sm font-semibold text-white">Summary</h2>
           <p className="text-sm text-gray-500 mt-1">
             {findings.length === 0
-              ? (running ? 'Scanning in progress…' : 'No findings reported.')
-              : `${findings.length} findings • top issues highlighted below.`}
+              ? (running ? 'Scanning…' : 'No issues found.')
+              : `${findings.length} issues found. Top ones are below.`}
           </p>
 
           {topFindings.length > 0 ? (
@@ -283,15 +244,15 @@ export default function ReportView() {
                 <li key={i} className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-sm text-gray-200 truncate">{displayFindingTitle(f)}</p>
-                    <p className="text-xs text-gray-600 mt-0.5 capitalize">{(f.category || 'other').toLowerCase()}</p>
+                    <p className="text-xs text-gray-600 mt-0.5">{formatCategoryLabel(f.category)}</p>
                   </div>
-                  <SeverityBadge severity={(f.severity || 'info').toLowerCase()} />
+                  <SeverityDot severity={(f.severity || 'info').toLowerCase()} />
                 </li>
               ))}
             </ul>
           ) : (
             <div className="mt-4 text-sm text-gray-600">
-              {running ? 'Findings will populate once the scan completes.' : 'No vulnerabilities found.'}
+              {running ? 'Issues will show when the scan is done.' : 'No issues found.'}
             </div>
           )}
 
@@ -324,17 +285,17 @@ export default function ReportView() {
 
           <div className="mt-4 space-y-3">
             <div className="rounded-lg border border-slate-800 bg-black/5 dark:bg-black/30 p-3">
-              <p className="text-xs text-gray-600">Attention</p>
+              <p className="text-xs text-gray-600">Note</p>
               {diffData?.compareScanId ? (
                 (scan?.diffSummary?.newBlockedCount || 0) > 0 ? (
                   <p className="text-sm text-red-400 mt-1">
-                    New high/critical issues: <span className="font-semibold tabular-nums">{scan.diffSummary.newBlockedCount}</span>
+                    New serious issues: <span className="font-semibold tabular-nums">{scan.diffSummary.newBlockedCount}</span>
                   </p>
                 ) : (
-                  <p className="text-sm text-emerald-400 mt-1">No new high-risk issues compared to the last scan.</p>
+                  <p className="text-sm text-emerald-400 mt-1">No new serious issues since the last scan.</p>
                 )
               ) : (
-                <p className="text-sm text-gray-600 mt-1">Run another scan for this site to see what changed.</p>
+                <p className="text-sm text-gray-600 mt-1">Run another scan to see changes.</p>
               )}
             </div>
 
@@ -349,7 +310,7 @@ export default function ReportView() {
                     <div className="grid grid-cols-3 gap-2 text-xs">
                       <Stat label="New" value={diffData.diff.newIssues?.length || 0} className="text-red-400" />
                       <Stat label="Fixed" value={diffData.diff.fixedIssues?.length || 0} className="text-emerald-400" />
-                      <Stat label="Still present" value={diffData.diff.persisting?.length || 0} className="text-gray-300" />
+                      <Stat label="Still there" value={diffData.diff.persisting?.length || 0} className="text-gray-300" />
                     </div>
                   ) : (
                     <p className="text-sm text-gray-600">No comparison available yet.</p>
@@ -360,9 +321,7 @@ export default function ReportView() {
               )}
             </div>
 
-            <p className="text-xs text-gray-600 leading-relaxed">
-              <span className="text-gray-400">New</span> = not present last scan • <span className="text-gray-400">Fixed</span> = gone since last scan • <span className="text-gray-400">Still present</span> = seen in both scans.
-            </p>
+            
           </div>
         </div>
       </div>
@@ -392,49 +351,7 @@ export default function ReportView() {
           <AnimatedProgressBar progress={scan?.progress ?? 0} running={running} />
         </div>
 
-        {findings.length > 0 && (
-          <div className="mt-4 pt-4 border-t border-slate-800 space-y-3">
-            <div className="flex flex-wrap gap-2">
-              <FilterChip
-                active={severityFilter === 'all'}
-                onClick={() => setSeverityFilter('all')}
-                className="bg-slate-500/10 text-gray-400 border border-slate-800"
-                label={`All (${findings.length})`}
-              />
-              {['critical', 'high', 'medium', 'low', 'info'].map((s) =>
-                sevCounts[s] ? (
-                  <FilterChip
-                    key={s}
-                    active={severityFilter === s}
-                    onClick={() => setSeverityFilter(s)}
-                    className={SEV[s]?.bg}
-                    label={`${sevCounts[s]} ${s.charAt(0).toUpperCase() + s.slice(1)}`}
-                  />
-                ) : null,
-              )}
-            </div>
-
-            {categories.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                <FilterChip
-                  active={categoryFilter === 'all'}
-                  onClick={() => setCategoryFilter('all')}
-                  className="bg-slate-500/10 text-gray-400 border border-slate-800"
-                  label="All topics"
-                />
-                {categories.map((c) => (
-                  <FilterChip
-                    key={c}
-                    active={categoryFilter === c}
-                    onClick={() => setCategoryFilter(c)}
-                    className="bg-primary-500/10 text-primary-400 border border-primary-500/20"
-                    label={`${c}${categoryCounts[c] ? ` (${categoryCounts[c]})` : ''}`}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+        
       </div>
 
       {/* ── Findings + Detail ──────────────────────────────────── */}
@@ -443,37 +360,22 @@ export default function ReportView() {
         <div className="rounded-xl border border-slate-800 bg-dark-200 p-4">
           <div className="flex items-end justify-between gap-3 mb-3">
             <h2 className="font-semibold text-white text-sm">
-              Findings{' '}
-              <span className="text-gray-600 font-normal">({filteredFindings.length}{filteredFindings.length !== findings.length ? ` / ${findings.length}` : ''})</span>
+              Findings <span className="text-gray-600 font-normal">({sortedFindings.length})</span>
             </h2>
-            {(severityFilter !== 'all' || categoryFilter !== 'all') && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSeverityFilter('all');
-                  setCategoryFilter('all');
-                }}
-                className="text-xs text-gray-500 hover:text-white transition"
-              >
-                Reset filters
-              </button>
-            )}
           </div>
 
           {findings.length === 0 ? (
             <div className="py-6">
               <EmptyState
-                title={running ? 'Scanning…' : 'No vulnerabilities found'}
-                description={running ? 'Findings will appear here once the scan completes.' : 'This scan completed with zero reported findings.'}
+                title={running ? 'Scanning…' : 'No issues found'}
+                description={running ? 'Issues will show here when the scan is done.' : 'This scan finished with no issues.'}
               />
             </div>
-          ) : filteredFindings.length === 0 ? (
-            <div className="py-10 text-center text-gray-600 text-sm">No matches for your filters.</div>
           ) : (
             <ul className="space-y-1.5 max-h-[460px] overflow-y-auto pr-1">
-              {filteredFindings.map((f, i) => {
+              {sortedFindings.map((f, i) => {
                 const sev = (f.severity || 'info').toLowerCase();
-                const active = i === selectedIndex;
+                const active = i === safeSelectedIndex;
                 return (
                   <li
                     key={typeof f.__index === 'number' ? f.__index : i}
@@ -486,11 +388,10 @@ export default function ReportView() {
                   >
                     <div className="flex items-start justify-between gap-2">
                       <span className="text-sm text-gray-200 font-medium leading-snug">{displayFindingTitle(f)}</span>
-                      <SeverityBadge severity={sev} />
+                      <SeverityDot severity={sev} />
                     </div>
-                    <div className="mt-1 flex items-center gap-2">
-                      <CategoryBadge category={(f.category || 'other').toLowerCase()} />
-                      {f.cve && <span className="text-xs text-gray-500 font-mono">{f.cve}</span>}
+                    <div className="mt-1 text-xs text-gray-600">
+                      {formatCategoryLabel(f.category)}
                     </div>
                   </li>
                 );
@@ -502,7 +403,7 @@ export default function ReportView() {
         {/* Detail panel */}
         <div className="lg:col-span-2 rounded-xl border border-slate-800 bg-dark-200 p-5">
           <div className="flex items-center justify-between gap-3 mb-4">
-            <h2 className="font-semibold text-white text-sm">Finding details</h2>
+            <h2 className="font-semibold text-white text-sm">Details</h2>
             <button
               type="button"
               onClick={() => openAssistantForFinding()}
@@ -520,9 +421,9 @@ export default function ReportView() {
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <h3 className="text-lg font-semibold text-white">{displayFindingTitle(selectedVuln)}</h3>
-                  <div className="mt-1 flex flex-wrap items-center gap-2">
-                    <CategoryBadge category={(selectedVuln.category || 'other').toLowerCase()} />
-                    {selectedVuln.cve && <span className="text-xs text-gray-500 font-mono">{selectedVuln.cve}</span>}
+                  <div className="mt-1 text-xs text-gray-600">
+                    {formatCategoryLabel(selectedVuln.category)}
+                    {selectedVuln.cve ? ` • ${selectedVuln.cve}` : ''}
                   </div>
                 </div>
                 <SeverityBadge severity={(selectedVuln.severity || 'info').toLowerCase()} />
@@ -558,7 +459,7 @@ export default function ReportView() {
               )}
 
               <div>
-                <h4 className="text-xs font-semibold text-primary-500 uppercase tracking-wide mb-2">Detection method</h4>
+                <h4 className="text-xs font-semibold text-primary-500 uppercase tracking-wide mb-2">How we found it</h4>
                 <p className="text-gray-400 text-sm">{getDetectionMethod(selectedVuln.category)}</p>
               </div>
 
@@ -577,7 +478,7 @@ export default function ReportView() {
                   to={'/learn#' + (selectedVuln.category || 'other')}
                   className="text-primary-500 hover:text-primary-400 text-sm font-medium transition"
                 >
-                  Learn more about this vulnerability type →
+                  Learn more about this issue →
                 </Link>
               </div>
             </div>
@@ -628,27 +529,25 @@ export default function ReportView() {
   );
 }
 
-function FilterChip({ active, onClick, className, label }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`px-3 py-1 rounded-full text-xs font-medium transition ${className} ${
-        active ? 'ring-2 ring-primary-500/30' : 'opacity-80 hover:opacity-100'
-      }`}
-    >
-      {label}
-    </button>
-  );
-}
+function formatCategoryLabel(category) {
+  const c = String(category || '').toLowerCase();
+  if (!c) return 'General';
 
-function CategoryBadge({ category }) {
-  const label = category || 'other';
-  return (
-    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-secondary-500/10 text-secondary-400 border border-secondary-500/20">
-      {label}
-    </span>
-  );
+  const map = {
+    headers: 'Security headers',
+    cookies: 'Cookies',
+    tls: 'TLS/SSL',
+    ssl: 'TLS/SSL',
+    xss: 'XSS',
+    sqli: 'SQL injection',
+    traversal: 'Path traversal',
+    subdomain: 'Subdomains',
+    error: 'Error details',
+    rate_limit: 'Rate limiting',
+    access_control: 'Access control',
+  };
+
+  return map[c] || c.replace(/_/g, ' ');
 }
 
 function SeverityBadge({ severity }) {
@@ -660,7 +559,10 @@ function SeverityBadge({ severity }) {
   );
 }
 
-
+function SeverityDot({ severity }) {
+  const style = SEV[severity] || SEV.info;
+  return <span className={`mt-1 h-2.5 w-2.5 rounded-full ${style.dot}`} />;
+}
 
 function Stat({ label, value, className }) {
   return (
@@ -673,36 +575,36 @@ function Stat({ label, value, className }) {
 
 function getDetectionMethod(category) {
   const methods = {
-    xss: 'A harmless script tag was added to the URL and the response was checked for reflection.',
-    sqli: 'Test input was added to the URL and the response was checked for database error messages.',
-    headers: 'HTTP response headers were checked for missing security headers.',
-    ssl: 'A TLS connection was opened to inspect the certificate and protocol.',
-    tls: 'A TLS connection was opened to inspect the certificate and protocol.',
-    traversal: 'Path traversal sequences were added to the URL to check for sensitive file exposure.',
-    subdomain: 'Common subdomain names were resolved to discover exposed hosts.',
-    cookies: 'Set-Cookie headers were inspected for missing security flags.',
-    error: 'Requests were sent to trigger errors and check for stack trace exposure.',
-    access_control: 'Numeric IDs were modified to test access control.',
-    rate_limit: 'Multiple requests were sent to check for rate limiting.',
+    xss: 'We added a small test value and checked if it comes back in the page.',
+    sqli: 'We added test input and looked for database-style error messages.',
+    headers: 'We checked if common security headers are missing.',
+    ssl: 'We checked the TLS/SSL connection and certificate.',
+    tls: 'We checked the TLS/SSL connection and certificate.',
+    traversal: 'We tried ../ style paths and checked for file leaks.',
+    subdomain: 'We tried common subdomain names and checked what exists.',
+    cookies: 'We checked cookies for missing security flags.',
+    error: 'We checked if the site shows detailed errors or stack traces.',
+    access_control: 'We changed IDs in the URL to see if other data is reachable.',
+    rate_limit: 'We sent a burst of requests and checked for rate limiting.',
   };
-  return methods[category] || 'Automated checks were run against the site.';
+  return methods[category] || 'We ran automated checks.';
 }
 
 function getRemediationAdvice(category) {
   const advice = {
-    xss: 'Encode user input before rendering in HTML. Use Content-Security-Policy headers.',
-    sqli: 'Use parameterized queries. Never concatenate user input into SQL.',
-    headers: 'Add security headers: CSP, X-Frame-Options, HSTS, X-Content-Type-Options.',
-    ssl: 'Use TLS 1.2+. Disable legacy protocols. Keep certificates up to date.',
-    tls: 'Use TLS 1.2+. Disable legacy protocols. Keep certificates up to date.',
-    traversal: 'Never use raw user input as file paths. Validate and sanitize.',
-    subdomain: 'Audit subdomains regularly. Restrict access to dev/staging environments.',
-    cookies: 'Set HttpOnly, Secure, and SameSite flags on all session cookies.',
-    error: 'Return generic errors to users. Log details server-side only.',
-    access_control: 'Check authorization on every request. Do not trust client IDs.',
-    rate_limit: 'Implement rate limiting on login and sensitive endpoints.',
+    xss: 'Escape output, validate input, and add a Content-Security-Policy.',
+    sqli: 'Use parameterized queries (never build SQL with user input).',
+    headers: 'Add common security headers (CSP, HSTS, X-Frame-Options).',
+    ssl: 'Use TLS 1.2+ only and keep certificates valid.',
+    tls: 'Use TLS 1.2+ only and keep certificates valid.',
+    traversal: 'Do not use user input as file paths. Use allow-lists.',
+    subdomain: 'Check if the subdomain should be public. Add auth if needed.',
+    cookies: 'Set HttpOnly, Secure, and SameSite on session cookies.',
+    error: 'Do not show stack traces to users. Log them on the server.',
+    access_control: 'Check permissions on every request (server-side).',
+    rate_limit: 'Add rate limiting to login and other sensitive routes.',
   };
-  return advice[category] || 'Review the finding and implement appropriate security controls.';
+  return advice[category] || 'Fix the root cause, then run the scan again.';
 }
 
 function getCodeExample(category) {

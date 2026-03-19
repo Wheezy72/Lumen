@@ -23,10 +23,12 @@ let transporter = null;
 
 function getTransporter() {
   if (!transporter) {
+    const port = parseInt(SMTP_PORT, 10);
+
     transporter = nodemailer.createTransport({
       host: SMTP_HOST,
-      port: parseInt(SMTP_PORT, 10),
-      secure: false,
+      port,
+      secure: port === 465,
       auth: SMTP_USER && SMTP_PASS ? { user: SMTP_USER, pass: SMTP_PASS } : undefined,
     });
   }
