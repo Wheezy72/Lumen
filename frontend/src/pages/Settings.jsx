@@ -125,7 +125,7 @@ export default function Settings({ user, onUpdateUser }) {
             <div>
               <div className="text-sm font-medium text-gray-300">Email alerts</div>
               <div className="text-xs text-gray-500 mt-1">
-                Sends you a short summary when a scan finds vulnerabilities.
+                Sends you a short summary when a scan finds issues.
               </div>
               {!canEnableAlerts && (
                 <div className="text-xs text-amber-400/90 mt-2">
