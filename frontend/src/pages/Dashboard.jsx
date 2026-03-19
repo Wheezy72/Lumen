@@ -17,6 +17,7 @@ import {
 
 Chart.register(ArcElement, BarElement, CategoryScale, LinearScale, Tooltip, Legend);
 
+const SEV_ORDER = ['critical', 'high', 'medium', 'low', 'info'];
 
 const SEV_COLORS = {
   critical: '#7c3aed',

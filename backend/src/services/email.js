@@ -1,4 +1,8 @@
 import nodemailer from 'nodemailer';
+import PDFDocument from 'pdfkit';
+import path from 'path';
+import fs from 'fs';
+import { createObjectCsvWriter } from 'csv-writer';
 import { logger } from '../utils/logger.js';
 import User from '../models/User.js';
 import Scan from '../models/Scan.js';
@@ -39,6 +43,126 @@ function getTransporter() {
   return transporter;
 }
 
+function sanitizeName(s = '') {
+  return String(s).replace(/[^a-z0-9\-_.]/gi, '_');
+}
+
+function ensureReportDir() {
+  const dirName = process.env.REPORTS_DIR || 'reports';
+  const dir = path.join(process.cwd(), dirName);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+function getHostLabel(scan) {
+  if (scan?.targetHost) return scan.targetHost;
+  try {
+    return new URL(scan.targetUrl).hostname;
+  } catch {
+    return 'site';
+  }
+}
+
+function makeExportBase(scan) {
+  const host = sanitizeName(getHostLabel(scan));
+  const id = sanitizeName(scan?._id?.toString() || 'scan');
+  return `${host}_${id}`;
+}
+
+async function generateCsvExport(scan) {
+  const reportDir = ensureReportDir();
+  const base = makeExportBase(scan);
+  const fileName = `${base}_findings.csv`;
+  const filePath = path.join(reportDir, fileName);
+
+  const csvWriter = createObjectCsvWriter({
+    path: filePath,
+    header: [
+      { id: 'severity', title: 'Severity' },
+      { id: 'title', title: 'Title' },
+      { id: 'category', title: 'Category' },
+      { id: 'cve', title: 'CVE' },
+      { id: 'epss', title: 'EPSS' },
+      { id: 'description', title: 'Description' },
+      { id: 'evidence', title: 'Evidence' },
+    ],
+  });
+
+  const rows = (scan.results || []).map((v) => ({
+    severity: v.severity || 'info',
+    title: v.title || '',
+    category: v.category || '',
+    cve: v.cve || '',
+    epss: typeof v.epss !== 'undefined' ? v.epss : '',
+    description: v.description || '',
+    evidence: v.evidence || '',
+  }));
+
+  await csvWriter.writeRecords(rows);
+
+  const urlName = encodeURIComponent(fileName);
+  const downloadUrl = `/api/reports/file/${urlName}?download=${encodeURIComponent(fileName)}`;
+
+  return { fileName, filePath, downloadUrl };
+}
+
+async function generatePdfExport(scan, { summaryLines = [], topFindings = [] } = {}) {
+  const reportDir = ensureReportDir();
+  const base = makeExportBase(scan);
+  const fileName = `${base}_security_report.pdf`;
+  const filePath = path.join(reportDir, fileName);
+
+  await new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ margin: 48 });
+    const ws = fs.createWriteStream(filePath);
+
+    ws.on('finish', resolve);
+    ws.on('error', reject);
+    doc.on('error', reject);
+
+    doc.pipe(ws);
+
+    const host = getHostLabel(scan);
+
+    doc.font('Helvetica-Bold').fontSize(18).text('Lumen Scan Summary');
+    doc.moveDown(0.2);
+    doc.font('Helvetica').fontSize(10).fillColor('#374151').text(`Target: ${scan.targetUrl}`);
+    doc.text(`Host: ${host}`);
+    if (scan.completedAt) doc.text(`Completed: ${new Date(scan.completedAt).toISOString()}`);
+    doc.text(`Scan ID: ${scan._id?.toString()}`);
+
+    doc.moveDown(0.8);
+    doc.font('Helvetica-Bold').fontSize(12).fillColor('#111827').text('Summary');
+    doc.moveDown(0.2);
+    doc.font('Helvetica').fontSize(10).fillColor('#374151');
+
+    (summaryLines.length ? summaryLines : ['No summary available.']).forEach((line) => {
+      doc.text(`• ${line}`);
+    });
+
+    doc.moveDown(0.8);
+    doc.font('Helvetica-Bold').fontSize(12).fillColor('#111827').text('Findings (top)');
+    doc.moveDown(0.2);
+    doc.font('Helvetica').fontSize(10).fillColor('#374151');
+
+    if (!topFindings.length) {
+      doc.text('No findings.');
+    } else {
+      topFindings.slice(0, 25).forEach((f) => {
+        const sev = String(f.severity || 'info').toUpperCase();
+        doc.text(`• [${sev}] ${String(f.title || '').trim()}`);
+      });
+    }
+
+    doc.end();
+  });
+
+  const urlName = encodeURIComponent(fileName);
+  const downloadUrl = `/api/reports/file/${urlName}?download=${encodeURIComponent(fileName)}`;
+
+  return { fileName, filePath, downloadUrl };
+}
+
 export async function sendScanSummaryEmail(scan) {
   if (!isEmailEnabled()) return;
 
@@ -54,8 +178,6 @@ export async function sendScanSummaryEmail(scan) {
       const severity = (finding.severity || 'info').toLowerCase();
       counts[severity] = (counts[severity] || 0) + 1;
     });
-
-    const targetLabel = scan.targetHost || scan.targetUrl;
 
     const severityRank = (sev) => {
       const s = String(sev || 'info').toLowerCase();
@@ -73,6 +195,8 @@ export async function sendScanSummaryEmail(scan) {
         return String(a.title || '').localeCompare(String(b.title || ''));
       });
 
+    const targetLabel = getHostLabel(scan);
+
     let compareScan = null;
     let diff = null;
     const compareScanId = scan.diffSummary?.compareScanId;
@@ -89,106 +213,70 @@ export async function sendScanSummaryEmail(scan) {
       }
     }
 
+    const hasComparison = Boolean(compareScan && diff);
+
     const newIssues = sortFindings(diff?.newIssues || []);
     const fixedIssues = sortFindings(diff?.fixedIssues || []);
     const persisting = sortFindings(diff?.persisting || []);
 
     const newHighCritical = newIssues.filter((finding) => {
-      const severity = (finding.severity || 'info').toLowerCase();
-      return severity === 'high' || severity === 'critical';
+      const s = String(finding.severity || 'info').toLowerCase();
+      return s === 'high' || s === 'critical';
     });
 
-    const hasComparison = Boolean(compareScan && diff);
+    const importance = newHighCritical.length ? 'action_required' : (newIssues.length ? 'review' : 'none');
 
     let subject = `[Lumen] Scan complete for ${targetLabel}`;
-    if (hasComparison) {
-      if (newIssues.length) {
-        subject = `[Lumen] Scan complete – ${newIssues.length} new finding${newIssues.length === 1 ? '' : 's'} for ${targetLabel}`;
-      } else if (!fixedIssues.length) {
-        subject = `[Lumen] Scan complete – no changes for ${targetLabel}`;
-      }
+    if (!hasComparison) {
+      subject = `[Lumen] Scan complete (baseline) for ${targetLabel}`;
+    } else if (importance === 'action_required') {
+      subject = `[Lumen] Action needed: ${newHighCritical.length} new high/critical finding${newHighCritical.length === 1 ? '' : 's'} for ${targetLabel}`;
+    } else if (newIssues.length) {
+      subject = `[Lumen] Scan complete: ${newIssues.length} new finding${newIssues.length === 1 ? '' : 's'} for ${targetLabel}`;
+    } else if (fixedIssues.length) {
+      subject = `[Lumen] Scan complete: ${fixedIssues.length} finding${fixedIssues.length === 1 ? '' : 's'} fixed for ${targetLabel}`;
+    } else {
+      subject = `[Lumen] Scan complete: no changes for ${targetLabel}`;
     }
 
-    const lines = [];
-
-    lines.push(`Scan complete for: ${scan.targetUrl}`);
-    lines.push('');
-
+    const summaryLines = [];
     if (total === 0) {
-      lines.push('Findings: none');
+      summaryLines.push('No findings were recorded by the current scan profile.');
     } else {
-      lines.push(`Total findings: ${total}`);
-      lines.push(`Critical: ${counts.critical}  High: ${counts.high}  Medium: ${counts.medium}  Low: ${counts.low}  Info: ${counts.info}`);
+      summaryLines.push(`Total findings: ${total} (Critical: ${counts.critical}, High: ${counts.high}, Medium: ${counts.medium}, Low: ${counts.low}, Info: ${counts.info}).`);
     }
 
     if (!hasComparison) {
-      lines.push('');
-      lines.push('Changes since last scan: not available (first recorded scan for this site).');
+      summaryLines.push('No previous scan was available to compare against (baseline run).');
     } else {
-      lines.push('');
-      lines.push('Changes since last scan:');
-      lines.push(`New: ${newIssues.length}  Fixed: ${fixedIssues.length}  Still present: ${persisting.length}`);
+      summaryLines.push(`Changes since previous scan: New: ${newIssues.length}, Fixed: ${fixedIssues.length}, Still present: ${persisting.length}.`);
 
-      if (newIssues.length === 0 && fixedIssues.length === 0) {
-        lines.push('No changes were detected compared to the previous scan.');
+      if (importance === 'action_required') {
+        summaryLines.push(`Important: ${newHighCritical.length} new high/critical issue${newHighCritical.length === 1 ? '' : 's'} detected.`);
+      } else if (newIssues.length) {
+        summaryLines.push('New issues were detected; review recommended.');
       } else {
-        if (newIssues.length === 0) {
-          lines.push('No new findings were introduced compared to the previous scan.');
-        }
-        if (fixedIssues.length === 0) {
-          lines.push('No findings were fixed since the previous scan.');
-        }
-      }
-
-      if (newHighCritical.length) {
-        lines.push('');
-        lines.push(`Warning: ${newHighCritical.length} new high/critical finding${newHighCritical.length === 1 ? '' : 's'} detected.`);
-        newHighCritical.slice(0, 5).forEach((finding) => {
-          lines.push(`- [${(finding.severity || 'info').toUpperCase()}] ${finding.title}`);
-        });
-        if (newHighCritical.length > 5) {
-          lines.push(`  ...and ${newHighCritical.length - 5} more.`);
-        }
-      }
-
-      if (newIssues.length) {
-        lines.push('');
-        lines.push('New findings:');
-        newIssues.slice(0, 5).forEach((finding) => {
-          lines.push(`- [${(finding.severity || 'info').toUpperCase()}] ${finding.title}`);
-        });
-        if (newIssues.length > 5) {
-          lines.push(`  ...and ${newIssues.length - 5} more.`);
-        }
-      }
-
-      if (fixedIssues.length) {
-        lines.push('');
-        lines.push('Fixed since last scan:');
-        fixedIssues.slice(0, 5).forEach((finding) => {
-          lines.push(`- [${(finding.severity || 'info').toUpperCase()}] ${finding.title}`);
-        });
-        if (fixedIssues.length > 5) {
-          lines.push(`  ...and ${fixedIssues.length - 5} more.`);
-        }
+        summaryLines.push('No new issues were detected compared to the previous scan.');
       }
     }
 
-    if (total) {
-      const top = sortFindings(results).slice(0, 5);
+    const topFindings = sortFindings(results).slice(0, 10);
 
-      lines.push('');
-      lines.push('Top findings in this scan:');
-      top.forEach((finding) => {
-        lines.push(`- [${(finding.severity || 'info').toUpperCase()}] ${finding.title}`);
-      });
-      if (total > 5) {
-        lines.push(`  ...and ${total - 5} more.`);
-      }
-    }
+    const [pdfExport, csvExport] = await Promise.all([
+      generatePdfExport(scan, { summaryLines, topFindings }),
+      generateCsvExport(scan),
+    ]);
 
+    const lines = [];
+    lines.push(`Scan summary for ${scan.targetUrl}`);
     lines.push('');
-    lines.push('Open the Lumen dashboard to view the full report and export a PDF/CSV if needed.');
+    summaryLines.forEach((l) => lines.push(`- ${l}`));
+    lines.push('');
+    lines.push('Exports');
+    lines.push(`- PDF: ${pdfExport.fileName} (${pdfExport.downloadUrl})`);
+    lines.push(`- CSV: ${csvExport.fileName} (${csvExport.downloadUrl})`);
+    lines.push('');
+    lines.push('Note: Download links require you to be signed in to Lumen.');
 
     logger.debug('Sending scan summary email', {
       to: user.email,
@@ -206,6 +294,10 @@ export async function sendScanSummaryEmail(scan) {
       to: user.email,
       subject,
       text: lines.join('\n'),
+      attachments: [
+        { filename: pdfExport.fileName, path: pdfExport.filePath },
+        { filename: csvExport.fileName, path: csvExport.filePath },
+      ],
     });
   } catch (e) {
     logger.warn('Failed to send scan summary email', {
