@@ -195,6 +195,10 @@ export async function sendScanSummaryEmail(scan) {
       scanId: scan?._id?.toString(),
       target: scan.targetUrl,
       totalFindings: total,
+      smtpHost: SMTP_HOST,
+      smtpPort: SMTP_PORT,
+      smtpSecure: parseInt(SMTP_PORT, 10) === 465,
+      smtpAuth: Boolean(SMTP_USER && SMTP_PASS),
     });
 
     await getTransporter().sendMail({
