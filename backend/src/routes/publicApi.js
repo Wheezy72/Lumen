@@ -329,7 +329,7 @@ router.get('/scans/:id/report.csv', async (req, res, next) => {
     const fileName = `${sanitizeName(host)}_${scan._id.toString()}_findings.csv`;
 
     const rows = Array.isArray(scan.results) ? scan.results : [];
-    const header = ['Title', 'TechnicalTitle', 'Category', 'Severity', 'EPSS', 'CVE', 'Description', 'Evidence'];
+    const header = ['Title', 'TechnicalTitle', 'Category', 'Severity', 'CVE', 'Description', 'Evidence'];
 
     const csv = [
       header.join(','),
@@ -338,7 +338,6 @@ router.get('/scans/:id/report.csv', async (req, res, next) => {
         escapeCsv(v.title || ''),
         escapeCsv(v.category || ''),
         escapeCsv(v.severity || ''),
-        escapeCsv(typeof v.epss !== 'undefined' ? v.epss : ''),
         escapeCsv(v.cve || ''),
         escapeCsv(v.description || ''),
         escapeCsv(v.evidence || ''),

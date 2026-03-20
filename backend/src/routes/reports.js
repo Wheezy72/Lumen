@@ -322,7 +322,6 @@ router.post('/pdf', async (req, res, next) => {
       const metaParts = [];
       if (v.category) metaParts.push(`Category: ${String(v.category).replace(/_/g, ' ')}`);
       if (v.cve) metaParts.push(`CVE: ${v.cve}`);
-      if (typeof v.epss !== 'undefined') metaParts.push(`EPSS: ${v.epss}`);
 
       if (metaParts.length) {
         doc.font('Helvetica').fillColor('#374151').fontSize(10).text(metaParts.join(' • '));
@@ -386,7 +385,6 @@ router.post('/csv', async (req, res, next) => {
         { id: 'title', title: 'Title' },
         { id: 'category', title: 'Category' },
         { id: 'severity', title: 'Severity' },
-        { id: 'epss', title: 'EPSS' },
         { id: 'cve', title: 'CVE' },
         { id: 'description', title: 'Description' },
         { id: 'evidence', title: 'Evidence' },
@@ -397,7 +395,6 @@ router.post('/csv', async (req, res, next) => {
       title: v.title || '',
       category: v.category || '',
       severity: v.severity || 'low',
-      epss: typeof v.epss !== 'undefined' ? v.epss : '',
       cve: v.cve || '',
       description: v.description || '',
       evidence: v.evidence || '',
