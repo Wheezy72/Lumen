@@ -263,25 +263,38 @@ export default function Vulnerabilities() {
                   id={v.slug}
                   className="rounded-xl border border-slate-800 bg-dark-200 overflow-hidden transition hover:border-primary-500/30"
                 >
-                  <div className="relative h-20 sm:h-24 w-full overflow-hidden border-b border-slate-800">
-                    {showImage && (
-                      <img
-                        src={imageUrl}
-                        alt=""
-                        className="absolute inset-0 h-full w-full object-cover opacity-80 dark:opacity-60"
-                        onError={() => onHeaderImageError(v.slug)}
-                        loading="lazy"
-                      />
-                    )}
-                    <div className={`absolute inset-0 bg-gradient-to-r ${art.from} ${art.to}`} />
+                  <button
+                    type="button"
+                    onClick={() => toggleCard(v.id)}
+                    className="block w-full text-left"
+                    aria-expanded={expanded}
+                  >
                     <div
-                      className="absolute inset-0 opacity-80 dark:opacity-60"
-                      style={{
-                        backgroundImage:
-                          'radial-gradient(circle at 15% 10%, rgba(255,255,255,0.14), transparent 50%), radial-gradient(circle at 85% 0%, rgba(255,255,255,0.10), transparent 55%)',
-                      }}
-                    />
-                  </div>
+                      className={`relative w-full overflow-hidden border-b border-slate-800 transition-[height] duration-300 ${
+                        expanded ? 'h-64 sm:h-72 bg-black/5 dark:bg-black/30' : 'h-20 sm:h-24'
+                      }`}
+                    >
+                      {showImage && (
+                        <img
+                          src={imageUrl}
+                          alt=""
+                          className={`absolute inset-0 h-full w-full ${expanded ? 'object-contain' : 'object-cover'} opacity-85 dark:opacity-60`}
+                          onError={() => onHeaderImageError(v.slug)}
+                          loading="lazy"
+                        />
+                      )}
+                      <div
+                        className={`absolute inset-0 bg-gradient-to-r ${art.from} ${art.to} ${expanded ? 'opacity-50' : 'opacity-100'}`}
+                      />
+                      <div
+                        className={`absolute inset-0 ${expanded ? 'opacity-35 dark:opacity-25' : 'opacity-80 dark:opacity-60'}`}
+                        style={{
+                          backgroundImage:
+                            'radial-gradient(circle at 15% 10%, rgba(255,255,255,0.14), transparent 50%), radial-gradient(circle at 85% 0%, rgba(255,255,255,0.10), transparent 55%)',
+                        }}
+                      />
+                    </div>
+                  </button>
 
                   <button
                     type="button"
@@ -298,18 +311,6 @@ export default function Vulnerabilities() {
                   {expanded && (
                     <div className="px-5 pb-5 border-t border-slate-800 animate-slide-up">
                       <div className="pt-4 space-y-4">
-                        {showImage && imageUrl ? (
-                          <div className="rounded-lg border border-slate-800 bg-black/5 dark:bg-black/25 overflow-hidden">
-                            <img
-                              src={imageUrl}
-                              alt=""
-                              className="w-full max-h-72 object-contain bg-black/5 dark:bg-black/40"
-                              onError={() => onHeaderImageError(v.slug)}
-                              loading="lazy"
-                            />
-                          </div>
-                        ) : null}
-
                         <LearnSection title="How it works">{v.humanDesc}</LearnSection>
                         <LearnSection title="How to reduce the risk">{v.prevention}</LearnSection>
                       </div>

@@ -162,8 +162,18 @@ export function localAssistantExplanation(scan, finding) {
 }
 
 export async function assistantChat({ scan, finding }) {
-  return {
-    usedAI: false,
-    assistant: { role: 'assistant', content: localAssistantExplanation(scan, finding) },
-  };
+  try {
+    return {
+      usedAI: false,
+      assistant: { role: 'assistant', content: localAssistantExplanation(scan, finding) },
+    };
+  } catch {
+    return {
+      usedAI: false,
+      assistant: {
+        role: 'assistant',
+        content: 'Could not generate an explanation for this finding. Try again, or view the Description and Evidence sections.',
+      },
+    };
+  }
 }
