@@ -63,11 +63,57 @@ export default function NewScan() {
     return SCAN_PROFILES[profile].modules;
   };
 
-  const getMinDateTime = () => {
-    const now = new Date();
-    now.setMinutes(now.getMinutes() + 5);
-    return now.toISOString().slice(0, 16);
+  const toLocalDateTimeValue = (date) => {
+    const d = new Date(date);
+    const tzOffsetMs = d.getTimezoneOffset() * 60000;
+    return new Date(d.getTime() - tzOffsetMs).toISOString().slice(0, 16);
   };
+
+  const getMinDateTime = () => {
+    return toLocalDateTimeValue(new Date(Date.now() + 5 * 60 * 1000));
+  };
+
+  const ensureScheduledTime = () => {
+    const min = getMinDateTime();
+    setScheduledTime((prev) => {
+      const value = String(prev || '').trim();
+      if (value && value >= min) return value;
+      return min;
+    });
+  };
+
+  const schedulePresets = [
+    {
+      key: 'soonest',
+      label: 'Soonest',
+      getValue: () => getMinDateTime(),
+    },
+    {
+      key: '15m',
+      label: '+15m',
+      getValue: () => toLocalDateTimeValue(new Date(Date.now() + 15 * 60 * 1000)),
+    },
+    {
+      key: '30m',
+      label: '+30m',
+      getValue: () => toLocalDateTimeValue(new Date(Date.now() + 30 * 60 * 1000)),
+    },
+    {
+      key: '1h',
+      label: '+1h',
+      getValue: () => toLocalDateTimeValue(new Date(Date.now() + 60 * 60 * 1000)),
+    },
+    {
+      key: 'tomorrow',
+      label: 'Tomorrow 09:00',
+      getValue: () => {
+        const d = new Date();
+        d.setDate(d.getDate() + 1);
+        d.setHours(9, 0, 0, 0);
+        return toLocalDateTimeValue(d);
+      },
+    },
+  ];
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -341,7 +387,10 @@ export default function NewScan() {
             actions={
               <button
                 type="button"
-                onClick={() => setScheduleEnabled((v) => !v)}
+                onClick={() => {
+                  if (!scheduleEnabled) ensureScheduledTime();
+                  setScheduleEnabled((v) => !v);
+                }}
                 className="inline-flex items-center gap-3"
                 aria-pressed={scheduleEnabled}
               >
@@ -364,16 +413,31 @@ export default function NewScan() {
           />
 
           {scheduleEnabled ? (
-            <div className="mt-5 animate-slide-up">
-              <label className="block text-sm font-medium text-gray-400 mb-2">Run at</label>
-              <input
-                type="datetime-local"
-                value={scheduledTime}
-                onChange={(e) => setScheduledTime(e.target.value)}
-                min={getMinDateTime()}
-                className="input input-plain"
-              />
-              <p className="text-sm text-gray-500 mt-2">The scan will start automatically at the selected time.</p>
+            <div className="mt-5 animate-slide-up space-y-3">
+              <div className="flex flex-wrap gap-2">
+                {schedulePresets.map((preset) => (
+                  <button
+                    key={preset.key}
+                    type="button"
+                    onClick={() => setScheduledTime(preset.getValue())}
+                    className="px-3 py-1.5 rounded-full text-xs font-semibold border border-slate-800 bg-black/5 dark:bg-black/30 hover:bg-black/10 dark:hover:bg-black/45 transition text-gray-200"
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-2">Run at</label>
+                <input
+                  type="datetime-local"
+                  value={scheduledTime}
+                  onChange={(e) => setScheduledTime(e.target.value)}
+                  min={getMinDateTime()}
+                  className="input input-plain"
+                />
+                <p className="text-sm text-gray-500 mt-2">The scan will start automatically at the selected time.</p>
+              </div>
             </div>
           ) : (
             <div className="mt-5 text-sm text-gray-500">

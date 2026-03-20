@@ -96,11 +96,15 @@ export default function ResetPassword() {
               <input
                 type="text"
                 value={form.code}
-                onChange={(e) => setForm((p) => ({ ...p, code: e.target.value }))}
+                onChange={(e) => {
+                  const next = e.target.value.replace(/\D/g, '').slice(0, 6);
+                  setForm((p) => ({ ...p, code: next }));
+                }}
                 className="input input-plain"
                 placeholder="123456"
                 inputMode="numeric"
-                pattern="\\d{6}"
+                pattern="[0-9]{6}"
+                maxLength={6}
                 required
               />
             </div>

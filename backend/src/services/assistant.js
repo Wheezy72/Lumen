@@ -12,6 +12,28 @@ const HEADER_HINTS = {
   'Content-Security-Policy': 'Restricts where scripts/styles can load from (reduces XSS impact).',
 };
 
+const HEADER_IMPACTS = {
+  'X-Frame-Options': 'Without it, attackers may be able to trick users into clicking invisible UI (clickjacking).',
+  'X-Content-Type-Options': 'Without it, browsers may treat files as a different type, enabling some injection attacks.',
+  'Referrer-Policy': 'Without it, sensitive URL details can leak to third parties via the Referrer header.',
+  'Strict-Transport-Security': 'Without it, users can be downgraded to HTTP, increasing the risk of interception/injection.',
+  'Content-Security-Policy': 'Without it, many XSS payloads are easier to execute and harder to contain.',
+};
+
+const CATEGORY_IMPACTS = {
+  xss: 'Attackers may run JavaScript in users’ browsers (session theft, account takeover).',
+  sqli: 'Attackers may read/modify database data or bypass authentication.',
+  headers: 'Missing headers remove browser-level protections that reduce exploit impact.',
+  cookies: 'Weak cookie flags make session theft and replay attacks easier.',
+  traversal: 'Attackers may read sensitive files or access unintended server paths.',
+  subdomain: 'Forgotten hosts are often weaker and can be used as a stepping stone into production.',
+  error: 'Verbose errors leak internal details that help attackers craft reliable exploits.',
+  access_control: 'Users may access other users’ data or perform actions they shouldn’t.',
+  rate_limit: 'Attackers can brute-force passwords or spam sensitive endpoints at high volume.',
+  tls: 'Weak TLS settings can allow interception or downgrade attacks.',
+  ssl: 'Weak TLS settings can allow interception or downgrade attacks.',
+};
+
 function headerMeaningFromTitle(title = '') {
   const raw = String(title || '');
   const match = raw.match(/^Missing security header:\s*(.+)$/i);
