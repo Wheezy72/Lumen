@@ -261,9 +261,10 @@ export default function App() {
               path="/settings"
               element={user ? <Settings user={user} onUpdateUser={setUser} /> : <Login onLogin={setUser} message="Please sign in to manage your settings." />}
             />
-            <Route path="/login" elemen={<<Login onLogin={setUser} />} />
-           <<Route path="/register" elemen={<<Register onRegister={setUser} />} />
-           < Route path="/forgot-password" elemen={<tForgotPassword />} />
+            <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <Login onLogin={setUser} />} />
+            <Route path="/register" element={user ? <Navigate to="/dashboard" replace /> : <Register onRegister={setUser} />} />
+            <Route path="/forgot-password" element={user ? <Navigate to="/dashboard" replace /> : <ForgotPassword />} />
+            <Route path="/reset-password" element={user ? <Navigate to="/dashboard" replace /> : <ResetPassword />} />
             <Route
               path="/report/:scanId"
               element={user ? <ReportView /> : <Login onLogin={setUser} message="Please sign in to view this report." />}

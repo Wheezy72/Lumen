@@ -169,9 +169,9 @@ export default function AuthBackground({ variant = "primary", className = "", ch
 
   return (
     <div ref={containerRef} className={`relative overflow-hidden ${className}`.trim()}>
-      <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/0 via-white/10 to-white/45 dark:from-black/0 dark:via-black/25 dark:to-black/70" />
-      <div className="relative">{children}</div>
+      <canvas ref={canvasRef} className="absolute inset-0 h-full w-full z-0" />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/0 via-white/10 to-white/45 dark:from-black/0 dark:via-black/25 dark:to-black/70 z-10" />
+      <div className="relative z-20">{children}</div>
     </div>
   );
 }
