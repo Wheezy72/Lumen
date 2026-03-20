@@ -35,7 +35,7 @@ export default function App() {
         const { data } = await axios.get("/api/auth/me");
         setUser(data);
       } catch {
-        // No active session.
+        setUser(null);
       } finally {
         setLoading(false);
       }
@@ -250,24 +250,64 @@ export default function App() {
             <Route path="/learn" element={<Vulnerabilities />} />
             <Route
               path="/dashboard"
-              element={user ? <Dashboard /> : <Login onLogin={setUser} message="Please sign in to view the dashboard." />}
+              element={
+                user
+                  ? <Dashboard />
+                  : <Navigate to="/login" replace state={{ message: "Please sign in to view the dashboard." }} />
+              }
             />
-            <Route path="/scans" element={user ? <Scans /> : <Login onLogin={setUser} message="Please sign in to view your scans." />} />
-            <Route path="/changes" element={user ? <Changes /> : <Login onLogin={setUser} message="Please sign in to view changes." />} />
+            <Route
+              path="/scans"
+              element={
+                user
+                  ? <Scans />
+                  : <Navigate to="/login" replace state={{ message: "Please sign in to view your scans." }} />
+              }
+            />
+            <Route
+              path="/changes"
+              element={
+                user
+                  ? <Changes />
+                  : <Navigate to="/login" replace state={{ message: "Please sign in to view changes." }} />
+              }
+            />
             {/* Alias kept for older links */}
-            <Route path="/regressions" element={user ? <Changes /> : <Login onLogin={setUser} message="Please sign in to view changes." />} />
-            <Route path="/new" element={user ? <NewScan /> : <Login onLogin={setUser} message="Please sign in to start a new scan." />} />
+            <Route
+              path="/regressions"
+              element={
+                user
+                  ? <Changes />
+                  : <Navigate to="/login" replace state={{ message: "Please sign in to view changes." }} />
+              }
+            />
+            <Route
+              path="/new"
+              element={
+                user
+                  ? <NewScan />
+                  : <Navigate to="/login" replace state={{ message: "Please sign in to start a new scan." }} />
+              }
+            />
             <Route
               path="/settings"
-              element={user ? <Settings user={user} onUpdateUser={setUser} /> : <Login onLogin={setUser} message="Please sign in to manage your settings." />}
+              element={
+                user
+                  ? <Settings user={user} onUpdateUser={setUser} />
+                  : <Navigate to="/login" replace state={{ message: "Please sign in to manage your settings." }} />
+              }
             />
-            <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <Login onLogin={setUser} />} />
-            <Route path="/register" element={user ? <Navigate to="/dashboard" replace /> : <Register onRegister={setUser} />} />
-            <Route path="/forgot-password" element={user ? <Navigate to="/dashboard" replace /> : <ForgotPassword />} />
-            <Route path="/reset-password" element={user ? <Navigate to="/dashboard" replace /> : <ResetPassword />} />
+            <Route path="/login" element={<Login onLogin={setUser} />} />
+            <Route path="/register" element={<Register onRegister={setUser} />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route
               path="/report/:scanId"
-              element={user ? <ReportView /> : <Login onLogin={setUser} message="Please sign in to view this report." />}
+              element={
+                user
+                  ? <ReportView />
+                  : <Navigate to="/login" replace state={{ message: "Please sign in to view this report." }} />
+              }
             />
             <Route path="/error" element={<ErrorPage />} />
             <Route path="*" element={<NotFound />} />

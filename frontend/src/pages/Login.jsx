@@ -1,10 +1,12 @@
 import React, { useState } from "react";
 import axios from "axios";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import AuthBackground from "../components/ui/AuthBackground.jsx";
 
 export default function Login({ onLogin, message }) {
   const navigate = useNavigate();
+  const location = useLocation();
+  const routingMessage = message || location.state?.message;
 
   const [form, setForm] = useState({ username: "", password: "" });
   const [error, setError] = useState("");
@@ -48,9 +50,9 @@ export default function Login({ onLogin, message }) {
           </div>
 
           {/* App.jsx routing message (e.g., "Please sign in to view the dashboard") */}
-          {message && !error && (
+          {routingMessage && !error && (
             <div className="mb-6 p-4 bg-primary-900/30 border border-primary-500/30 rounded-lg">
-              <p className="text-primary-400 text-sm text-center">{message}</p>
+              <p className="text-primary-400 text-sm text-center">{routingMessage}</p>
             </div>
           )}
 
