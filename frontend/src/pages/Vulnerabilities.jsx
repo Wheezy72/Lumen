@@ -255,6 +255,8 @@ export default function Vulnerabilities() {
               const showImage = attempt !== -1;
               const imageUrl = showImage ? `/learn/${v.slug}.${candidates[attempt]}` : '';
 
+              const expanded = expandedCard === v.id;
+
               return (
                 <article
                   key={v.id}
@@ -293,17 +295,22 @@ export default function Vulnerabilities() {
                     <span className={severityBadge(v.severity)}>{v.severity}</span>
                   </button>
 
-                  {expandedCard === v.id && (
+                  {expanded && (
                     <div className="px-5 pb-5 border-t border-slate-800 animate-slide-up">
                       <div className="pt-4 space-y-4">
-                        <LearnSection title="How it works">{v.humanDesc}</LearnSection>
-
-                        <LearnSection title="Real example">
-                          <div className="rounded-lg bg-black/5 dark:bg-black/55 border border-slate-800 p-3 text-xs text-gray-300 font-mono whitespace-pre-wrap">
-                            {v.realExample}
+                        {showImage && imageUrl ? (
+                          <div className="rounded-lg border border-slate-800 bg-black/5 dark:bg-black/25 overflow-hidden">
+                            <img
+                              src={imageUrl}
+                              alt=""
+                              className="w-full max-h-72 object-contain bg-black/5 dark:bg-black/40"
+                              onError={() => onHeaderImageError(v.slug)}
+                              loading="lazy"
+                            />
                           </div>
-                        </LearnSection>
+                        ) : null}
 
+                        <LearnSection title="How it works">{v.humanDesc}</LearnSection>
                         <LearnSection title="How to reduce the risk">{v.prevention}</LearnSection>
                       </div>
                     </div>
