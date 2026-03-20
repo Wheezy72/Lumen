@@ -261,8 +261,8 @@ export default function App() {
               path="/settings"
               element={user ? <Settings user={user} onUpdateUser={setUser} /> : <Login onLogin={setUser} message="Please sign in to manage your settings." />}
             />
-            <Route path="/login" elemen={<<Login onLogin={setUser} />} />
-           <<Route path="/register" elemen={<<Register onRegister={setUser} />} />
+            <Route path="/login" elemen={<Login onLogin={setUser} />} />
+           <Route path="/register" elemen={<Register onRegister={setUser} />} />
            < Route path="/forgot-password" elemen={<tForgotPassword />} />
             <Route
               path="/report/:scanId"
