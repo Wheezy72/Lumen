@@ -19,9 +19,18 @@ If you run the frontend with Vite, `/api` is proxied to the backend (`http://127
 - Frontend (Vite): `http://localhost:5173`
 - Backend API: `http://localhost:4000`
 
-If you’re accessing from another device on your network, use the backend machine’s IP:
+If you’re accessing from another device on your network, use the dev machine’s IP:
 - Example frontend: `http://100.114.121.63:5173`
 - Example backend: `http://100.114.121.63:4000`
+
+### LAN testing checklist (phone / second laptop)
+
+1) Start Vite with `host: true` (already configured).
+2) Make sure Windows firewall allows inbound TCP to ports **5173** and **4000**.
+3) In `backend/.env`, set one of:
+   - `CORS_ORIGINS=*` (fastest for local testing), or
+   - `CORS_ORIGINS=http://100.114.121.63:5173` (recommended if you want to be strict)
+4) Keep `COOKIE_DOMAIN` **empty** for LAN/IP testing.
 
 ---
 
