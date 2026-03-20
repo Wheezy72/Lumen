@@ -43,6 +43,10 @@ const scanSchema = Joi.object({
   scanProfile: Joi.array().items(Joi.string()).optional(),
   scheduledFor: Joi.date().iso().optional(),
   webhookUrl: Joi.string().uri({ allowRelative: false }).optional(),
+  authHeaders: Joi.object({
+    cookie: Joi.string().max(8192).allow(''),
+    authorization: Joi.string().max(8192).allow(''),
+  }).optional(),
 });
 
 const recurringScanSchema = Joi.object({
@@ -356,12 +360,20 @@ router.post('/', async (req, res, next) => {
       jobOptions.delay = scheduledTime.getTime() - Date.now();
     }
 
+    const requestHeaders = {};
+    const cookie = data.authHeaders?.cookie ? String(data.authHeaders.cookie).trim() : '';
+    const authorization = data.authHeaders?.authorization ? String(data.authHeaders.authorization).trim() : '';
+
+    if (cookie) requestHeaders.Cookie = cookie;
+    if (authorization) requestHeaders.Authorization = authorization;
+
     await scanQueue.add(
       'start',
       {
         scanId: scan._id.toString(),
         scanProfile: data.scanProfile,
         webhookUrl: data.webhookUrl || undefined,
+        requestHeaders: Object.keys(requestHeaders).length ? requestHeaders : undefined,
       },
       jobOptions,
     );

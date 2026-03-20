@@ -46,7 +46,7 @@ export default function Register({ onRegister }) {
       const response = await axios.post("/api/auth/register", {
         username: form.username,
         password: form.password,
-        email: form.email || undefined,
+        email: form.email,
       });
 
       if (onRegister) {
@@ -115,7 +115,7 @@ export default function Register({ onRegister }) {
 
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
-                Email <span className="text-gray-500 text-xs">(optional)</span>
+                Email <span className="text-primary-500">*</span>
               </label>
               <div className="relative">
                 <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 input-icon z-10">
@@ -135,6 +135,7 @@ export default function Register({ onRegister }) {
                   onChange={handleChange}
                   className="input"
                   placeholder="you@example.com"
+                  required
                 />
               </div>
             </div>

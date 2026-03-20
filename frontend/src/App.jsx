@@ -5,6 +5,8 @@ import Landing from "./pages/Landing.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
 import Login from "./pages/Login.jsx";
 import Register from "./pages/Register.jsx";
+import ForgotPassword from "./pages/ForgotPassword.jsx";
+import ResetPassword from "./pages/ResetPassword.jsx";
 import Scans from "./pages/Scans.jsx";
 import Changes from "./pages/Changes.jsx";
 import NewScan from "./pages/NewScan.jsx";
@@ -70,7 +72,11 @@ export default function App() {
   const isActiveRoute = (path) => location.pathname === path;
 
   // On auth routes, we want full-width background (no max-width container)
-  const isAuthRoute = location.pathname === "/login" || location.pathname === "/register";
+  const isAuthRoute =
+    location.pathname === "/login"
+    || location.pathname === "/register"
+    || location.pathname === "/forgot-password"
+    || location.pathname === "/reset-password";
 
   return (
     <div className="min-h-screen app-shell text-white">
@@ -255,8 +261,9 @@ export default function App() {
               path="/settings"
               element={user ? <Settings user={user} onUpdateUser={setUser} /> : <Login onLogin={setUser} message="Please sign in to manage your settings." />}
             />
-            <Route path="/login" element={<Login onLogin={setUser} />} />
-            <Route path="/register" element={<Register onRegister={setUser} />} />
+            <Route path="/login" elemen={<<Login onLogin={setUser} />} />
+           <<Route path="/register" elemen={<<Register onRegister={setUser} />} />
+           < Route path="/forgot-password" elemen={<tForgotPassword />} />
             <Route
               path="/report/:scanId"
               element={user ? <ReportView /> : <Login onLogin={setUser} message="Please sign in to view this report." />}

@@ -102,11 +102,11 @@ def check_tls(hostname: str, port: int = 443) -> List[Dict]:
     return issues
 
 
-def check_http_headers(url: str) -> List[Dict]:
+def check_http_headers(url: str, headers: Optional[Dict] = None) -> List[Dict]:
     """Inspect HTTP response headers for missing security headers."""
     issues: List[Dict] = []
     try:
-        resp = requests.get(url, timeout=10)
+        resp = requests.get(url, timeout=10, headers=headers)
         required = [
             ("Content-Security-Policy", "high"),
             ("X-Frame-Options", "medium"),
@@ -133,7 +133,7 @@ def check_http_headers(url: str) -> List[Dict]:
     return issues
 
 
-def check_xss(url: str) -> List[Dict]:
+def check_xss(url: str, headers: Optional[Dict] = None) -> List[Dict]:
     """Try to reflect a harmless script tag via query parameters."""
     issues: List[Dict] = []
     probe = "<script>alert(1)</script>"
@@ -145,7 +145,7 @@ def check_xss(url: str) -> List[Dict]:
         new_qs = urllib.parse.urlencode(qs, doseq=True)
         test_url = urllib.parse.urlunparse(parsed._replace(query=new_qs))
 
-        resp = requests.get(test_url, timeout=10)
+        resp = requests.get(test_url, timeout=10, headers=headers)
         if probe in resp.text:
             issues.append({
                 "title": "Reflected XSS",
@@ -165,7 +165,7 @@ def check_xss(url: str) -> List[Dict]:
     return issues
 
 
-def check_sql_injection(url: str) -> List[Dict]:
+def check_sql_injection(url: str, headers: Optional[Dict] = None) -> List[Dict]:
     """Add a simple SQL-shaped test string and look for error messages."""
     issues: List[Dict] = []
     payload = "' OR '1'='1"
@@ -177,7 +177,8 @@ def check_sql_injection(url: str) -> List[Dict]:
         new_qs = urllib.parse.urlencode(qs, doseq=True)
         test_url = urllib.parse.urlunparse(parsed._replace(query=new_qs))
 
-        resp = requests.get(test_url, timeout=10)
+        resp = requests.get(test_url, timeout=10, headers=headers)
+
         soup = BeautifulSoup(resp.text, "lxml")
         text = soup.text.lower()
         if "sql" in text or "syntax" in text:
@@ -198,7 +199,7 @@ def check_sql_injection(url: str) -> List[Dict]:
     return issues
 
 
-def check_directory_traversal(url: str) -> List[Dict]:
+def check_directory_traversal(url: str, headers: Optional[Dict] = None) -> List[Dict]:
     """Try to access sensitive files via a file parameter."""
     issues: List[Dict] = []
     try:
@@ -208,7 +209,7 @@ def check_directory_traversal(url: str) -> List[Dict]:
         test_url = urllib.parse.urlunparse(
             parsed._replace(query=urllib.parse.urlencode(qs, doseq=True))
         )
-        resp = requests.get(test_url, timeout=10)
+        resp = requests.get(test_url, timeout=10, headers=headers)
         if "root:x:" in resp.text:
             issues.append({
                 "title": "Directory traversal",
@@ -255,11 +256,11 @@ def discover_subdomains(hostname: str) -> List[Dict]:
     return issues
 
 
-def check_cookie_flags(url: str) -> List[Dict]:
+def check_cookie_flags(url: str, headers: Optional[Dict] = None) -> List[Dict]:
     """Inspect Set-Cookie headers for missing security flags."""
     issues: List[Dict] = []
     try:
-        resp = requests.get(url, timeout=10)
+        resp = requests.get(url, timeout=10, headers=headers)
         set_cookie = resp.headers.get("Set-Cookie")
         if not set_cookie:
             return issues
@@ -283,7 +284,7 @@ def check_cookie_flags(url: str) -> List[Dict]:
     return issues
 
 
-def check_error_leakage(url: str) -> List[Dict]:
+def check_error_leakage(url: str, headers: Optional[Dict] = None) -> List[Dict]:
     """Look for verbose error messages or stack traces."""
     issues: List[Dict] = []
     try:
@@ -293,7 +294,7 @@ def check_error_leakage(url: str) -> List[Dict]:
         test_url = urllib.parse.urlunparse(
             parsed._replace(query=urllib.parse.urlencode(qs, doseq=True))
         )
-        resp = requests.get(test_url, timeout=10)
+        resp = requests.get(test_url, timeout=10, headers=headers)
         text = resp.text
 
         if resp.status_code >= 500 or any(
@@ -316,7 +317,7 @@ def check_error_leakage(url: str) -> List[Dict]:
     return issues
 
 
-def check_broken_access_control(url: str) -> List[Dict]:
+def check_broken_access_control(url: str, headers: Optional[Dict] = None) -> List[Dict]:
     """Perform a simple IDOR-style probe."""
     issues: List[Dict] = []
     try:
@@ -338,8 +339,8 @@ def check_broken_access_control(url: str) -> List[Dict]:
         url1 = urllib.parse.urlunparse(parsed._replace(path=path_original))
         url2 = urllib.parse.urlunparse(parsed._replace(path=path_other))
 
-        resp1 = requests.get(url1, timeout=10)
-        resp2 = requests.get(url2, timeout=10)
+        resp1 = requests.get(url1, timeout=10, headers=headers)
+        resp2 = requests.get(url2, timeout=10, headers=headers)
 
         if resp1.status_code == 200 and resp2.status_code == 200 and resp1.text != resp2.text:
             issues.append({
@@ -359,13 +360,13 @@ def check_broken_access_control(url: str) -> List[Dict]:
     return issues
 
 
-def check_rate_limiting(url: str) -> List[Dict]:
+def check_rate_limiting(url: str, headers: Optional[Dict] = None) -> List[Dict]:
     """Check for signs of rate limiting."""
     issues: List[Dict] = []
     try:
         responses = []
         for _ in range(5):
-            resp = requests.get(url, timeout=5)
+            resp = requests.get(url, timeout=5, headers=headers)
             responses.append(resp)
 
         limited = any(
@@ -395,7 +396,12 @@ def check_rate_limiting(url: str) -> List[Dict]:
 # --- Orchestration -------------------------------------------------------------
 
 
-def run_scan(target_url: str, profile: Optional[List[str]] = None, scan_id: Optional[str] = None) -> List[Dict]:
+def run_scan(
+    target_url: str,
+    profile: Optional[List[str]] = None,
+    scan_id: Optional[str] = None,
+    headers: Optional[Dict] = None,
+) -> List[Dict]:
     """Run selected scan modules and report progress."""
     issues: List[Dict] = []
 
@@ -443,23 +449,23 @@ def run_scan(target_url: str, profile: Optional[List[str]] = None, scan_id: Opti
         if module == "tls":
             issues.extend(check_tls(hostname))
         elif module == "headers":
-            issues.extend(check_http_headers(target_url))
+            issues.extend(check_http_headers(target_url, headers))
         elif module == "xss":
-            issues.extend(check_xss(target_url))
+            issues.extend(check_xss(target_url, headers))
         elif module == "sqli":
-            issues.extend(check_sql_injection(target_url))
+            issues.extend(check_sql_injection(target_url, headers))
         elif module == "traversal":
-            issues.extend(check_directory_traversal(target_url))
+            issues.extend(check_directory_traversal(target_url, headers))
         elif module == "subdomain":
             issues.extend(discover_subdomains(hostname))
         elif module == "cookies":
-            issues.extend(check_cookie_flags(target_url))
+            issues.extend(check_cookie_flags(target_url, headers))
         elif module == "error":
-            issues.extend(check_error_leakage(target_url))
+            issues.extend(check_error_leakage(target_url, headers))
         elif module == "access_control":
-            issues.extend(check_broken_access_control(target_url))
+            issues.extend(check_broken_access_control(target_url, headers))
         elif module == "rate_limit":
-            issues.extend(check_rate_limiting(target_url))
+            issues.extend(check_rate_limiting(target_url, headers))
 
         current_progress += progress_step
         if scan_id:
@@ -491,6 +497,10 @@ def main() -> None:
             target_url = payload.get("targetUrl")
             profile = payload.get("scanProfile")
 
+            request_headers = payload.get("requestHeaders")
+            if not isinstance(request_headers, dict):
+                request_headers = None
+
             if not target_url:
                 print("Received job without a targetUrl, skipping.")
                 if scan_id:
@@ -501,7 +511,7 @@ def main() -> None:
             if scan_id:
                 send_progress(scan_id, 10)
 
-            issues = run_scan(target_url, profile, scan_id)
+            issues = run_scan(target_url, profile, scan_id, request_headers)
             send_results(scan_id, issues)
         except Exception as e:
             print(f"Worker error: {e}")
