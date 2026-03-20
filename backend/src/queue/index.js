@@ -292,7 +292,7 @@ export const configureBull = () => {
 
   // Process scan jobs
   scanQueue.process('start', async (job) => {
-    const { scanId, scanProfile } = job.data;
+    const { scanId, scanProfile, requestHeaders } = job.data;
 
     await initResultSubscriber();
 
@@ -325,6 +325,7 @@ export const configureBull = () => {
         scanId,
         targetUrl: scan.targetUrl,
         scanProfile: scanProfile || scan.scanProfile || null,
+        requestHeaders: requestHeaders || null,
       }));
 
       waiter.start();

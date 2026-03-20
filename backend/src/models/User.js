@@ -1,17 +1,20 @@
 import mongoose from 'mongoose';
 
 // Basic user account used for authentication and notifications.
-// Users sign in with a username and password. Email is optional and is only
-// used for notifications when the user enables email alerts.
+// Users sign in with a username and password. Email is required so users can
+// recover access via password reset.
 const userSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true, index: true },
-  email: { type: String, required: false, default: undefined, trim: true, lowercase: true },
+  email: { type: String, required: true, trim: true, lowercase: true },
   emailAlertsEnabled: { type: Boolean, default: false },
   passwordHash: { type: String, required: true },
+  passwordResetCodeHash: { type: String, default: undefined },
+  passwordResetExpiresAt: { type: Date, default: undefined },
   roles: { type: [String], default: ['user'] },
 }, { timestamps: true });
 
-// Email must be unique only when it exists (prevents duplicate key errors for null/missing values).
+// Keep the partial unique index to avoid duplicate key errors for any legacy users
+// that may still have a missing email value in older databases.
 userSchema.index(
   { email: 1 },
   {

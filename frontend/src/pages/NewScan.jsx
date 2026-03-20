@@ -46,6 +46,9 @@ export default function NewScan() {
   const [customModules, setCustomModules] = useState([]);
   const [scheduleEnabled, setScheduleEnabled] = useState(false);
   const [scheduledTime, setScheduledTime] = useState('');
+  const [authEnabled, setAuthEnabled] = useState(false);
+  const [cookieHeader, setCookieHeader] = useState('');
+  const [authorizationHeader, setAuthorizationHeader] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -110,6 +113,15 @@ export default function NewScan() {
         payload.scheduledFor = new Date(scheduledTime).toISOString();
       }
 
+      const cookie = cookieHeader.trim();
+      const authorization = authorizationHeader.trim();
+      if (authEnabled && (cookie || authorization)) {
+        payload.authHeaders = {
+          cookie: cookie || undefined,
+          authorization: authorization || undefined,
+        };
+      }
+
       const response = await axios.post('/api/scans', payload);
       navigate('/report/' + response.data._id);
     } catch (err) {
@@ -153,6 +165,75 @@ export default function NewScan() {
             />
             <p className="text-sm text-gray-500 mt-2">Example: https://example.com</p>
           </div>
+        </Card>
+
+        <Card className="p-6">
+          <CardHeader
+            title="Authentication"
+            description={authEnabled ? 'Send your Cookie / Authorization headers with each request.' : 'Optional (for scanning pages behind login)'}
+            actions={
+              <button
+                type="button"
+                onClick={() => setAuthEnabled((v) => !v)}
+                className="inline-flex items-center gap-3"
+                aria-pressed={authEnabled}
+              >
+                <span className="text-sm text-gray-400">Use auth</span>
+                <span
+                  className={`h-6 w-11 rounded-full border transition relative ${
+                    authEnabled
+                      ? 'bg-primary-500/20 border-primary-500/30'
+                      : 'bg-black/5 dark:bg-black/30 border-slate-700'
+                  }`}
+                >
+                  <span
+                    className={`absolute top-1/2 -translate-y-1/2 h-4 w-4 rounded-full transition ${
+                      authEnabled ? 'bg-primary-400 left-6' : 'bg-slate-500 left-1'
+                    }`}
+                  />
+                </span>
+              </button>
+            }
+          />
+
+          {authEnabled ? (
+            <div className="mt-5 space-y-4 animate-slide-up">
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-2">Cookie</label>
+                <textarea
+                  value={cookieHeader}
+                  onChange={(e) => setCookieHeader(e.target.value)}
+                  placeholder="session=...; other=..."
+                  className="input input-plain h-24"
+                />
+                <p className="text-xs text-gray-500 mt-2">
+                  Paste the raw Cookie header value from your browser (DevTools → Application → Cookies).
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-2">Authorization</label>
+                <input
+                  type="text"
+                  value={authorizationHeader}
+                  onChange={(e) => setAuthorizationHeader(e.target.value)}
+                  placeholder="Bearer eyJ..."
+                  className="input input-plain"
+                />
+                <p className="text-xs text-gray-500 mt-2">
+                  If the app uses tokens, paste the full Authorization header value (for example: Bearer &lt;token&gt;).
+                </p>
+              </div>
+
+              <div className="text-xs text-amber-400/90">
+                Don’t share cookies/tokens from real accounts. Sessions can expire.
+              </div>
+            </div>
+          ) : (
+            <div className="mt-5 text-sm text-gray-500">
+              Turn this on only when you need to scan an authenticated area.
+            </div>
+          )}
         </Card>
 
         <Card className="p-6">

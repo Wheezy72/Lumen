@@ -31,15 +31,24 @@ const SEV_COLORS = {
 
 function isRealFinding(finding) {
   if (!finding || !finding.title) return false;
-  const title = finding.title.toLowerCase();
-  return !(
-    title.includes('error') ||
-    title.includes('exception') ||
-    title.includes('failed') ||
-    title.includes('timeout') ||
-    title.includes('could not') ||
-    title.includes('unable to')
-  );
+
+  const title = String(finding.title).toLowerCase();
+  const category = String(finding.category || '').toLowerCase();
+
+  // Exclude non-security “scanner could not run” conditions.
+  if (category === 'network' || category === 'policy' || category === 'http') return false;
+
+  // Exclude module failures without accidentally hiding real findings like
+  // "Verbose error or stack trace exposed".
+  if (title.includes('scan error') || title.endsWith('enumeration error')) return false;
+
+  if (title === 'dns resolution failed' || title === 'invalid site url') return false;
+
+  if (title.includes('timeout') || title.includes('timed out') || title.includes('could not') || title.includes('unable to')) {
+    return false;
+  }
+
+  return true;
 }
 
 function severityRank(sev) {

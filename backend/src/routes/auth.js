@@ -1,15 +1,30 @@
 import express from 'express';
 import Joi from 'joi';
 import bcrypt from 'bcryptjs';
+import crypto from 'node:crypto';
 import User from '../models/User.js';
 import { signToken, setAuthCookie, clearAuthCookie, authMiddleware } from '../middleware/auth.js';
+import { sendPasswordResetCodeEmail } from '../services/email.js';
 
 const router = express.Router();
 
 const registerSchema = Joi.object({
   username: Joi.string().alphanum().min(3).max(50).required(),
-  // Removed .email() completely. It will now accept any string, or nothing at all.
-  email: Joi.string().allow('', null).optional(),
+  email: Joi.string().email().max(254).required(),
+  password: Joi.string()
+    .min(8)
+    .max(128)
+    .pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*[^A-Za-z0-9]).+$/)
+    .required(),
+});
+
+const forgotPasswordSchema = Joi.object({
+  email: Joi.string().email().max(254).required(),
+});
+
+const resetPasswordSchema = Joi.object({
+  email: Joi.string().email().max(254).required(),
+  code: Joi.string().pattern(/^\d{6}$/).required(),
   password: Joi.string()
     .min(8)
     .max(128)
@@ -27,26 +42,20 @@ router.post('/register', async (req, res, next) => {
   try {
     const { username, email, password } = await registerSchema.validateAsync(req.body, { stripUnknown: true });
 
-    const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+    const normalizedEmail = email.trim().toLowerCase();
 
-    // Build the query dynamically so we don't search for empty emails
-    const query = [{ username }];
-    if (normalizedEmail) {
-      query.push({ email: normalizedEmail });
-    }
-
-    const existingUser = await User.findOne({ $or: query });
+    const existingUser = await User.findOne({ $or: [{ username }, { email: normalizedEmail }] });
     if (existingUser) {
       return res.status(409).json({ error: 'Username or email is already registered.' });
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
 
-    // Dynamically build the user object so MongoDB's partial email index ignores missing fields
-    const newUserData = { username, passwordHash };
-    if (normalizedEmail) newUserData.email = normalizedEmail;
-
-    const user = await User.create(newUserData);
+    const user = await User.create({
+      username,
+      email: normalizedEmail,
+      passwordHash,
+    });
 
     const token = signToken({ id: user._id, username: user.username });
     setAuthCookie(res, token);
@@ -98,6 +107,72 @@ router.get('/me', authMiddleware, async (req, res, next) => {
       email: user.email,
       emailAlertsEnabled: user.emailAlertsEnabled,
     });
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.post('/forgot-password', async (req, res, next) => {
+  try {
+    const emailEnabled = ['true', '1', 'yes', 'on'].includes(String(process.env.EMAIL_ENABLED || '').toLowerCase());
+    if (!emailEnabled) {
+      return res.status(503).json({ error: 'Email is not configured on this server.' });
+    }
+
+    const { email } = await forgotPasswordSchema.validateAsync(req.body, { stripUnknown: true });
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const user = await User.findOne({ email: normalizedEmail });
+    if (user) {
+      const code = String(Math.floor(100000 + Math.random() * 900000));
+      const codeHash = crypto.createHash('sha256').update(code).digest('hex');
+
+      user.passwordResetCodeHash = codeHash;
+      user.passwordResetExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
+      await user.save();
+
+      await sendPasswordResetCodeEmail({
+        to: user.email,
+        username: user.username,
+        code,
+      });
+    }
+
+    res.json({ ok: true });
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.post('/reset-password', async (req, res, next) => {
+  try {
+    const { email, code, password } = await resetPasswordSchema.validateAsync(req.body, { stripUnknown: true });
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const user = await User.findOne({ email: normalizedEmail });
+    const storedHash = user?.passwordResetCodeHash;
+    const storedExp = user?.passwordResetExpiresAt;
+
+    if (!user || !storedHash || !storedExp || storedExp.getTime() < Date.now()) {
+      return res.status(400).json({ error: 'Invalid or expired reset code.' });
+    }
+
+    const providedHash = crypto.createHash('sha256').update(String(code)).digest('hex');
+
+    const a = Buffer.from(storedHash, 'utf8');
+    const b = Buffer.from(providedHash, 'utf8');
+    const match = a.length === b.length && crypto.timingSafeEqual(a, b);
+
+    if (!match) {
+      return res.status(400).json({ error: 'Invalid or expired reset code.' });
+    }
+
+    user.passwordHash = await bcrypt.hash(password, 12);
+    user.passwordResetCodeHash = undefined;
+    user.passwordResetExpiresAt = undefined;
+    await user.save();
+
+    res.json({ ok: true });
   } catch (e) {
     next(e);
   }

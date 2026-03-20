@@ -7,7 +7,7 @@ const router = express.Router();
 
 const updateSchema = Joi.object({
   username: Joi.string().alphanum().min(3).max(50).optional(),
-  email: Joi.string().allow('', null).optional(),
+  email: Joi.string().email().max(254).required(),
   emailAlertsEnabled: Joi.boolean().optional(),
 });
 
@@ -51,18 +51,17 @@ router.put('/me', async (req, res, next) => {
       }
     }
 
-    const normalizedEmail = typeof payload.email === 'string' ? payload.email.trim().toLowerCase() : null;
-
-    if (normalizedEmail) {
-      const existing = await User.findOne({ email: normalizedEmail, _id: { $ne: user._id } });
-      if (existing) {
-        return res.status(409).json({ error: 'That email is already linked to another account.' });
-      }
-      user.email = normalizedEmail;
-    } else if (payload.email === '' || payload.email === null) {
-      user.email = undefined;
-      user.emailAlertsEnabled = false;
+    const normalizedEmail = payload.email.trim().toLowerCase();
+    if (!normalizedEmail) {
+      return res.status(400).json({ error: 'Email is required.' });
     }
+
+    const existing = await User.findOne({ email: normalizedEmail, _id: { $ne: user._id } });
+    if (existing) {
+      return res.status(409).json({ error: 'That email is already linked to another account.' });
+    }
+
+    user.email = normalizedEmail;
 
     if (typeof payload.emailAlertsEnabled === 'boolean') {
       if (payload.emailAlertsEnabled && !user.email) {

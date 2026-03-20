@@ -55,7 +55,7 @@ export default function Settings({ user, onUpdateUser }) {
     }
   };
 
-  const canEnableAlerts = Boolean(form.email.trim());
+  const hasEmail = Boolean(form.email.trim());
 
   return (
     <div className="max-w-2xl">
@@ -102,11 +102,17 @@ export default function Settings({ user, onUpdateUser }) {
                 className="input input-plain"
                 value={form.email}
                 onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
-                placeholder="Optional (used for alerts)"
+                placeholder="you@example.com"
+                required
               />
               <p className="text-xs text-gray-500 mt-2">
-                Email is optional. If you don’t add one, alerts stay disabled.
+                Your email is required for password resets and notifications.
               </p>
+              {!hasEmail && (
+                <div className="text-xs text-amber-400/90 mt-2">
+                  Add an email address to continue.
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -119,7 +125,7 @@ export default function Settings({ user, onUpdateUser }) {
               type="checkbox"
               checked={form.emailAlertsEnabled}
               onChange={(e) => setForm((p) => ({ ...p, emailAlertsEnabled: e.target.checked }))}
-              disabled={!canEnableAlerts}
+              disabled={!hasEmail}
               className="mt-1 w-4 h-4 text-primary-500 bg-black/5 dark:bg-black/40 border-slate-600 rounded disabled:opacity-40"
             />
             <div>
@@ -127,11 +133,7 @@ export default function Settings({ user, onUpdateUser }) {
               <div className="text-xs text-gray-500 mt-1">
                 Sends you a short summary when a scan finds issues.
               </div>
-              {!canEnableAlerts && (
-                <div className="text-xs text-amber-400/90 mt-2">
-                  Add an email address above to enable alerts.
-                </div>
-              )}
+              
             </div>
           </label>
         </div>

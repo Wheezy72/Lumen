@@ -163,6 +163,29 @@ async function generatePdfExport(scan, { summaryLines = [], topFindings = [] } =
   return { fileName, filePath, downloadUrl };
 }
 
+export async function sendPasswordResetCodeEmail({ to, username, code }) {
+  if (!isEmailEnabled()) {
+    throw new Error('Email is not enabled (EMAIL_ENABLED is false)');
+  }
+
+  const subject = '[Lumen] Password reset code';
+  const text = [
+    `A password reset was requested for: ${username || 'your account'}`,
+    '',
+    `Your reset code is: ${code}`,
+    'This code expires in 15 minutes.',
+    '',
+    'If you did not request this, you can ignore this message.',
+  ].join('\n');
+
+  await getTransporter().sendMail({
+    from: EMAIL_FROM,
+    to,
+    subject,
+    text,
+  });
+}
+
 export async function sendScanSummaryEmail(scan) {
   if (!isEmailEnabled()) return;
 

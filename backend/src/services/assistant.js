@@ -21,7 +21,17 @@ function headerMeaningFromTitle(title = '') {
   const meaning = HEADER_HINTS[header];
   if (!meaning) return null;
 
-  return { header, meaning };
+  return { header, meaning, impact: HEADER_IMPACTS[header] };
+}
+
+function whyItMattersForFinding(finding) {
+  const category = String(finding?.category || 'other').toLowerCase();
+  const headerMeaning = headerMeaningFromTitle(finding?.title);
+
+  if (headerMeaning?.impact) return headerMeaning.impact;
+
+  return CATEGORY_IMPACTS[category]
+    || 'If real, this can make the application easier to attack or harder to defend.';
 }
 
 function remediationForCategory(category) {
@@ -104,7 +114,7 @@ export function localAssistantExplanation(scan, finding) {
 
   lines.push('');
   lines.push('Why it matters');
-  lines.push('- If real, this can make the application easier to attack or harder to defend.');
+  lines.push(`- ${whyItMattersForFinding(finding)}`);
 
   lines.push('');
   lines.push('How to fix');
