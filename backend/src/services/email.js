@@ -82,7 +82,6 @@ async function generateCsvExport(scan) {
       { id: 'title', title: 'Title' },
       { id: 'category', title: 'Category' },
       { id: 'cve', title: 'CVE' },
-      { id: 'epss', title: 'EPSS' },
       { id: 'description', title: 'Description' },
       { id: 'evidence', title: 'Evidence' },
     ],
@@ -93,7 +92,6 @@ async function generateCsvExport(scan) {
     title: v.title || '',
     category: v.category || '',
     cve: v.cve || '',
-    epss: typeof v.epss !== 'undefined' ? v.epss : '',
     description: v.description || '',
     evidence: v.evidence || '',
   }));
