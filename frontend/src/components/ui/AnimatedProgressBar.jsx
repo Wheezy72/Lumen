@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 
-function clampPct(v) {
-  const n = Number(v);
+function clampPct(value) {
+  const n = Number(value);
   if (Number.isNaN(n)) return 0;
   return Math.min(100, Math.max(0, n));
 }
@@ -21,7 +21,6 @@ export default function AnimatedProgressBar({ progress, running, label, compact 
 
     const tick = (now) => {
       const t = Math.min(1, (now - start) / duration);
-      // easeOutCubic
       const eased = 1 - Math.pow(1 - t, 3);
       setDisplay(from + (to - from) * eased);
       if (t < 1) raf.current = requestAnimationFrame(tick);
@@ -37,19 +36,54 @@ export default function AnimatedProgressBar({ progress, running, label, compact 
   const pctLabel = useMemo(() => `${Math.round(display)}%`, [display]);
 
   return (
-    <div className={compact ? '' : 'space-y-2'}>
-      <div className={`${compact ? 'h-1.5' : 'h-2.5'} rounded-full bg-slate-800 overflow-hidden`}>
+    <div className={compact ? '' : '\n  space-y-2\n'}>
+      <div
+        className={`
+          ${compact ? 'h-1.5' : 'h-2.5'}
+          rounded-full
+          bg-slate-800
+          overflow-hidden
+        `.trim()}
+      >
         <div
-          className={`h-full rounded-full transition-[width] duration-200 ease-out ${running ? 'progress-fill-running' : 'bg-emerald-500'}`}
+          className={`
+            h-full
+            rounded-full
+            transition-[width]
+            duration-200
+            ease-out
+            ${running ? 'progress-fill-running' : 'bg-emerald-500'}
+          `.trim()}
           style={{ width: `${display}%` }}
         />
       </div>
-      {!compact && (
-        <div className="flex items-center justify-between text-xs text-gray-600">
-          <span className="capitalize">{label || (running ? 'Scanning…' : 'Complete')}</span>
-          <span className="tabular-nums">{pctLabel}</span>
+
+      {!compact ? (
+        <div
+          className="
+            flex
+            items-center
+            justify-between
+            text-xs
+            text-gray-600
+          "
+        >
+          <span
+            className="
+              capitalize
+            "
+          >
+            {label || (running ? 'Scanning…' : 'Complete')}
+          </span>
+          <span
+            className="
+              tabular-nums
+            "
+          >
+            {pctLabel}
+          </span>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

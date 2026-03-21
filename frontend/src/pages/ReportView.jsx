@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { Link, useParams } from 'react-router-dom';
 import AnimatedProgressBar from '../components/ui/AnimatedProgressBar.jsx';
@@ -16,37 +16,43 @@ const SEV = {
 
 export default function ReportView() {
   const { scanId } = useParams();
+
   const [scan, setScan] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [scanLoading, setScanLoading] = useState(true);
+  const [scanErrorMessage, setScanErrorMessage] = useState('');
+
+  const [selectedFindingListIndex, setSelectedFindingListIndex] = useState(0);
+
+  const [diffData, setDiffData] = useState(null);
+  const [diffLoading, setDiffLoading] = useState(false);
+
   const [pdfLoading, setPdfLoading] = useState(false);
   const [csvLoading, setCsvLoading] = useState(false);
 
-  const [diffLoading, setDiffLoading] = useState(false);
-  const [diffData, setDiffData] = useState(null);
-
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [assistantLoading, setAssistantLoading] = useState(false);
-  const [assistantError, setAssistantError] = useState('');
+  const [assistantErrorMessage, setAssistantErrorMessage] = useState('');
   const [assistantText, setAssistantText] = useState('');
 
   const loadScan = async () => {
+    setScanErrorMessage('');
+    setScanLoading(true);
+
     try {
-      setLoading(true);
       const { data } = await axios.get('/api/scans/' + scanId);
       setScan(data);
-      setSelectedIndex(0);
+      setSelectedFindingListIndex(0);
     } catch {
-      setError('Failed to load scan results');
+      setScanErrorMessage('Failed to load scan results');
     } finally {
-      setLoading(false);
+      setScanLoading(false);
     }
   };
 
   const loadDiff = async () => {
+    setDiffLoading(true);
+
     try {
-      setDiffLoading(true);
       const { data } = await axios.get(`/api/scans/${scanId}/diff`);
       setDiffData(data);
     } catch {
@@ -57,8 +63,9 @@ export default function ReportView() {
   };
 
   const generatePdf = async () => {
+    setPdfLoading(true);
+
     try {
-      setPdfLoading(true);
       const { data } = await axios.post('/api/reports/pdf', { scanId });
       window.open(data.url, '_blank');
     } catch {
@@ -69,8 +76,9 @@ export default function ReportView() {
   };
 
   const generateCsv = async () => {
+    setCsvLoading(true);
+
     try {
-      setCsvLoading(true);
       const { data } = await axios.post('/api/reports/csv', { scanId });
       window.open(data.url, '_blank');
     } catch {
@@ -85,103 +93,74 @@ export default function ReportView() {
     loadDiff();
 
     const es = new EventSource('/api/sse/events');
+
     es.onmessage = (e) => {
       try {
         const msg = JSON.parse(e.data);
         if (msg.scanId !== scanId) return;
 
         if (msg.type === 'progress') {
-          setScan((prev) => (prev ? { ...prev, progress: msg.progress ?? prev.progress, status: 'running' } : prev));
-        } else if (msg.type === 'failed') {
-          setScan((prev) => (prev ? { ...prev, status: 'failed', error: msg.error || prev.error } : prev));
-        } else if (msg.type === 'completed') {
+          setScan((prev) => (prev
+            ? { ...prev, progress: msg.progress ?? prev.progress, status: 'running' }
+            : prev
+          ));
+          return;
+        }
+
+        if (msg.type === 'failed') {
+          setScan((prev) => (prev
+            ? { ...prev, status: 'failed', error: msg.error || prev.error }
+            : prev
+          ));
+          return;
+        }
+
+        if (msg.type === 'completed') {
           loadScan();
           loadDiff();
         }
-      } catch {}
+      } catch {
+        // ignore invalid event payloads
+      }
     };
+
     return () => es.close();
   }, [scanId]);
 
   useEffect(() => {
-    setSelectedIndex(0);
+    setSelectedFindingListIndex(0);
   }, [scanId]);
 
-  const formatLocalDateTime = (value) => {
-    if (!value) return '—';
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return '—';
-    return new Intl.DateTimeFormat(undefined, {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-    }).format(d);
-  };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <div className="animate-spin w-8 h-8 mx-auto border-2 border-primary-500 border-t-transparent rounded-full mb-4" />
-          <p className="text-gray-500 text-sm">Loading scan results…</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="text-center py-16">
-        <p className="text-red-400 mb-4">{error}</p>
-        <div className="flex items-center justify-center gap-3">
-          <button onClick={loadScan} className="text-primary-500 hover:underline text-sm">Try again</button>
-          <Link to="/login" className="text-gray-500 hover:text-gray-400 text-sm">Sign in</Link>
-        </div>
-      </div>
-    );
-  }
-
   const findings = scan?.results || [];
-  const findingsWithIndex = findings.map((f, idx) => ({ ...f, __index: idx }));
 
-  const sevRank = (sev) => {
-    const s = (sev || 'info').toLowerCase();
-    if (s === 'critical') return 4;
-    if (s === 'high') return 3;
-    if (s === 'medium') return 2;
-    if (s === 'low') return 1;
-    return 0;
-  };
+  const sortedFindings = useMemo(() => {
+    const findingsWithIndex = findings.map((f, idx) => ({ ...f, __index: idx }));
 
-  const sortedFindings = [...findingsWithIndex].sort((a, b) => {
-    const d = sevRank(b.severity) - sevRank(a.severity);
-    if (d) return d;
-    return String(a.title || '').localeCompare(String(b.title || ''));
-  });
+    return [...findingsWithIndex].sort((a, b) => {
+      const d = getSeverityRank(b.severity) - getSeverityRank(a.severity);
+      if (d) return d;
+      return String(a.title || '').localeCompare(String(b.title || ''));
+    });
+  }, [findings]);
 
-  const topFindings = sortedFindings.slice(0, 3);
+  const topFindings = useMemo(() => sortedFindings.slice(0, 3), [sortedFindings]);
 
-  const safeSelectedIndex = Math.min(selectedIndex, Math.max(sortedFindings.length - 1, 0));
-  const selectedVuln = sortedFindings[safeSelectedIndex];
-  const selectedFindingIndex = typeof selectedVuln?.__index === 'number' ? selectedVuln.__index : null;
+  const safeSelectedIndex = Math.min(selectedFindingListIndex, Math.max(sortedFindings.length - 1, 0));
+  const selectedFinding = sortedFindings[safeSelectedIndex];
+  const selectedFindingIndex = typeof selectedFinding?.__index === 'number' ? selectedFinding.__index : null;
 
-  const statusColor = scan?.status === 'completed' ? 'text-emerald-400'
-    : scan?.status === 'running' ? 'text-blue-400'
-    : scan?.status === 'failed' ? 'text-red-400'
-    : 'text-gray-400';
+  const isRunning = scan?.status === 'running' || scan?.status === 'queued' || scan?.status === 'scheduled';
+  const statusColor = getStatusColor(scan?.status);
 
-  const running = scan?.status === 'running' || scan?.status === 'queued' || scan?.status === 'scheduled';
-
-  const openAssistantForFinding = async () => {
+  const openAssistantForSelectedFinding = async () => {
     if (selectedFindingIndex === null) return;
 
     setAssistantOpen(true);
-    setAssistantError('');
+    setAssistantErrorMessage('');
     setAssistantText('');
 
     setAssistantLoading(true);
+
     try {
       const { data } = await axios.post('/api/ai/chat', {
         scanId,
@@ -195,338 +174,1208 @@ export default function ReportView() {
       setAssistantText(data?.assistant?.content || '');
     } catch (e) {
       const msg = e?.response?.data?.error || 'Failed to load the explanation.';
-      setAssistantError(msg);
+      setAssistantErrorMessage(msg);
     } finally {
       setAssistantLoading(false);
     }
   };
 
+  if (scanLoading) {
+    return (
+      <div
+        className="
+          flex
+          items-center
+          justify-center
+          min-h-[400px]
+        "
+      >
+        <div
+          className="
+            text-center
+          "
+        >
+          <div
+            className="
+              animate-spin
+              w-8
+              h-8
+              mx-auto
+              border-2
+              border-primary-500
+              border-t-transparent
+              rounded-full
+              mb-4
+            "
+          />
+          <p
+            className="
+              text-gray-500
+              text-sm
+            "
+          >
+            Loading scan results…
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (scanErrorMessage) {
+    return (
+      <div
+        className="
+          text-center
+          py-16
+        "
+      >
+        <p
+          className="
+            text-red-400
+            mb-4
+          "
+        >
+          {scanErrorMessage}
+        </p>
+        <div
+          className="
+            flex
+            items-center
+            justify-center
+            gap-3
+          "
+        >
+          <button
+            onClick={loadScan}
+            className="
+              text-primary-500
+              hover:underline
+              text-sm
+            "
+          >
+            Try again
+          </button>
+          <Link
+            to="/login"
+            className="
+              text-gray-500
+              hover:text-gray-400
+              text-sm
+            "
+          >
+            Sign in
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
-      <div className="space-y-5">
-      {/* ── Header ─────────────────────────────────────────────── */}
-      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold bg-gradient-to-r from-primary-400 to-secondary-400 bg-clip-text text-transparent">Scan report</h1>
-          <p className="text-gray-500 mt-1 break-all text-sm">{scan?.targetUrl}</p>
-        </div>
-        <div className="flex gap-2 shrink-0">
-          <button
-            onClick={generatePdf}
-            disabled={pdfLoading}
-            className="px-4 py-2 rounded-lg text-sm font-medium bg-dark-200 border border-slate-800 hover:bg-black/5 dark:hover:bg-slate-800 disabled:opacity-50 transition"
-          >
-            {pdfLoading ? 'Generating…' : 'Download PDF'}
-          </button>
-          <button
-            onClick={generateCsv}
-            disabled={csvLoading}
-            className="px-4 py-2 rounded-lg text-sm font-medium btn btn-primary disabled:opacity-50"
-          >
-            {csvLoading ? 'Generating…' : 'Download CSV'}
-          </button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Summary */}
-        <div className="lg:col-span-2 rounded-xl border border-slate-800 bg-dark-200 p-5">
-          <h2 className="text-sm font-semibold text-white">Summary</h2>
-          <p className="text-sm text-gray-500 mt-1">
-            {findings.length === 0
-              ? (running ? 'Scanning…' : 'No issues found.')
-              : `${findings.length} issues found. Top ones are below.`}
-          </p>
-
-          {topFindings.length > 0 ? (
-            <ul className="mt-4 space-y-2">
-              {topFindings.map((f, i) => (
-                <li key={i} className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-sm text-gray-200 truncate">{displayFindingTitle(f)}</p>
-                    <p className="text-xs text-gray-600 mt-0.5">{formatCategoryLabel(f.category)}</p>
-                  </div>
-                  <SeverityDot severity={(f.severity || 'info').toLowerCase()} />
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <div className="mt-4 text-sm text-gray-600">
-              {running ? 'Issues will show when the scan is done.' : 'No issues found.'}
-            </div>
-          )}
-
-          <div className="mt-4 pt-4 border-t border-slate-800 flex flex-wrap gap-2">
-            <Link to="/scans" className="px-3 py-2 rounded-lg text-sm font-medium bg-dark-300 border border-slate-800 hover:bg-black/5 dark:hover:bg-slate-800 transition">
-              Back to scans
-            </Link>
-            <Link to="/new" className="px-3 py-2 rounded-lg text-sm font-medium btn btn-primary">
-              New scan
-            </Link>
-          </div>
-        </div>
-
-        {/* Changes */}
-        <div className="rounded-xl border border-slate-800 bg-dark-200 p-5">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h2 className="text-sm font-semibold text-white">Changes</h2>
-              <p className="text-xs text-gray-600 mt-1">Compared to the previous scan</p>
-            </div>
-            {diffData?.compareScanId ? (
-              <Link
-                to={`/report/${diffData.compareScanId}`}
-                className="text-xs font-semibold text-primary-400 hover:text-primary-300 transition"
-              >
-                View previous →
-              </Link>
-            ) : null}
-          </div>
-
-          <div className="mt-4 space-y-3">
-            <div className="rounded-lg border border-slate-800 bg-black/5 dark:bg-black/30 p-3">
-              <p className="text-xs text-gray-600">Note</p>
-              {diffData?.compareScanId ? (
-                (scan?.diffSummary?.newBlockedCount || 0) > 0 ? (
-                  <p className="text-sm text-red-400 mt-1">
-                    New serious issues: <span className="font-semibold tabular-nums">{scan.diffSummary.newBlockedCount}</span>
-                  </p>
-                ) : (
-                  <p className="text-sm text-emerald-400 mt-1">No new serious issues since the last scan.</p>
-                )
-              ) : (
-                <p className="text-sm text-gray-600 mt-1">Run another scan to see changes.</p>
-              )}
-            </div>
-
-            <div className="rounded-lg border border-slate-800 bg-black/5 dark:bg-black/30 p-3">
-              <p className="text-xs text-gray-600">Changes</p>
-              {diffLoading ? (
-                <p className="text-sm text-gray-500 mt-1">Loading…</p>
-              ) : diffData?.compareScanId ? (
-                <div className="mt-2 space-y-2">
-                  <p className="text-sm text-gray-200">Compared to {formatLocalDateTime(diffData.compareCreatedAt)}</p>
-                  {diffData?.diff ? (
-                    <div className="grid grid-cols-3 gap-2 text-xs">
-                      <Stat label="New" value={diffData.diff.newIssues?.length || 0} className="text-red-400" />
-                      <Stat label="Fixed" value={diffData.diff.fixedIssues?.length || 0} className="text-emerald-400" />
-                      <Stat label="Still there" value={diffData.diff.persisting?.length || 0} className="text-gray-300" />
-                    </div>
-                  ) : (
-                    <p className="text-sm text-gray-600">No comparison available yet.</p>
-                  )}
-                </div>
-              ) : (
-                <p className="text-sm text-gray-600 mt-1">No previous scan for this site yet.</p>
-              )}
-            </div>
-
-            
-          </div>
-        </div>
-      </div>
-
-      {/* ── Meta bar ───────────────────────────────────────────── */}
-      <div className="rounded-xl border border-slate-800 bg-dark-200 p-5">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+      <div
+        className="
+          space-y-5
+        "
+      >
+        {/* ── Header ─────────────────────────────────────────────── */}
+        <div
+          className="
+            flex
+            flex-col
+            md:flex-row
+            md:items-start
+            md:justify-between
+            gap-4
+          "
+        >
           <div>
-            <p className="text-xs text-gray-600 mb-1">Status</p>
-            <p className={`font-semibold capitalize ${statusColor}`}>{scan?.status}</p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-600 mb-1">Progress</p>
-            <p className="font-semibold text-white">{scan?.progress ?? 0}%</p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-600 mb-1">Started</p>
-            <p className="font-semibold text-white">{formatLocalDateTime(scan?.startedAt)}</p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-600 mb-1">Completed</p>
-            <p className="font-semibold text-white">{formatLocalDateTime(scan?.completedAt)}</p>
-          </div>
-        </div>
-
-        <div className="mt-4">
-          <AnimatedProgressBar progress={scan?.progress ?? 0} running={running} />
-        </div>
-
-        
-      </div>
-
-      {/* ── Findings + Detail ──────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Findings list */}
-        <div className="rounded-xl border border-slate-800 bg-dark-200 p-4">
-          <div className="flex items-end justify-between gap-3 mb-3">
-            <h2 className="font-semibold text-white text-sm">
-              Findings <span className="text-gray-600 font-normal">({sortedFindings.length})</span>
-            </h2>
-          </div>
-
-          {findings.length === 0 ? (
-            <div className="py-6">
-              <EmptyState
-                title={running ? 'Scanning…' : 'No issues found'}
-                description={running ? 'Issues will show here when the scan is done.' : 'This scan finished with no issues.'}
-              />
-            </div>
-          ) : (
-            <ul className="space-y-1.5 max-h-[460px] overflow-y-auto pr-1">
-              {sortedFindings.map((f, i) => {
-                const sev = (f.severity || 'info').toLowerCase();
-                const active = i === safeSelectedIndex;
-                return (
-                  <li
-                    key={typeof f.__index === 'number' ? f.__index : i}
-                    onClick={() => setSelectedIndex(i)}
-                    className={`p-3 rounded-lg cursor-pointer transition border ${
-                      active
-                        ? 'bg-primary-500/10 dark:bg-primary-900/30 border-primary-500/30 dark:border-primary-700/50'
-                        : 'border-transparent hover:bg-black/5 dark:hover:bg-slate-800/50'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <span className="text-sm text-gray-200 font-medium leading-snug">{displayFindingTitle(f)}</span>
-                      <SeverityDot severity={sev} />
-                    </div>
-                    <div className="mt-1 text-xs text-gray-600">
-                      {formatCategoryLabel(f.category)}
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
-
-        {/* Detail panel */}
-        <div className="lg:col-span-2 rounded-xl border border-slate-800 bg-dark-200 p-5">
-          <div className="flex items-center justify-between gap-3 mb-4">
-            <h2 className="font-semibold text-white text-sm">Details</h2>
-            <button
-              type="button"
-              onClick={() => openAssistantForFinding()}
-              disabled={!selectedVuln || selectedFindingIndex === null}
-              className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-800 bg-black/5 dark:bg-black/30 hover:bg-black/10 dark:hover:bg-black/50 transition disabled:opacity-50 disabled:cursor-not-allowed text-gray-200"
+            <h1
+              className="
+                text-2xl
+                font-bold
+                bg-gradient-to-r
+                from-primary-400
+                to-secondary-400
+                bg-clip-text
+                text-transparent
+              "
             >
-              Explain
+              Scan report
+            </h1>
+            <p
+              className="
+                text-gray-500
+                mt-1
+                break-all
+                text-sm
+              "
+            >
+              {scan?.targetUrl}
+            </p>
+          </div>
+
+          <div
+            className="
+              flex
+              gap-2
+              shrink-0
+            "
+          >
+            <button
+              onClick={generatePdf}
+              disabled={pdfLoading}
+              className="
+                px-4
+                py-2
+                rounded-lg
+                text-sm
+                font-medium
+                bg-dark-200
+                border
+                border-slate-800
+                hover:bg-black/5
+                dark:hover:bg-slate-800
+                disabled:opacity-50
+                transition
+              "
+            >
+              {pdfLoading ? 'Generating…' : 'Download PDF'}
+            </button>
+            <button
+              onClick={generateCsv}
+              disabled={csvLoading}
+              className="
+                px-4
+                py-2
+                rounded-lg
+                text-sm
+                font-medium
+                btn
+                btn-primary
+                disabled:opacity-50
+              "
+            >
+              {csvLoading ? 'Generating…' : 'Download CSV'}
             </button>
           </div>
+        </div>
 
-          {!selectedVuln ? (
-            <div className="py-16 text-center text-gray-600 text-sm">Select a finding from the list.</div>
-          ) : (
-            <div className="space-y-5">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h3 className="text-lg font-semibold text-white">{displayFindingTitle(selectedVuln)}</h3>
-                  <div className="mt-1 text-xs text-gray-600">
-                    {formatCategoryLabel(selectedVuln.category)}
-                    {selectedVuln.cve ? ` • ${selectedVuln.cve}` : ''}
-                  </div>
-                </div>
-                <SeverityBadge severity={(selectedVuln.severity || 'info').toLowerCase()} />
-              </div>
+        <div
+          className="
+            grid
+            grid-cols-1
+            lg:grid-cols-3
+            gap-4
+          "
+        >
+          {/* Summary */}
+          <div
+            className="
+              lg:col-span-2
+              rounded-xl
+              border
+              border-slate-800
+              bg-dark-200
+              p-5
+            "
+          >
+            <h2
+              className="
+                text-sm
+                font-semibold
+                text-white
+              "
+            >
+              Summary
+            </h2>
+            <p
+              className="
+                text-sm
+                text-gray-500
+                mt-1
+              "
+            >
+              {findings.length === 0
+                ? (isRunning ? 'Scanning…' : 'No issues found.')
+                : `${findings.length} issues found. Top ones are below.`}
+            </p>
 
-              {(() => {
-                const headerHint = getHeaderHint(selectedVuln);
-
-                if (!selectedVuln.description && !headerHint) return null;
-
-                return (
-                  <div>
-                    <h4 className="text-xs font-semibold text-primary-500 uppercase tracking-wide mb-2">Description</h4>
-                    {selectedVuln.description && (
-                      <p className="text-gray-300 text-sm leading-relaxed">{selectedVuln.description}</p>
-                    )}
-                    {headerHint && (
-                      <p className={`text-sm leading-relaxed ${selectedVuln.description ? 'mt-2 text-gray-400' : 'text-gray-300'}`}>
-                        {headerHint.meaning}
+            {topFindings.length > 0 ? (
+              <ul
+                className="
+                  mt-4
+                  space-y-2
+                "
+              >
+                {topFindings.map((f, i) => (
+                  <li
+                    key={i}
+                    className="
+                      flex
+                      items-start
+                      justify-between
+                      gap-3
+                    "
+                  >
+                    <div
+                      className="
+                        min-w-0
+                      "
+                    >
+                      <p
+                        className="
+                          text-sm
+                          text-gray-200
+                          truncate
+                        "
+                      >
+                        {displayFindingTitle(f)}
                       </p>
-                    )}
-                  </div>
-                );
-              })()}
+                      <p
+                        className="
+                          text-xs
+                          text-gray-600
+                          mt-0.5
+                        "
+                      >
+                        {formatCategoryLabel(f.category)}
+                      </p>
+                    </div>
+                    <SeverityDot severity={(f.severity || 'info').toLowerCase()} />
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div
+                className="
+                  mt-4
+                  text-sm
+                  text-gray-600
+                "
+              >
+                {isRunning ? 'Issues will show when the scan is done.' : 'No issues found.'}
+              </div>
+            )}
 
-              {selectedVuln.evidence && (
-                <div>
-                  <h4 className="text-xs font-semibold text-primary-500 uppercase tracking-wide mb-2">Evidence</h4>
-                  <div className="rounded-lg bg-black/5 dark:bg-black/50 border border-slate-800 p-3 text-xs text-gray-300 font-mono break-all">
-                    {selectedVuln.evidence}
-                  </div>
-                </div>
-              )}
+            <div
+              className="
+                mt-4
+                pt-4
+                border-t
+                border-slate-800
+                flex
+                flex-wrap
+                gap-2
+              "
+            >
+              <Link
+                to="/scans"
+                className="
+                  px-3
+                  py-2
+                  rounded-lg
+                  text-sm
+                  font-medium
+                  bg-dark-300
+                  border
+                  border-slate-800
+                  hover:bg-black/5
+                  dark:hover:bg-slate-800
+                  transition
+                "
+              >
+                Back to scans
+              </Link>
+              <Link
+                to="/new"
+                className="
+                  px-3
+                  py-2
+                  rounded-lg
+                  text-sm
+                  font-medium
+                  btn
+                  btn-primary
+                "
+              >
+                New scan
+              </Link>
+            </div>
+          </div>
 
+          {/* Changes */}
+          <div
+            className="
+              rounded-xl
+              border
+              border-slate-800
+              bg-dark-200
+              p-5
+            "
+          >
+            <div
+              className="
+                flex
+                items-start
+                justify-between
+                gap-3
+              "
+            >
               <div>
-                <h4 className="text-xs font-semibold text-primary-500 uppercase tracking-wide mb-2">How we found it</h4>
-                <p className="text-gray-400 text-sm">{getDetectionMethod(selectedVuln.category)}</p>
+                <h2
+                  className="
+                    text-sm
+                    font-semibold
+                    text-white
+                  "
+                >
+                  Changes
+                </h2>
+                <p
+                  className="
+                    text-xs
+                    text-gray-600
+                    mt-1
+                  "
+                >
+                  Compared to the previous scan
+                </p>
               </div>
 
-              <div className="rounded-lg border border-emerald-800/40 bg-emerald-900/10 p-4">
-                <h4 className="text-xs font-semibold text-emerald-400 uppercase tracking-wide mb-2">How to fix</h4>
-                <p className="text-emerald-300/80 text-sm mb-3">{getRemediationAdvice(selectedVuln.category)}</p>
-                {getCodeExample(selectedVuln.category) && (
-                  <pre className="mt-2 rounded-lg bg-black/5 dark:bg-black/60 border border-slate-800 p-3 text-xs text-emerald-400 font-mono overflow-x-auto whitespace-pre">
-                    {getCodeExample(selectedVuln.category)}
-                  </pre>
+              {diffData?.compareScanId ? (
+                <Link
+                  to={`/report/${diffData.compareScanId}`}
+                  className="
+                    text-xs
+                    font-semibold
+                    text-primary-400
+                    hover:text-primary-300
+                    transition
+                  "
+                >
+                  View previous →
+                </Link>
+              ) : null}
+            </div>
+
+            <div
+              className="
+                mt-4
+                space-y-3
+              "
+            >
+              <div
+                className="
+                  rounded-lg
+                  border
+                  border-slate-800
+                  bg-black/5
+                  dark:bg-black/30
+                  p-3
+                "
+              >
+                <p
+                  className="
+                    text-xs
+                    text-gray-600
+                  "
+                >
+                  Note
+                </p>
+
+                {diffData?.compareScanId ? (
+                  (scan?.diffSummary?.newBlockedCount || 0) > 0 ? (
+                    <p
+                      className="
+                        text-sm
+                        text-red-400
+                        mt-1
+                      "
+                    >
+                      New serious issues:{' '}
+                      <span
+                        className="
+                          font-semibold
+                          tabular-nums
+                        "
+                      >
+                        {scan.diffSummary.newBlockedCount}
+                      </span>
+                    </p>
+                  ) : (
+                    <p
+                      className="
+                        text-sm
+                        text-emerald-400
+                        mt-1
+                      "
+                    >
+                      No new serious issues since the last scan.
+                    </p>
+                  )
+                ) : (
+                  <p
+                    className="
+                      text-sm
+                      text-gray-600
+                      mt-1
+                    "
+                  >
+                    Run another scan to see changes.
+                  </p>
                 )}
               </div>
 
-              <div className="pt-4 border-t border-slate-800">
-                <Link
-                  to={'/learn#' + (selectedVuln.category || 'other')}
-                  className="text-primary-500 hover:text-primary-400 text-sm font-medium transition"
+              <div
+                className="
+                  rounded-lg
+                  border
+                  border-slate-800
+                  bg-black/5
+                  dark:bg-black/30
+                  p-3
+                "
+              >
+                <p
+                  className="
+                    text-xs
+                    text-gray-600
+                  "
                 >
-                  Learn more about this issue →
-                </Link>
+                  Changes
+                </p>
+
+                {diffLoading ? (
+                  <p
+                    className="
+                      text-sm
+                      text-gray-500
+                      mt-1
+                    "
+                  >
+                    Loading…
+                  </p>
+                ) : diffData?.compareScanId ? (
+                  <div
+                    className="
+                      mt-2
+                      space-y-2
+                    "
+                  >
+                    <p
+                      className="
+                        text-sm
+                        text-gray-200
+                      "
+                    >
+                      Compared to {formatLocalDateTime(diffData.compareCreatedAt)}
+                    </p>
+
+                    {diffData?.diff ? (
+                      <div
+                        className="
+                          grid
+                          grid-cols-3
+                          gap-2
+                          text-xs
+                        "
+                      >
+                        <Stat label="New" value={diffData.diff.newIssues?.length || 0} className="text-red-400" />
+                        <Stat label="Fixed" value={diffData.diff.fixedIssues?.length || 0} className="text-emerald-400" />
+                        <Stat label="Still there" value={diffData.diff.persisting?.length || 0} className="text-gray-300" />
+                      </div>
+                    ) : (
+                      <p
+                        className="
+                          text-sm
+                          text-gray-600
+                        "
+                      >
+                        No comparison available yet.
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <p
+                    className="
+                      text-sm
+                      text-gray-600
+                      mt-1
+                    "
+                  >
+                    No previous scan for this site yet.
+                  </p>
+                )}
               </div>
             </div>
-          )}
+          </div>
+        </div>
+
+        {/* ── Meta bar ───────────────────────────────────────────── */}
+        <div
+          className="
+            rounded-xl
+            border
+            border-slate-800
+            bg-dark-200
+            p-5
+          "
+        >
+          <div
+            className="
+              grid
+              grid-cols-2
+              md:grid-cols-4
+              gap-4
+              text-sm
+            "
+          >
+            <div>
+              <p
+                className="
+                  text-xs
+                  text-gray-600
+                  mb-1
+                "
+              >
+                Status
+              </p>
+              <p
+                className={`
+                  font-semibold
+                  capitalize
+                  ${statusColor}
+                `.trim()}
+              >
+                {scan?.status}
+              </p>
+            </div>
+            <div>
+              <p
+                className="
+                  text-xs
+                  text-gray-600
+                  mb-1
+                "
+              >
+                Progress
+              </p>
+              <p
+                className="
+                  font-semibold
+                  text-white
+                "
+              >
+                {scan?.progress ?? 0}%
+              </p>
+            </div>
+            <div>
+              <p
+                className="
+                  text-xs
+                  text-gray-600
+                  mb-1
+                "
+              >
+                Started
+              </p>
+              <p
+                className="
+                  font-semibold
+                  text-white
+                "
+              >
+                {formatLocalDateTime(scan?.startedAt)}
+              </p>
+            </div>
+            <div>
+              <p
+                className="
+                  text-xs
+                  text-gray-600
+                  mb-1
+                "
+              >
+                Completed
+              </p>
+              <p
+                className="
+                  font-semibold
+                  text-white
+                "
+              >
+                {formatLocalDateTime(scan?.completedAt)}
+              </p>
+            </div>
+          </div>
+
+          <div
+            className="
+              mt-4
+            "
+          >
+            <AnimatedProgressBar progress={scan?.progress ?? 0} running={isRunning} />
+          </div>
+        </div>
+
+        {/* ── Findings + Detail ──────────────────────────────────── */}
+        <div
+          className="
+            grid
+            grid-cols-1
+            lg:grid-cols-3
+            gap-4
+          "
+        >
+          {/* Findings list */}
+          <div
+            className="
+              rounded-xl
+              border
+              border-slate-800
+              bg-dark-200
+              p-4
+            "
+          >
+            <div
+              className="
+                flex
+                items-end
+                justify-between
+                gap-3
+                mb-3
+              "
+            >
+              <h2
+                className="
+                  font-semibold
+                  text-white
+                  text-sm
+                "
+              >
+                Findings{' '}
+                <span
+                  className="
+                    text-gray-600
+                    font-normal
+                  "
+                >
+                  ({sortedFindings.length})
+                </span>
+              </h2>
+            </div>
+
+            {findings.length === 0 ? (
+              <div
+                className="
+                  py-6
+                "
+              >
+                <EmptyState
+                  title={isRunning ? 'Scanning…' : 'No issues found'}
+                  description={isRunning ? 'Issues will show here when the scan is done.' : 'This scan finished with no issues.'}
+                />
+              </div>
+            ) : (
+              <ul
+                className="
+                  space-y-1.5
+                  max-h-[460px]
+                  overflow-y-auto
+                  pr-1
+                "
+              >
+                {sortedFindings.map((f, i) => {
+                  const sev = (f.severity || 'info').toLowerCase();
+                  const active = i === safeSelectedIndex;
+
+                  return (
+                    <li
+                      key={typeof f.__index === 'number' ? f.__index : i}
+                      onClick={() => setSelectedFindingListIndex(i)}
+                      className={
+                        `
+                          p-3
+                          rounded-lg
+                          cursor-pointer
+                          transition
+                          border
+                          ${active
+                            ? 'bg-primary-500/10 dark:bg-primary-900/30 border-primary-500/30 dark:border-primary-700/50'
+                            : 'border-transparent hover:bg-black/5 dark:hover:bg-slate-800/50'
+                          }
+                        `
+                      }
+                    >
+                      <div
+                        className="
+                          flex
+                          items-start
+                          justify-between
+                          gap-2
+                        "
+                      >
+                        <span
+                          className="
+                            text-sm
+                            text-gray-200
+                            font-medium
+                            leading-snug
+                          "
+                        >
+                          {displayFindingTitle(f)}
+                        </span>
+                        <SeverityDot severity={sev} />
+                      </div>
+                      <div
+                        className="
+                          mt-1
+                          text-xs
+                          text-gray-600
+                        "
+                      >
+                        {formatCategoryLabel(f.category)}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+
+          {/* Detail panel */}
+          <div
+            className="
+              lg:col-span-2
+              rounded-xl
+              border
+              border-slate-800
+              bg-dark-200
+              p-5
+            "
+          >
+            <div
+              className="
+                flex
+                items-center
+                justify-between
+                gap-3
+                mb-4
+              "
+            >
+              <h2
+                className="
+                  font-semibold
+                  text-white
+                  text-sm
+                "
+              >
+                Details
+              </h2>
+              <button
+                type="button"
+                onClick={openAssistantForSelectedFinding}
+                disabled={!selectedFinding || selectedFindingIndex === null}
+                className="
+                  px-3
+                  py-1.5
+                  rounded-lg
+                  text-xs
+                  font-semibold
+                  border
+                  border-slate-800
+                  bg-black/5
+                  dark:bg-black/30
+                  hover:bg-black/10
+                  dark:hover:bg-black/50
+                  transition
+                  disabled:opacity-50
+                  disabled:cursor-not-allowed
+                  text-gray-200
+                "
+              >
+                Explain
+              </button>
+            </div>
+
+            {!selectedFinding ? (
+              <div
+                className="
+                  py-16
+                  text-center
+                  text-gray-600
+                  text-sm
+                "
+              >
+                Select a finding from the list.
+              </div>
+            ) : (
+              <div
+                className="
+                  space-y-5
+                "
+              >
+                <div
+                  className="
+                    flex
+                    items-start
+                    justify-between
+                    gap-4
+                  "
+                >
+                  <div>
+                    <h3
+                      className="
+                        text-lg
+                        font-semibold
+                        text-white
+                      "
+                    >
+                      {displayFindingTitle(selectedFinding)}
+                    </h3>
+                    <div
+                      className="
+                        mt-1
+                        text-xs
+                        text-gray-600
+                      "
+                    >
+                      {formatCategoryLabel(selectedFinding.category)}
+                      {selectedFinding.cve ? ` • ${selectedFinding.cve}` : ''}
+                    </div>
+                  </div>
+
+                  <SeverityBadge severity={(selectedFinding.severity || 'info').toLowerCase()} />
+                </div>
+
+                {(() => {
+                  const headerHint = getHeaderHint(selectedFinding);
+                  if (!selectedFinding.description && !headerHint) return null;
+
+                  return (
+                    <div>
+                      <h4
+                        className="
+                          text-xs
+                          font-semibold
+                          text-primary-500
+                          uppercase
+                          tracking-wide
+                          mb-2
+                        "
+                      >
+                        Description
+                      </h4>
+
+                      {selectedFinding.description ? (
+                        <p
+                          className="
+                            text-gray-300
+                            text-sm
+                            leading-relaxed
+                          "
+                        >
+                          {selectedFinding.description}
+                        </p>
+                      ) : null}
+
+                      {headerHint ? (
+                        <p
+                          className={
+                            `
+                              text-sm
+                              leading-relaxed
+                              ${selectedFinding.description ? 'mt-2 text-gray-400' : 'text-gray-300'}
+                            `
+                          }
+                        >
+                          {headerHint.meaning}
+                        </p>
+                      ) : null}
+                    </div>
+                  );
+                })()}
+
+                {selectedFinding.evidence ? (
+                  <div>
+                    <h4
+                      className="
+                        text-xs
+                        font-semibold
+                        text-primary-500
+                        uppercase
+                        tracking-wide
+                        mb-2
+                      "
+                    >
+                      Evidence
+                    </h4>
+                    <div
+                      className="
+                        rounded-lg
+                        bg-black/5
+                        dark:bg-black/50
+                        border
+                        border-slate-800
+                        p-3
+                        text-xs
+                        text-gray-300
+                        font-mono
+                        break-all
+                      "
+                    >
+                      {selectedFinding.evidence}
+                    </div>
+                  </div>
+                ) : null}
+
+                <div>
+                  <h4
+                    className="
+                      text-xs
+                      font-semibold
+                      text-primary-500
+                      uppercase
+                      tracking-wide
+                      mb-2
+                    "
+                  >
+                    How we found it
+                  </h4>
+                  <p
+                    className="
+                      text-gray-400
+                      text-sm
+                    "
+                  >
+                    {getDetectionMethod(selectedFinding.category)}
+                  </p>
+                </div>
+
+                <div
+                  className="
+                    rounded-lg
+                    border
+                    border-emerald-800/40
+                    bg-emerald-900/10
+                    p-4
+                  "
+                >
+                  <h4
+                    className="
+                      text-xs
+                      font-semibold
+                      text-emerald-400
+                      uppercase
+                      tracking-wide
+                      mb-2
+                    "
+                  >
+                    How to fix
+                  </h4>
+
+                  <p
+                    className="
+                      text-emerald-300/80
+                      text-sm
+                      mb-3
+                    "
+                  >
+                    {getRemediationAdvice(selectedFinding.category)}
+                  </p>
+
+                  {getCodeExample(selectedFinding.category) ? (
+                    <pre
+                      className="
+                        mt-2
+                        rounded-lg
+                        bg-black/5
+                        dark:bg-black/60
+                        border
+                        border-slate-800
+                        p-3
+                        text-xs
+                        text-emerald-400
+                        font-mono
+                        overflow-x-auto
+                        whitespace-pre
+                      "
+                    >
+                      {getCodeExample(selectedFinding.category)}
+                    </pre>
+                  ) : null}
+                </div>
+
+                <div
+                  className="
+                    pt-4
+                    border-t
+                    border-slate-800
+                  "
+                >
+                  <Link
+                    to={'/learn#' + (selectedFinding.category || 'other')}
+                    className="
+                      text-primary-500
+                      hover:text-primary-400
+                      text-sm
+                      font-medium
+                      transition
+                    "
+                  >
+                    Learn more about this issue →
+                  </Link>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
-    </div>
 
       <Modal
         open={assistantOpen}
         title="Explanation"
         onClose={() => {
           setAssistantOpen(false);
-          setAssistantError('');
+          setAssistantErrorMessage('');
           setAssistantLoading(false);
           setAssistantText('');
         }}
         maxWidthClass="max-w-3xl"
         footer={
-          <div className="flex justify-end">
+          <div
+            className="
+              flex
+              justify-end
+            "
+          >
             <button
               type="button"
               onClick={() => setAssistantOpen(false)}
-              className="px-4 py-2 rounded-lg text-sm font-semibold border border-slate-800 bg-black/5 dark:bg-black/30 hover:bg-black/10 dark:hover:bg-black/50 transition text-gray-200"
+              className="
+                px-4
+                py-2
+                rounded-lg
+                text-sm
+                font-semibold
+                border
+                border-slate-800
+                bg-black/5
+                dark:bg-black/30
+                hover:bg-black/10
+                dark:hover:bg-black/50
+                transition
+                text-gray-200
+              "
             >
               Close
             </button>
           </div>
         }
       >
-        {assistantError ? (
-          <div className="mb-3 p-3 rounded-lg border border-red-500/30 bg-red-900/20 text-red-400 text-sm">
-            {assistantError}
+        {assistantErrorMessage ? (
+          <div
+            className="
+              mb-3
+              p-3
+              rounded-lg
+              border
+              border-red-500/30
+              bg-red-900/20
+              text-red-400
+              text-sm
+            "
+          >
+            {assistantErrorMessage}
           </div>
         ) : null}
 
-        <div className="rounded-lg border border-slate-800 bg-black/5 dark:bg-black/30 p-4 max-h-[60vh] overflow-y-auto">
+        <div
+          className="
+            rounded-lg
+            border
+            border-slate-800
+            bg-black/5
+            dark:bg-black/30
+            p-4
+            max-h-[60vh]
+            overflow-y-auto
+          "
+        >
           {assistantLoading ? (
-            <div className="text-sm text-gray-400">Generating explanation…</div>
+            <div
+              className="
+                text-sm
+                text-gray-400
+              "
+            >
+              Generating explanation…
+            </div>
           ) : assistantText ? (
-            <div className="whitespace-pre-wrap leading-relaxed text-sm text-gray-200">{assistantText}</div>
+            <div
+              className="
+                whitespace-pre-wrap
+                leading-relaxed
+                text-sm
+                text-gray-200
+              "
+            >
+              {assistantText}
+            </div>
           ) : (
-            <div className="text-sm text-gray-600">Select a finding and click <span className="text-gray-300 font-semibold">Explain</span>.</div>
+            <div
+              className="
+                text-sm
+                text-gray-600
+              "
+            >
+              Select a finding and click{' '}
+              <span
+                className="
+                  text-gray-300
+                  font-semibold
+                "
+              >
+                Explain
+              </span>
+              .
+            </div>
           )}
         </div>
       </Modal>
     </>
   );
+}
+
+function getSeverityRank(sev) {
+  const s = (sev || 'info').toLowerCase();
+  if (s === 'critical') return 4;
+  if (s === 'high') return 3;
+  if (s === 'medium') return 2;
+  if (s === 'low') return 1;
+  return 0;
+}
+
+function getStatusColor(status) {
+  if (status === 'completed') return 'text-emerald-400';
+  if (status === 'running') return 'text-blue-400';
+  if (status === 'failed') return 'text-red-400';
+  return 'text-gray-400';
+}
+
+function formatLocalDateTime(value) {
+  if (!value) return '—';
+
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '—';
+
+  return new Intl.DateTimeFormat(undefined, {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(d);
 }
 
 function formatCategoryLabel(category) {
@@ -552,8 +1401,20 @@ function formatCategoryLabel(category) {
 
 function SeverityBadge({ severity }) {
   const style = SEV[severity] || SEV.info;
+
   return (
-    <span className={`shrink-0 px-2 py-0.5 rounded-full text-xs font-medium uppercase ${style.bg}`}>
+    <span
+      className={`
+        shrink-0
+        px-2
+        py-0.5
+        rounded-full
+        text-xs
+        font-medium
+        uppercase
+        ${style.bg}
+      `}
+    >
       {severity}
     </span>
   );
@@ -561,14 +1422,50 @@ function SeverityBadge({ severity }) {
 
 function SeverityDot({ severity }) {
   const style = SEV[severity] || SEV.info;
-  return <span className={`mt-1 h-2.5 w-2.5 rounded-full ${style.dot}`} />;
+
+  return (
+    <span
+      className={`
+        mt-1
+        h-2.5
+        w-2.5
+        rounded-full
+        ${style.dot}
+      `}
+    />
+  );
 }
 
 function Stat({ label, value, className }) {
   return (
-    <div className="rounded-lg border border-slate-800 bg-black/5 dark:bg-black/30 p-2">
-      <p className="text-[11px] text-gray-600">{label}</p>
-      <p className={`text-sm font-semibold tabular-nums ${className || 'text-gray-200'}`}>{value}</p>
+    <div
+      className="
+        rounded-lg
+        border
+        border-slate-800
+        bg-black/5
+        dark:bg-black/30
+        p-2
+      "
+    >
+      <p
+        className="
+          text-[11px]
+          text-gray-600
+        "
+      >
+        {label}
+      </p>
+      <p
+        className={`
+          text-sm
+          font-semibold
+          tabular-nums
+          ${className || 'text-gray-200'}
+        `}
+      >
+        {value}
+      </p>
     </div>
   );
 }
@@ -587,6 +1484,7 @@ function getDetectionMethod(category) {
     access_control: 'We changed IDs in the URL to see if other data is reachable.',
     rate_limit: 'We sent a burst of requests and checked for rate limiting.',
   };
+
   return methods[category] || 'We ran automated checks.';
 }
 
@@ -604,6 +1502,7 @@ function getRemediationAdvice(category) {
     access_control: 'Check permissions on every request (server-side).',
     rate_limit: 'Add rate limiting to login and other sensitive routes.',
   };
+
   return advice[category] || 'Fix the root cause, then run the scan again.';
 }
 
@@ -615,5 +1514,6 @@ function getCodeExample(category) {
     cookies: '// Secure cookie settings\nres.cookie("session", token, {\n  httpOnly: true,\n  secure: true,\n  sameSite: "strict"\n});',
     rate_limit: '// Express rate limiter\nconst limit = rateLimit({ windowMs: 15*60*1000, max: 5 });\napp.use("/login", limit);',
   };
+
   return examples[category] || null;
 }
