@@ -31,7 +31,6 @@ redis_client = redis.Redis.from_url(REDIS_URL)
 
 
 def send_results(scan_id: str, issues: List[Dict]) -> None:
-    """Publish the list of issues for a given scan back to Redis."""
     redis_client.publish(
         RESULT_CHANNEL,
         json.dumps({"scanId": scan_id, "results": issues}),
@@ -39,7 +38,6 @@ def send_results(scan_id: str, issues: List[Dict]) -> None:
 
 
 def send_progress(scan_id: str, progress: int) -> None:
-    """Publish a live progress update back to Redis."""
     redis_client.publish(
         RESULT_CHANNEL,
         json.dumps({"scanId": scan_id, "type": "progress", "progress": progress}),
@@ -47,7 +45,6 @@ def send_progress(scan_id: str, progress: int) -> None:
 
 
 def send_error(scan_id: str, error: str) -> None:
-    """Publish a scan failure back to Redis so the backend can fail fast."""
     redis_client.publish(
         RESULT_CHANNEL,
         json.dumps({"scanId": scan_id, "type": "error", "error": error}),
@@ -477,46 +474,80 @@ def run_scan(
 # --- Entry point ---------------------------------------------------------------
 
 
-def main() -> None:
+def parse_job_payload(message: Dict) -> Dict:
+    raw = message.get("data")
+    if raw is None:
+        return {}
+
+    payload = json.loads(raw)
+    if not isinstance(payload, dict):
+        return {}
+
+    request_headers = payload.get("requestHeaders")
+    if not isinstance(request_headers, dict):
+        request_headers = None
+
+    return {
+        "scan_id": payload.get("scanId"),
+        "target_url": payload.get("targetUrl"),
+        "scan_profile": payload.get("scanProfile"),
+        "request_headers": request_headers,
+    }
+
+
+def process_job(message: Dict) -> None:
+    job = parse_job_payload(message)
+
+    scan_id = job.get("scan_id")
+    target_url = job.get("target_url")
+    scan_profile = job.get("scan_profile")
+    request_headers = job.get("request_headers")
+
+    if not target_url:
+        print("Received job without a targetUrl, skipping.")
+        if scan_id:
+            send_error(scan_id, "Job missing targetUrl")
+        return
+
+    print(f"Processing scan {scan_id} for {target_url}")
+    if scan_id:
+        send_progress(scan_id, 10)
+
+    issues = run_scan(target_url, scan_profile, scan_id, request_headers)
+    send_results(scan_id, issues)
+
+
+def run_worker_loop(stop_event: threading.Event) -> None:
     pubsub = redis_client.pubsub()
     pubsub.subscribe(JOB_CHANNEL)
-
-    stop_event = threading.Event()
-    threading.Thread(target=heartbeat_loop, args=(stop_event,), daemon=True).start()
 
     print("Python worker is running and waiting for scan jobs...")
 
     for message in pubsub.listen():
+        if stop_event.is_set():
+            return
+
         if message.get("type") != "message":
             continue
 
-        scan_id = None
         try:
-            payload = json.loads(message["data"])
-            scan_id = payload.get("scanId")
-            target_url = payload.get("targetUrl")
-            profile = payload.get("scanProfile")
-
-            request_headers = payload.get("requestHeaders")
-            if not isinstance(request_headers, dict):
-                request_headers = None
-
-            if not target_url:
-                print("Received job without a targetUrl, skipping.")
-                if scan_id:
-                    send_error(scan_id, "Job missing targetUrl")
-                continue
-
-            print(f"Processing scan {scan_id} for {target_url}")
-            if scan_id:
-                send_progress(scan_id, 10)
-
-            issues = run_scan(target_url, profile, scan_id, request_headers)
-            send_results(scan_id, issues)
+            process_job(message)
         except Exception as e:
+            scan_id = None
+            try:
+                scan_id = parse_job_payload(message).get("scan_id")
+            except Exception:
+                scan_id = None
+
             print(f"Worker error: {e}")
             if scan_id:
                 send_error(scan_id, str(e))
+
+
+def main() -> None:
+    stop_event = threading.Event()
+    threading.Thread(target=heartbeat_loop, args=(stop_event,), daemon=True).start()
+    run_worker_loop(stop_event)
 
 
 if __name__ == "__main__":
