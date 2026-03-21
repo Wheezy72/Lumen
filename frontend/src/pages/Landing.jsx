@@ -1,7 +1,23 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 
 export default function Landing() {
+  const [imageStatus, setImageStatus] = useState(() => ({}));
+
+  const getStepImageSrc = (step) => {
+    const n = parseInt(step, 10);
+    if (!n) return '';
+    return `/landing/step-${n}.png`;
+  };
+
+  const onImageLoad = (step) => {
+    setImageStatus((prev) => ({ ...prev, [step]: 'loaded' }));
+  };
+
+  const onImageError = (step) => {
+    setImageStatus((prev) => ({ ...prev, [step]: 'error' }));
+  };
+
   return (
     <div className="min-h-screen bg-dark-300 text-slate-900 dark:text-white">
 
@@ -75,22 +91,44 @@ export default function Landing() {
               desc: 'Findings are grouped by severity with remediation guidance. Export as PDF or CSV.',
               label: 'Results & report',
             },
-          ].map(({ step, title, desc, label }) => (
-            <div key={step} className="flex flex-col rounded-xl border border-slate-800 bg-dark-200 overflow-hidden">
-              {/* screenshot placeholder */}
-              <div className="h-44 bg-dark-300 border-b border-slate-800 flex flex-col items-center justify-center gap-2 text-gray-600">
-                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                <span className="text-xs">{label}</span>
+          ].map(({ step, title, desc, label }) => {
+            const src = getStepImageSrc(step);
+            const status = imageStatus[step];
+            const showImage = Boolean(src) && status !== 'error';
+            const showPlaceholder = status !== 'loaded';
+
+            return (
+              <div key={step} className="flex flex-col rounded-xl border border-slate-800 bg-dark-200 overflow-hidden">
+                <div className="relative h-44 bg-dark-300 border-b border-slate-800 overflow-hidden">
+                  {showImage ? (
+                    <img
+                      src={src}
+                      alt={label}
+                      loading="lazy"
+                      onLoad={() => onImageLoad(step)}
+                      onError={() => onImageError(step)}
+                      className="absolute inset-0 h-full w-full object-contain"
+                    />
+                  ) : null}
+
+                  {showPlaceholder ? (
+                    <div className="h-full w-full flex flex-col items-center justify-center gap-2 text-gray-600">
+                      <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      <span className="text-xs">{label}</span>
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="p-5">
+                  <span className="text-xs font-mono text-primary-500">{step}</span>
+                  <h3 className="mt-1 font-semibold text-slate-900 dark:text-white">{title}</h3>
+                  <p className="mt-2 text-sm text-slate-600 dark:text-gray-400">{desc}</p>
+                </div>
               </div>
-              <div className="p-5">
-                <span className="text-xs font-mono text-primary-500">{step}</span>
-                <h3 className="mt-1 font-semibold text-slate-900 dark:text-white">{title}</h3>
-                <p className="mt-2 text-sm text-slate-600 dark:text-gray-400">{desc}</p>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
 
