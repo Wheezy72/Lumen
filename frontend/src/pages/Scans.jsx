@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import AnimatedProgressBar from '../components/ui/AnimatedProgressBar.jsx';
 import EmptyState from '../components/ui/EmptyState.jsx';
 import SeverityMiniBar from '../components/ui/SeverityMiniBar.jsx';
+import { formatLocalDateTime } from '../utils/dates.js';
 
 const STATUS_STYLES = {
   completed: 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30',
@@ -165,18 +166,7 @@ function ScanRow({ scan, onDownload, isDownloading, onDelete, isDeleting }) {
     }
   }, [targetHost, targetUrl]);
 
-  const formatLocalDateTime = (value) => {
-    if (!value) return 'Queued';
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return 'Queued';
-    return new Intl.DateTimeFormat(undefined, {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-    }).format(d);
-  };
+  
 
   
 
@@ -185,7 +175,7 @@ function ScanRow({ scan, onDownload, isDownloading, onDelete, isDeleting }) {
       <td className="px-4 py-3 align-middle">
         <div className="font-medium text-white truncate max-w-xs">{host}</div>
         <div className="text-xs text-gray-600 mt-0.5 truncate max-w-xs">{targetUrl}</div>
-        <div className="text-xs text-gray-600 mt-1">{formatLocalDateTime(startedAt)}</div>
+        <div className="text-xs text-gray-600 mt-1">{formatLocalDateTime(startedAt, null, 'Queued')}</div>
         {status === 'completed' && (
           <div className="mt-2">
             <SeverityMiniBar findings={results || []} />

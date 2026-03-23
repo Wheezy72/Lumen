@@ -14,6 +14,7 @@ export default function Vulnerabilities() {
       access_control: { from: 'from-purple-500/25', to: 'to-blue-500/10' },
       headers: { from: 'from-blue-500/25', to: 'to-emerald-500/10' },
       cookies: { from: 'from-emerald-500/25', to: 'to-blue-500/10' },
+      ssl: { from: 'from-emerald-500/20', to: 'to-blue-500/10' },
       error: { from: 'from-slate-500/25', to: 'to-red-500/10' },
       rate_limit: { from: 'from-blue-500/20', to: 'to-slate-500/10' },
       subdomain: { from: 'from-emerald-500/20', to: 'to-slate-500/10' },
@@ -139,6 +140,19 @@ export default function Vulnerabilities() {
         'An attacker spends days guessing passwords. Because failed logins are not logged centrally and no alerts are configured, the behaviour is never reviewed.',
       prevention:
         'Log security-relevant events, send them to a central location, and define alerts for patterns such as high failure rates or access from unusual locations.'
+    },
+    {
+      id: 10,
+      slug: 'ssl',
+      name: 'TLS/SSL (HTTPS) Configuration',
+      severity: 'Medium',
+      shortDesc: 'Weak TLS settings or certificate issues can expose users to interception and tampering.',
+      humanDesc:
+        'TLS (often called SSL) is what makes HTTPS secure. If a site uses an invalid certificate, supports outdated TLS versions, or is missing hardening like HSTS, attackers on the network can potentially intercept traffic, downgrade connections, or inject content.',
+      realExample:
+        'A site supports TLS 1.0 or uses an expired certificate. Users see certificate warnings, and in some environments attackers can exploit weak configurations to intercept or downgrade encrypted sessions.',
+      prevention:
+        'Use TLS 1.2+ (prefer TLS 1.3), keep certificates valid, disable weak ciphers, enable HSTS when appropriate, and test regularly using tools like SSL Labs.'
     }
   ];
 

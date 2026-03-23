@@ -3,6 +3,8 @@ import Joi from 'joi';
 import net from 'node:net';
 import path from 'path';
 import fs from 'fs';
+import { ensureReportDir } from '../utils/reportDir.js';
+import { getSeverityRank } from '../utils/severity.js';
 import PDFDocument from 'pdfkit';
 
 import Scan from '../models/Scan.js';
@@ -44,12 +46,6 @@ const isBlockedHost = (host) => {
 
 const publicOwnerQuery = { $or: [{ userId: { $exists: false } }, { userId: null }] };
 
-function ensureReportDir() {
-  const dir = path.join(process.cwd(), 'reports');
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  return dir;
-}
-
 function sanitizeName(s = '') {
   return String(s).replace(/[^a-z0-9\-_.]/gi, '_');
 }
@@ -65,14 +61,7 @@ function makeReportName(scan) {
   return `${sanitizeName(host)}_${scan._id.toString()}_security_report.pdf`;
 }
 
-function severityRank(sev) {
-  const s = String(sev || 'info').toLowerCase();
-  if (s === 'critical') return 4;
-  if (s === 'high') return 3;
-  if (s === 'medium') return 2;
-  if (s === 'low') return 1;
-  return 0;
-}
+
 
 async function writePdfReport(scan, filePath) {
   const doc = new PDFDocument({ margin: 40 });
@@ -80,7 +69,7 @@ async function writePdfReport(scan, filePath) {
 
   const results = Array.isArray(scan.results) ? scan.results : [];
   const sorted = [...results].sort((a, b) => {
-    const d = severityRank(b.severity) - severityRank(a.severity);
+    const d = getSeverityRank(b.severity) - getSeverityRank(a.severity);
     if (d) return d;
     return String(a.title || '').localeCompare(String(b.title || ''));
   });
