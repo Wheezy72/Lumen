@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
 import EmptyState from '../components/ui/EmptyState.jsx';
+import { formatLocalDateTime } from '../utils/dates.js';
 
 const WARNING_STYLE = 'bg-red-500/15 text-red-400 border border-red-500/30';
 
@@ -17,18 +18,7 @@ export default function Changes() {
     load();
   }, []);
 
-  const formatLocalDateTime = (value) => {
-    if (!value) return '—';
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return '—';
-    return new Intl.DateTimeFormat(undefined, {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-    }).format(d);
-  };
+  
 
   const rows = useMemo(() => {
     return (items || []).map((scan) => {

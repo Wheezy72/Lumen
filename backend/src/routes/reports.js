@@ -6,6 +6,8 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { createObjectCsvWriter } from 'csv-writer';
 import Scan from '../models/Scan.js';
+import { displayFindingTitle, getHeaderHintForTitle } from '../services/findingTitle.js';
+import { ensureReportDir } from '../utils/reportDir.js';
 
 const router = express.Router();
 
@@ -15,12 +17,6 @@ const __dirname = path.dirname(__filename);
 const reportSchema = Joi.object({
   scanId: Joi.string().required(),
 });
-
-function ensureReportDir() {
-  const dir = path.join(process.cwd(), 'reports');
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  return dir;
-}
 
 function sanitizeName(s = '') {
   return s.replace(/[^a-z0-9\-_.]/gi, '_');
@@ -108,78 +104,21 @@ function mitigationAdvice(vuln = {}) {
   }
 }
 
-const HEADER_HINTS = {
-  'X-Frame-Options': {
-    label: 'Clickjacking protection',
-    meaning: 'Helps stop other sites from embedding your pages inside hidden iframes (a common clickjacking trick).',
-  },
-  'X-Content-Type-Options': {
-    label: 'MIME sniffing protection',
-    meaning: 'Helps browsers avoid guessing file types in a way that can enable script injection in edge cases.',
-  },
-  'Referrer-Policy': {
-    label: 'Referrer privacy',
-    meaning: 'Controls how much URL information is shared in the Referer header when users navigate away from your site.',
-  },
-  'Strict-Transport-Security': {
-    label: 'HTTPS enforcement',
-    meaning: 'Tells browsers to use HTTPS only for this site, helping prevent downgrade attacks.',
-  },
-  'Content-Security-Policy': {
-    label: 'Script and content restrictions',
-    meaning: 'Limits where scripts/styles can load from, reducing the impact of XSS if a bug exists.',
-  },
-};
-
-function headerHintForTitle(title = '') {
-  const raw = String(title || '');
-  const match = raw.match(/^Missing security header:\s*(.+)$/i);
-  if (!match) return null;
-
-  const header = match[1].trim();
-  const info = HEADER_HINTS[header];
-  return {
-    header,
-    label: info?.label || 'Browser security',
-    meaning: info?.meaning || 'A recommended browser security header was not present in the HTTP response.',
-  };
-}
-
-function rewriteGenericTitle(vuln = {}) {
-  const title = String(vuln.title || '');
-  const category = String(vuln.category || '').toLowerCase();
-
-  if (category === 'rate_limit' && /no obvious rate limiting/i.test(title)) return 'No rate limiting detected';
-  if (category === 'cookies' && /cookies missing security flags/i.test(title)) return 'Cookie security flags missing';
-  if (category === 'sqli' && /potential sql injection/i.test(title)) return 'Possible SQL injection';
-  if (category === 'xss' && /reflected xss/i.test(title)) return 'Possible reflected XSS';
-  if (category === 'traversal' && /directory traversal/i.test(title)) return 'Possible path traversal';
-  if (category === 'subdomain' && /^Subdomain found:/i.test(title)) return title.replace(/^Subdomain found:/i, 'Public subdomain found:');
-  if (category === 'ssl' && /handshake error/i.test(title)) return 'TLS/SSL connection problem';
-
-  return title;
-}
-
-function displayFindingTitle(vuln = {}) {
-  const hint = headerHintForTitle(vuln.title);
-  if (hint) return `Missing ${hint.label} header (${hint.header})`;
-
-  const rewritten = rewriteGenericTitle(vuln);
-  return rewritten || 'Untitled';
-}
-
 // Serve: GET /api/reports/file/:name (sets content-disposition)
 router.get('/file/:name', async (req, res, next) => {
   try {
     const name = req.params.name;
-    const abs = path.join(ensureReportDir(), name);
-    if (!abs.startsWith(ensureReportDir())) return res.status(400).end(); // path safety
+    const reportDir = ensureReportDir();
+    const abs = path.join(reportDir, name);
+    if (!abs.startsWith(reportDir)) return res.status(400).end(); // path safety
     if (!fs.existsSync(abs)) return res.status(404).end();
 
     const downloadName = req.query.download || name;
     res.setHeader('Content-Disposition', `attachment; filename="${downloadName}"`);
     res.sendFile(abs);
-  } catch (e) { next(e); }
+  } catch (e) {
+    next(e);
+  }
 });
 
 async function generatePdfReport(scan) {
@@ -299,7 +238,7 @@ async function generatePdfReport(scan) {
   doc.moveDown(0.5);
 
   results.forEach((v, idx) => {
-    const headerHint = headerHintForTitle(v.title);
+    const headerHint = getHeaderHintForTitle(v.title);
     const friendlyTitle = displayFindingTitle(v);
     const technicalTitle = String(v.title || '');
     const severity = (v.severity || 'low').toUpperCase();

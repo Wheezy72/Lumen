@@ -2,6 +2,8 @@ import nodemailer from 'nodemailer';
 import PDFDocument from 'pdfkit';
 import path from 'path';
 import fs from 'fs';
+import { ensureReportDir } from '../utils/reportDir.js';
+import { getSeverityRank } from '../utils/severity.js';
 import { createObjectCsvWriter } from 'csv-writer';
 import { logger } from '../utils/logger.js';
 import User from '../models/User.js';
@@ -45,13 +47,6 @@ function getTransporter() {
 
 function sanitizeName(s = '') {
   return String(s).replace(/[^a-z0-9\-_.]/gi, '_');
-}
-
-function ensureReportDir() {
-  const dirName = process.env.REPORTS_DIR || 'reports';
-  const dir = path.join(process.cwd(), dirName);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  return dir;
 }
 
 function getHostLabel(scan) {
@@ -200,18 +195,11 @@ export async function sendScanSummaryEmail(scan) {
       counts[severity] = (counts[severity] || 0) + 1;
     });
 
-    const severityRank = (sev) => {
-      const s = String(sev || 'info').toLowerCase();
-      if (s === 'critical') return 4;
-      if (s === 'high') return 3;
-      if (s === 'medium') return 2;
-      if (s === 'low') return 1;
-      return 0;
-    };
+    
 
     const sortFindings = (arr) =>
       [...(arr || [])].sort((a, b) => {
-        const d = severityRank(b.severity) - severityRank(a.severity);
+        const d = getSeverityRank(b.severity) - getSeverityRank(a.severity);
         if (d) return d;
         return String(a.title || '').localeCompare(String(b.title || ''));
       });

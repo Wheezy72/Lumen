@@ -5,6 +5,8 @@ import AnimatedProgressBar from '../components/ui/AnimatedProgressBar.jsx';
 import EmptyState from '../components/ui/EmptyState.jsx';
 import Modal from '../components/ui/Modal.jsx';
 import { displayFindingTitle, getHeaderHint } from '../utils/findingTitle.js';
+import { getSeverityRank } from '../utils/severity.js';
+import { formatLocalDateTime } from '../utils/dates.js';
 
 const SEV = {
   critical: { bg: 'bg-purple-500/15 text-purple-400 border border-purple-500/30', dot: 'bg-purple-400' },
@@ -1347,14 +1349,7 @@ export default function ReportView() {
   );
 }
 
-function getSeverityRank(sev) {
-  const s = (sev || 'info').toLowerCase();
-  if (s === 'critical') return 4;
-  if (s === 'high') return 3;
-  if (s === 'medium') return 2;
-  if (s === 'low') return 1;
-  return 0;
-}
+
 
 function getStatusColor(status) {
   if (status === 'completed') return 'text-emerald-400';
@@ -1363,20 +1358,7 @@ function getStatusColor(status) {
   return 'text-gray-400';
 }
 
-function formatLocalDateTime(value) {
-  if (!value) return '—';
 
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return '—';
-
-  return new Intl.DateTimeFormat(undefined, {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(d);
-}
 
 function formatCategoryLabel(category) {
   const c = String(category || '').toLowerCase();
