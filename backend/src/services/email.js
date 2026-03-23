@@ -2,6 +2,7 @@ import nodemailer from 'nodemailer';
 import PDFDocument from 'pdfkit';
 import path from 'path';
 import fs from 'fs';
+import { ensureReportDir } from '../utils/reportDir.js';
 import { createObjectCsvWriter } from 'csv-writer';
 import { logger } from '../utils/logger.js';
 import User from '../models/User.js';
@@ -45,13 +46,6 @@ function getTransporter() {
 
 function sanitizeName(s = '') {
   return String(s).replace(/[^a-z0-9\-_.]/gi, '_');
-}
-
-function ensureReportDir() {
-  const dirName = process.env.REPORTS_DIR || 'reports';
-  const dir = path.join(process.cwd(), dirName);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  return dir;
 }
 
 function getHostLabel(scan) {

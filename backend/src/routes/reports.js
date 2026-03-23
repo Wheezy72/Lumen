@@ -7,6 +7,7 @@ import { fileURLToPath } from 'url';
 import { createObjectCsvWriter } from 'csv-writer';
 import Scan from '../models/Scan.js';
 import { displayFindingTitle, getHeaderHintForTitle } from '../services/findingTitle.js';
+import { ensureReportDir } from '../utils/reportDir.js';
 
 const router = express.Router();
 
@@ -16,13 +17,6 @@ const __dirname = path.dirname(__filename);
 const reportSchema = Joi.object({
   scanId: Joi.string().required(),
 });
-
-function ensureReportDir() {
-  const dirName = process.env.REPORTS_DIR || 'reports';
-  const dir = path.join(process.cwd(), dirName);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  return dir;
-}
 
 function sanitizeName(s = '') {
   return s.replace(/[^a-z0-9\-_.]/gi, '_');

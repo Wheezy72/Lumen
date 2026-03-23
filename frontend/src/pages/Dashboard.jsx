@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import { useTheme } from '../theme/ThemeProvider.jsx';
 import { Card } from '../components/ui/Card.jsx';
 import { displayFindingTitle } from '../utils/findingTitle.js';
+import { getSeverityRank, SEVERITY_COLORS, SEVERITY_ORDER } from '../utils/severity.js';
 import {
   Chart,
   ArcElement,
@@ -16,18 +17,6 @@ import {
 } from 'chart.js';
 
 Chart.register(ArcElement, BarElement, CategoryScale, LinearScale, Tooltip, Legend);
-
-const SEV_ORDER = ['critical', 'high', 'medium', 'low', 'info'];
-
-const SEV_COLORS = {
-  critical: '#7c3aed',
-  high: '#ef4444',
-  medium: '#f59e0b',
-  low: '#14b8a6',
-  info: '#6b7280',
-};
-
-
 
 function isRealFinding(finding) {
   if (!finding || !finding.title) return false;
@@ -51,14 +40,7 @@ function isRealFinding(finding) {
   return true;
 }
 
-function severityRank(sev) {
-  const s = String(sev || 'info').toLowerCase();
-  if (s === 'critical') return 4;
-  if (s === 'high') return 3;
-  if (s === 'medium') return 2;
-  if (s === 'low') return 1;
-  return 0;
-}
+
 
 function getTargetLabel(scan) {
   if (!scan) return '';
@@ -113,14 +95,14 @@ export default function Dashboard() {
             issueAgg[title] = { title, count: 0, maxSeverity: 'info' };
           }
           issueAgg[title].count += 1;
-          if (severityRank(sev) > severityRank(issueAgg[title].maxSeverity)) {
+          if (getSeverityRank(sev) > getSeverityRank(issueAgg[title].maxSeverity)) {
             issueAgg[title].maxSeverity = sev;
           }
         });
       });
 
       const sortedIssues = Object.values(issueAgg)
-        .sort((a, b) => (b.count - a.count) || (severityRank(b.maxSeverity) - severityRank(a.maxSeverity)) || a.title.localeCompare(b.title))
+        .sort((a, b) => (b.count - a.count) || (getSeverityRank(b.maxSeverity) - getSeverityRank(a.maxSeverity)) || a.title.localeCompare(b.title))
         .slice(0, 5);
 
       const completed = data.filter((scan) => scan.status === 'completed').slice(0, 6).reverse();
@@ -157,9 +139,9 @@ export default function Dashboard() {
 
   const barData = useMemo(() => ({
     labels: barLabels.length ? barLabels : ['No data yet'],
-    datasets: SEV_ORDER.map((sev) => ({
+    datasets: SEVERITY_ORDER.map((sev) => ({
       label: sev.charAt(0).toUpperCase() + sev.slice(1),
-      backgroundColor: SEV_COLORS[sev],
+      backgroundColor: SEVERITY_COLORS[sev],
       data: barScans.length
         ? barScans.map((scan) =>
             (scan.results || [])
@@ -185,7 +167,7 @@ export default function Dashboard() {
     labels: ['Low', 'Medium', 'High', 'Critical', 'Info'],
     datasets: [{
       data: [vulnCounts.low, vulnCounts.medium, vulnCounts.high, vulnCounts.critical, vulnCounts.info],
-      backgroundColor: [SEV_COLORS.low, SEV_COLORS.medium, SEV_COLORS.high, SEV_COLORS.critical, SEV_COLORS.info],
+      backgroundColor: [SEVERITY_COLORS.low, SEVERITY_COLORS.medium, SEVERITY_COLORS.high, SEVERITY_COLORS.critical, SEVERITY_COLORS.info],
       borderWidth: 2,
       borderColor: '#111827',
     }],
@@ -293,7 +275,7 @@ export default function Dashboard() {
             <ul className="space-y-2">
               {topIssues.map((issue) => {
                 const sev = String(issue.maxSeverity || 'info').toLowerCase();
-                const color = SEV_COLORS[sev] || SEV_COLORS.info;
+                const color = SEVERITY_COLORS[sev] || SEVERITY_COLORS.info;
 
                 return (
                   <li key={issue.title} className="flex items-center justify-between gap-3">
@@ -336,7 +318,7 @@ export default function Dashboard() {
             <ul className="divide-y divide-slate-800">
               {recentFindings.map((finding, idx) => {
                 const sev = String(finding.severity || 'info').toLowerCase();
-                const color = SEV_COLORS[sev] || SEV_COLORS.info;
+                const color = SEVERITY_COLORS[sev] || SEVERITY_COLORS.info;
                 return (
                   <li key={`${finding.scanId}:${idx}`} className="py-2.5 flex items-start justify-between gap-3">
                     <div className="min-w-0">
