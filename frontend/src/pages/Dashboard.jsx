@@ -6,6 +6,7 @@ import { useTheme } from '../theme/ThemeProvider.jsx';
 import { Card } from '../components/ui/Card.jsx';
 import { displayFindingTitle } from '../utils/findingTitle.js';
 import { getSeverityRank, SEVERITY_COLORS, SEVERITY_ORDER } from '../utils/severity.js';
+import { formatLocalDateTime } from '../utils/dates.js';
 import {
   Chart,
   ArcElement,
@@ -54,17 +55,7 @@ function getTargetLabel(scan) {
   }
 }
 
-function formatLocalDateTime(value) {
-  if (!value) return '—';
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return '—';
-  return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(d);
-}
+
 
 export default function Dashboard() {
   const { theme } = useTheme();
@@ -324,7 +315,12 @@ export default function Dashboard() {
                     <div className="min-w-0">
                       <p className="text-sm text-gray-200 truncate">{displayFindingTitle(finding)}</p>
                       <p className="text-xs text-gray-600 truncate mt-0.5">
-                        {finding.scanTarget} • {formatLocalDateTime(finding.scanCreatedAt)}
+                        {finding.scanTarget} • {formatLocalDateTime(finding.scanCreatedAt, {
+                          month: 'short',
+                          day: '2-digit',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
                       </p>
                     </div>
 
