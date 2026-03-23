@@ -1,9 +1,24 @@
 const HEADER_HINTS = {
-  'X-Frame-Options': 'Clickjacking protection',
-  'X-Content-Type-Options': 'MIME sniffing protection',
-  'Referrer-Policy': 'Referrer privacy',
-  'Strict-Transport-Security': 'HTTPS enforcement',
-  'Content-Security-Policy': 'Script and content restrictions',
+  'X-Frame-Options': {
+    label: 'Clickjacking protection',
+    meaning: 'Helps stop other sites from embedding your pages inside hidden iframes (a common clickjacking trick).',
+  },
+  'X-Content-Type-Options': {
+    label: 'MIME sniffing protection',
+    meaning: 'Helps browsers avoid guessing file types in a way that can enable script injection in edge cases.',
+  },
+  'Referrer-Policy': {
+    label: 'Referrer privacy',
+    meaning: 'Controls how much URL information is shared in the Referer header when users navigate away from your site.',
+  },
+  'Strict-Transport-Security': {
+    label: 'HTTPS enforcement',
+    meaning: 'Tells browsers to use HTTPS only for this site, helping prevent downgrade attacks.',
+  },
+  'Content-Security-Policy': {
+    label: 'Script and content restrictions',
+    meaning: 'Limits where scripts/styles can load from, reducing the impact of XSS if a bug exists.',
+  },
 };
 
 export function getHeaderHintForTitle(title = '') {
@@ -12,9 +27,13 @@ export function getHeaderHintForTitle(title = '') {
   if (!match) return null;
 
   const header = match[1].trim();
-  const label = HEADER_HINTS[header] || 'Browser security';
+  const info = HEADER_HINTS[header];
 
-  return { header, label };
+  return {
+    header,
+    label: info?.label || 'Browser security',
+    meaning: info?.meaning || 'A recommended browser security header was not present in the HTTP response.',
+  };
 }
 
 function rewriteGenericTitle(vuln = {}) {
