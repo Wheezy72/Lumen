@@ -218,10 +218,6 @@ export default function Vulnerabilities() {
             <p className="text-sm text-gray-500 mt-2 max-w-2xl">
               Short, practical notes on common web issues and a few real-world incidents.
             </p>
-            <p className="text-xs text-gray-500 mt-2 max-w-2xl">
-              Tip: add header images in <span className="font-mono">frontend/public/learn</span>.
-              Name them like <span className="font-mono">sqli.png</span> (or <span className="font-mono">.jpg</span>/<span className="font-mono">.jpeg</span>).
-            </p>
           </div>
 
           <div className="flex flex-wrap gap-2">

@@ -21,16 +21,17 @@ export default function Landing() {
   return (
     <div className="min-h-screen bg-dark-300 text-slate-900 dark:text-white">
 
-      {/* ── Hero ─────────────────────────────────────────────────────── */}
+      {/*Hero */}
+
       <section className="max-w-5xl mx-auto px-6 pt-24 pb-16 text-center">
         <span className="inline-block px-3 py-1 text-xs font-semibold tracking-widest uppercase rounded-full bg-primary-500/10 dark:bg-primary-900/60 text-primary-700 dark:text-primary-400 border border-primary-500/20 dark:border-primary-700/40 mb-6">
-          Open-source · Self-hostable
+          Fast · Reliable
         </span>
         <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold leading-tight text-slate-900 dark:text-white">
           Quick security checks<br className="hidden sm:block" /> for your web app.
         </h1>
         <p className="mt-5 text-lg text-slate-600 dark:text-gray-400 max-w-2xl mx-auto">
-          Paste a URL and run a scan. You’ll get a short report with the issues found and how to fix them.
+          Paste a URL and run a scan. You’ll receive a short report with the found  issues and how to fix them.
         </p>
 
         <div className="mt-8 flex flex-wrap justify-center gap-4">
@@ -54,7 +55,7 @@ export default function Landing() {
             '10 checks',
             'Live progress',
             'PDF/CSV export',
-            'Self-hostable',
+            'Public API',
           ].map((s) => (
             <span key={s} className="flex items-center gap-2">
               <svg className="w-3.5 h-3.5 text-primary-500 shrink-0" fill="currentColor" viewBox="0 0 20 20">
@@ -66,7 +67,8 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── How It Works ──────────────────────────────────────────────── */}
+      {/* How It Works */}
+
       <section className="max-w-5xl mx-auto px-6 py-16">
         <h2 className="text-2xl font-bold text-center text-slate-900 dark:text-white mb-2">How it works</h2>
         <p className="text-center text-gray-500 text-sm mb-10">Three steps from zero to report.</p>
@@ -132,7 +134,8 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── Example findings card ──────────────────────────────────────── */}
+      {/*Example findings card */}
+
       <section className="max-w-5xl mx-auto px-6 py-16">
         <div className="grid md:grid-cols-2 gap-10 items-center">
           <div>
@@ -181,10 +184,11 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── CTA ──────────────────────────────────────────────────────── */}
+      {/*CTA*/}
+
       <section className="max-w-5xl mx-auto px-6 py-16 text-center">
         <div className="rounded-2xl border border-primary-500/20 dark:border-primary-800/40 bg-primary-500/10 dark:bg-primary-900/20 px-8 py-12">
-          <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Run a scan</h2>
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Start using Lumen, free of charge</h2>
           <p className="mt-2 text-slate-600 dark:text-gray-400 text-sm">Runs locally. No payment setup.</p>
           <Link
             to="/register"
