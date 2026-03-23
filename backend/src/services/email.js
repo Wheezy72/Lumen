@@ -23,6 +23,7 @@ const {
   SMTP_PORT = '587',
   SMTP_USER,
   SMTP_PASS,
+  SMTP_TLS_REJECT_UNAUTHORIZED = 'true',
 } = process.env;
 
 let transporter = null;
@@ -34,12 +35,14 @@ function isEmailEnabled() {
 function getTransporter() {
   if (!transporter) {
     const port = parseInt(SMTP_PORT, 10);
+    const rejectUnauthorized = !['false', '0', 'no', 'off'].includes(String(SMTP_TLS_REJECT_UNAUTHORIZED || '').toLowerCase());
 
     transporter = nodemailer.createTransport({
       host: SMTP_HOST,
       port,
       secure: port === 465,
       auth: SMTP_USER && SMTP_PASS ? { user: SMTP_USER, pass: SMTP_PASS } : undefined,
+      tls: { rejectUnauthorized },
     });
   }
   return transporter;
