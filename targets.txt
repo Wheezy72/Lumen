@@ -1,0 +1,48 @@
+1) Useful DVWA + Juice Shop links to seed your Dashboard (and to generate diffs)
+Below are “targets” you can save as quick links/cards. Replace host/port to match your setup.
+
+DVWA (usually http://127.0.0.1 or http://127.0.0.1:8080, sometimes under /dvwa/)
+Core pages:
+
+http://<dvwa-host>/dvwa/login.php
+http://<dvwa-host>/dvwa/security.php (change security level to create diff)
+http://<dvwa-host>/dvwa/index.php
+Good scan targets (vuln pages):
+
+SQLi: http://<dvwa-host>/dvwa/vulnerabilities/sqli/?id=1&Submit=Submit
+Reflected XSS: http://<dvwa-host>/dvwa/vulnerabilities/xss_r/?name=test
+Stored XSS: http://<dvwa-host>/dvwa/vulnerabilities/xss_s/
+File inclusion (path traversal-ish): http://<dvwa-host>/dvwa/vulnerabilities/fi/?page=include.php
+Command injection: http://<dvwa-host>/dvwa/vulnerabilities/exec/
+Weak sessions/cookies: http://<dvwa-host>/dvwa/login.php (DVWA sets cookies on login)
+How to force “diff / changes” on DVWA:
+
+Run scan with DVWA security set to Low
+Change DVWA security to Medium/High/Impossible
+Run the same scan target again → your “Changes/Diff” should light up because results differ
+OWASP Juice Shop (usually http://127.0.0.1:3000)
+UI routes (good for dashboard links, not always best scan targets because SPA):
+
+http://<js-host>/#/login
+http://<js-host>/#/register
+http://<js-host>/#/search
+http://<js-host>/#/score-board
+API-style routes (better scan targets; numeric IDs help the “access control” probe):
+
+Products:
+http://<js-host>/api/Products/1
+http://<js-host>/api/Products/2
+Search endpoint (if enabled in your build; good for query-string style tests):
+http://<js-host>/rest/products/search?q=apple
+Auth-required check (use Authorization Bearer token; good to test your “Use auth”):
+http://<js-host>/rest/user/whoami
+How to force “diff / changes” on Juice Shop:
+
+Scan the same host but change the target endpoint between runs (still counts as diff because diff is per host).
+Or scan an endpoint before/after enabling/disabling security headers in whatever reverse proxy you might be using.
+
+
+frontend/public/landing/hero.png
+frontend/public/landing/step-1.png
+frontend/public/landing/step-2.png
+frontend/public/landing/step-3.png
