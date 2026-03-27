@@ -3,7 +3,7 @@ dotenv.config();
 
 import mongoose from 'mongoose';
 import { logger } from '../utils/logger.js';
-import { configureBull, syncRecurringSchedules } from './index.js';
+import { configureBull } from './index.js';
 
 const { MONGODB_URI, LOG_LEVEL = 'info' } = process.env;
 
