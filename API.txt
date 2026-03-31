@@ -1,0 +1,100 @@
+The “API” is just a set of HTTP endpoints that let you do what the UI does:
+
+authenticate
+create a scan (async job)
+check progress/results
+compare this scan to the previous scan (new/fixed/persisting)
+optionally get a webhook callback when done
+Mental model (important)
+When you call POST /api/scans, the backend does not scan immediately. It:
+creates a Scan document in MongoDB (status: queued)
+pushes a job into Bull/Redis for the worker
+the Python worker scans and publishes progress/results
+backend saves results and marks status: completed
+So your demo is basically: “start scan → watch it progress → fetch report → run again → show diff”.
+
+Easiest demo flow (with 2 terminals)
+Assume backend is running on http://localhost:4000.
+Terminal A: watch live progress (SSE)
+This prints JSON events as the scan runs:
+
+bash
+
+
+curl -N http://localhost:4000/api/sse/events
+You’ll see messages like:
+
+json
+
+
+{"type":"progress","scanId":"...","progress":23}
+{"type":"completed","scanId":"...","progress":100,"status":"completed"}
+Terminal B: login, start scan, poll it
+Login (gets a token for scripts)
+bash
+
+
+curl -s -X POST http://localhost:4000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"YOUR_USER","password":"YOUR_PASS"}'
+Copy the "token" from the response.
+Start a scan
+bash
+
+
+curl -s -X POST http://localhost:4000/api/scans \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"targetUrl":"https://example.com","scanProfile":["headers","cookies"]}'
+This returns a scan object with _id. That _id is your scanId.
+Poll until done
+bash
+
+
+curl -s http://localhost:4000/api/scans/SCAN_ID \
+  -H "Authorization: Bearer YOUR_TOKEN"
+Look at:
+
+status (queued/running/completed/failed)
+progress (0–100)
+results (array of findings)
+Showing “new vs fixed vs persisting” (the cool part)
+After you run a second scan against the same host:
+
+bash
+
+
+curl -s http://localhost:4000/api/scans/SCAN_ID/diff \
+  -H "Authorization: Bearer YOUR_TOKEN"
+What it means:
+
+newIssues: present now, not present last time
+fixedIssues: were present last time, gone now
+persisting: still present in both
+That’s exactly the “tell if a new finding is there or an existing one left” idea.
+
+How your mate would use it to scan their webapp
+They have two realistic options:
+
+Option 1: simple polling (easy)
+login → get token
+POST /api/scans
+poll GET /api/scans/:id until completed
+call GET /api/scans/:id/diff and check diff.newIssues.length
+Option 2: webhook (best for CI)
+When creating a scan, include:
+
+json
+
+
+"webhookUrl": "https://webhook.site/your-unique-url"
+Then when the scan completes/fails, your API POSTs to that URL with scan status (and policy/diff summary).
+
+That’s a clean demo: “you don’t need the frontend; you can integrate it into pipelines.”
+
+One gotcha for demos: scanning localhost is blocked by default
+If you want to scan something like http://localhost:3000 (your mate running their app locally), the API blocks private targets unless you set:
+ALLOW_PRIVATE_TARGETS=true (in backend env)
+Otherwise use a publicly reachable URL.
+
+If you tell me what you want to demo (scan your own local test app vs scan a public site vs webhook into a fake CI), I’ll give you a tight 2–3 minute demo script you can literally read out loud while running the commands.

@@ -41,9 +41,6 @@ export default function Vulnerabilities() {
             <p className="text-sm text-gray-500 mt-2 max-w-2xl">
               Quick notes on common web issues. Keep it simple: understand it, fix it, verify it.
             </p>
-            <p className="text-xs text-gray-500 mt-2 max-w-2xl">
-              Images are optional. Add <span className="font-mono">/learn/&lt;slug&gt;.png</span> (or jpg/jpeg) in <span className="font-mono">frontend/public/learn</span>.
-            </p>
           </div>
 
           <div className="flex flex-wrap gap-2">
