@@ -1,0 +1,8 @@
+$kind: http-request
+name: Delete Schedule
+url: "{{baseUrl}}/api/publicApi/schedules/{{scheduleId}}"
+method: DELETE
+headers:
+  - name: Authorization
+    value: "Bearer {{publicApiKey}}"
+order: 3000

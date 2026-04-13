@@ -29,8 +29,7 @@ export default function AppHeader({
   return (
     <header className="bg-dark-200 backdrop-blur-lg border-b border-slate-800 sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <>
-          <div className="flex justify-between items-center h-16">
+        <div className="flex justify-between items-center h-16">
             <Link to={user ? "/dashboard" : "/"} className="flex items-center space-x-3">
               <div className="h-9 w-9 rounded-xl overflow-hidden ring-1 ring-black/10 dark:ring-white/10 shadow-soft">
                 <img src="/logo.jpg" alt="Logo" className="h-full w-full object-cover" />
@@ -180,7 +179,7 @@ export default function AppHeader({
               </nav>
             </div>
           )}
-        </>
+        </div>
       </div>
     </header>
   );

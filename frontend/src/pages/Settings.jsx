@@ -133,12 +133,9 @@ export default function Settings({ user, onUpdateUser }) {
               <div className="text-xs text-gray-500 mt-1">
                 Sends you a short summary when a scan finds issues.
               </div>
-              
             </div>
           </label>
         </div>
-
-        
 
         <button
           type="submit"

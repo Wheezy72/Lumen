@@ -1,2 +1,14 @@
-name: New Environment
-values: []
+name: Lumen Local
+values:
+  - name: baseUrl
+    value: http://localhost:4000
+    enabled: true
+  - name: publicApiKey
+    value: your_public_api_key_here
+    enabled: true
+  - name: scanId
+    value: ""
+    enabled: true
+  - name: scheduleId
+    value: ""
+    enabled: true

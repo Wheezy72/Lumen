@@ -31,8 +31,12 @@ function formatDateTime(value) {
 }
 
 function makeBaseName(scan) {
-  const url = new URL(scan.targetUrl);
-  const host = url.hostname || 'site';
+  let host = 'site';
+  try {
+    host = new URL(scan.targetUrl).hostname || 'site';
+  } catch {
+    // ignore invalid URL
+  }
   return sanitizeName(host);
 }
 
@@ -132,8 +136,12 @@ async function generatePdfReport(scan) {
 
   doc.pipe(ws);
 
-  const targetUrl = new URL(scan.targetUrl);
-  const host = targetUrl.hostname || 'site';
+  let host = 'site';
+  try {
+    host = new URL(scan.targetUrl).hostname || 'site';
+  } catch {
+    // ignore invalid URL
+  }
 
   const headerY = doc.y;
   doc.rect(0, headerY, doc.page.width, 92).fill('#0b1220');

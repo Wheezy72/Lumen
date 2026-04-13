@@ -1,0 +1,8 @@
+$kind: http-request
+name: Download CSV Report
+url: "{{baseUrl}}/api/publicApi/scans/{{scanId}}/report.csv"
+method: GET
+headers:
+  - name: Authorization
+    value: "Bearer {{publicApiKey}}"
+order: 6000

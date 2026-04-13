@@ -22,8 +22,12 @@ export default function Scans() {
   const [deleting, setDeleting] = useState(null);
 
   const load = async () => {
-    const { data } = await axios.get('/api/scans');
-    setScans(data);
+    try {
+      const { data } = await axios.get('/api/scans');
+      setScans(data);
+    } catch {
+      // backend may not be running
+    }
   };
 
   useEffect(() => {
@@ -165,10 +169,6 @@ function ScanRow({ scan, onDownload, isDownloading, onDelete, isDeleting }) {
       return targetUrl;
     }
   }, [targetHost, targetUrl]);
-
-  
-
-  
 
   return (
     <tr className="hover:bg-black/5 dark:hover:bg-white/[0.02] transition-colors duration-150">

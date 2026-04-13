@@ -1,0 +1,22 @@
+$kind: http-request
+name: Chat About a Finding
+url: "{{baseUrl}}/api/publicApi/scans/{{scanId}}/chat"
+method: POST
+headers:
+  - name: Content-Type
+    value: application/json
+  - name: Authorization
+    value: "Bearer {{publicApiKey}}"
+body:
+  mode: raw
+  raw: |
+    {
+      "findingIndex": 0,
+      "messages": [
+        {
+          "role": "user",
+          "content": "Can you explain this finding and how I should fix it?"
+        }
+      ]
+    }
+order: 1000

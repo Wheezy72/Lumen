@@ -10,15 +10,17 @@ export default function Changes() {
   const [items, setItems] = useState([]);
 
   const load = async () => {
-    const { data } = await axios.get('/api/scans/changes');
-    setItems(data || []);
+    try {
+      const { data } = await axios.get('/api/scans/changes');
+      setItems(data || []);
+    } catch {
+      // backend may not be running
+    }
   };
 
   useEffect(() => {
     load();
   }, []);
-
-  
 
   const rows = useMemo(() => {
     return (items || []).map((scan) => {
