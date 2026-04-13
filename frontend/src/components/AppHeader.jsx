@@ -180,7 +180,6 @@ export default function AppHeader({
             </div>
           )}
         </div>
-      </div>
     </header>
   );
 }
