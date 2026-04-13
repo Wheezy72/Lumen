@@ -166,10 +166,6 @@ function ScanRow({ scan, onDownload, isDownloading, onDelete, isDeleting }) {
     }
   }, [targetHost, targetUrl]);
 
-  
-
-  
-
   return (
     <tr className="hover:bg-black/5 dark:hover:bg-white/[0.02] transition-colors duration-150">
       <td className="px-4 py-3 align-middle">

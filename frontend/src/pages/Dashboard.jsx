@@ -64,6 +64,7 @@ export default function Dashboard() {
   const [recentScans, setRecentScans] = useState([]);
   const [topIssues, setTopIssues] = useState([]);
   const [barScans, setBarScans] = useState([]);
+  const [queuedScans, setQueuedScans] = useState([]);
 
   const fetchData = async () => {
     try {
@@ -97,12 +98,14 @@ export default function Dashboard() {
         .slice(0, 5);
 
       const completed = data.filter((scan) => scan.status === 'completed').slice(0, 6).reverse();
+      const pending = data.filter((scan) => ['queued', 'scheduled'].includes(scan.status));
 
       setMetrics({ totalScans: total, openScans: open, success, failed });
       setVulnCounts(counts);
       setRecentScans(data.slice(0, 5));
       setTopIssues(sortedIssues);
       setBarScans(completed);
+      setQueuedScans(pending);
     } catch {
       // ignore — backend may not be running
     }
@@ -247,6 +250,48 @@ export default function Dashboard() {
           </div>
         </Card>
       </div>
+
+      {queuedScans.length > 0 && (
+        <Card className="p-5">
+          <div className="flex items-start justify-between gap-3 mb-4">
+            <div>
+              <h3 className="text-sm font-semibold text-gray-200">Queued</h3>
+              <p className="text-xs text-gray-600 mt-1">
+                {queuedScans.length} scan{queuedScans.length !== 1 ? 's' : ''} waiting to run.
+              </p>
+            </div>
+            <Link to="/scans" className="text-xs font-semibold text-primary-400 hover:text-primary-300 transition">
+              View all →
+            </Link>
+          </div>
+
+          <ul className="divide-y divide-slate-800">
+            {queuedScans.map((scan) => {
+              const label = getTargetLabel(scan) || scan._id?.slice(-6);
+              const isScheduled = scan.status === 'scheduled';
+              return (
+                <li key={scan._id} className="py-2.5 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm text-gray-200 truncate">{label}</p>
+                    {isScheduled && scan.scheduledFor && (
+                      <p className="text-xs text-gray-600 mt-0.5">
+                        Runs {formatLocalDateTime(scan.scheduledFor, { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    )}
+                  </div>
+                  <span className={`text-[11px] px-2.5 py-0.5 rounded-full font-medium border shrink-0 ${
+                    isScheduled
+                      ? 'bg-purple-500/15 text-purple-400 border-purple-500/30'
+                      : 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                  }`}>
+                    {scan.status}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card className="p-5">
