@@ -111,6 +111,7 @@ async function writePdfReport(scan, filePath) {
   await new Promise((resolve, reject) => {
     ws.on('finish', resolve);
     ws.on('error', reject);
+    doc.on('error', reject);
   });
 }
 

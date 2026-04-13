@@ -1,7 +1,9 @@
 import React, { useState } from "react";
+
 import axios from "axios";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import AuthBackground from "../components/ui/AuthBackground.jsx";
+import { EyeIcon, EyeOffIcon } from "../components/ui/Icons.jsx";
 
 export default function Login({ onLogin, message }) {
   const navigate = useNavigate();
@@ -11,6 +13,7 @@ export default function Login({ onLogin, message }) {
   const [form, setForm] = useState({ username: "", password: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -107,14 +110,22 @@ export default function Login({ onLogin, message }) {
                   </svg>
                 </span>
                 <input
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   name="password"
                   value={form.password}
                   onChange={handleChange}
-                  className="input"
+                  className="input pr-10"
                   placeholder="Enter your password"
                   required
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition z-10"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+                </button>
               </div>
             </div>
 

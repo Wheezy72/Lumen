@@ -1,0 +1,8 @@
+$kind: http-request
+name: List Scans
+url: "{{baseUrl}}/api/publicApi/scans"
+method: GET
+headers:
+  - name: Authorization
+    value: "Bearer {{publicApiKey}}"
+order: 2000

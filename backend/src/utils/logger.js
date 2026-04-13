@@ -11,12 +11,3 @@ export const logger = winston.createLogger({
     new winston.transports.File({ filename: 'logs/app.log' }),
   ],
 });
-
-export const logRequest = (req, res, next) => {
-  logger.info('HTTP request', {
-    method: req.method,
-    url: req.originalUrl,
-    ip: req.ip,
-  });
-  next();
-};

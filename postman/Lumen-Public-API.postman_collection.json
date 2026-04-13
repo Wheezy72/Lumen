@@ -1,0 +1,133 @@
+{
+  "info": {
+    "name": "Lumen - Public API",
+    "_postman_id": "lumen-public-api-v1",
+    "description": "Test the Lumen public API. Set `baseUrl` and `publicApiKey` in your environment before running requests.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:4000" },
+    { "key": "publicApiKey", "value": "your_public_api_key_here" },
+    { "key": "scanId", "value": "" },
+    { "key": "scheduleId", "value": "" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{publicApiKey}}", "type": "string" }]
+  },
+  "item": [
+    {
+      "name": "Scans",
+      "item": [
+        {
+          "name": "Start a Scan",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/publicApi/scans",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"target\": \"https://example.com\",\n  \"modules\": [\"headers\", \"xss\", \"sqli\", \"cookies\", \"ssl\", \"rate_limit\"]\n}"
+            },
+            "description": "Queue a new scan. Returns a scan ID you can use in the other requests. Copy the `id` from the response into the `scanId` collection variable."
+          }
+        },
+        {
+          "name": "List Scans",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/publicApi/scans",
+            "description": "List all scans created via the public API (up to 50 by default). Add `?limit=100` to get more."
+          }
+        },
+        {
+          "name": "Get Scan by ID",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/publicApi/scans/{{scanId}}",
+            "description": "Get a single scan. Check `status` (queued → running → completed/failed) and `progress` (0–100)."
+          }
+        },
+        {
+          "name": "Get Report (JSON)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/publicApi/scans/{{scanId}}/report",
+            "description": "Returns a JSON summary of the scan with all findings and download URLs for the PDF and CSV reports."
+          }
+        },
+        {
+          "name": "Download PDF Report",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/publicApi/scans/{{scanId}}/report.pdf",
+            "description": "Download the full security report as a PDF. Only works once the scan has completed."
+          }
+        },
+        {
+          "name": "Download CSV Report",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/publicApi/scans/{{scanId}}/report.csv",
+            "description": "Download findings as a CSV file. Useful for importing into a spreadsheet or another tool."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Schedules",
+      "item": [
+        {
+          "name": "Create Schedule",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/publicApi/schedules",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"target\": \"https://example.com\",\n  \"cron\": \"0 9 * * 1\",\n  \"timezone\": \"Africa/Nairobi\",\n  \"modules\": [\"headers\", \"xss\", \"sqli\", \"cookies\", \"ssl\"],\n  \"runNow\": false\n}"
+            },
+            "description": "Create a recurring scan schedule using a cron expression. `cron: \"0 9 * * 1\"` = every Monday at 9am. Set `runNow: true` to also kick off an immediate scan."
+          }
+        },
+        {
+          "name": "List Schedules",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/publicApi/schedules",
+            "description": "List all recurring schedules created via the public API."
+          }
+        },
+        {
+          "name": "Delete Schedule",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/publicApi/schedules/{{scheduleId}}",
+            "description": "Remove a recurring schedule and cancel its queued jobs. Set `scheduleId` in the collection variables first."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Chat",
+      "item": [
+        {
+          "name": "Chat About a Finding",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/publicApi/scans/{{scanId}}/chat",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n  \"findingIndex\": 0,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Can you explain this finding and how I should fix it?\"\n    }\n  ]\n}"
+            },
+            "description": "Ask the AI assistant about a specific finding. `findingIndex` is the zero-based index into the scan's `results` array. You can pass multiple messages to continue the conversation (max 12)."
+          }
+        }
+      ]
+    }
+  ]
+}
