@@ -1,9 +1,0 @@
-$kind: collection
-name: Lumen - Public API
-auth:
-  - id: 586d825c-9271-4212-a480-57af488f1e78
-    type: bearer
-    name: Bearer Token
-    credentials:
-      token: E4A2B8C0D1E3F5A7B9C2D7D4E2A1B9C7D0F6
-order: 3262062015807487
