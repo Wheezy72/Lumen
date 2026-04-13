@@ -115,7 +115,7 @@ export async function sendPasswordResetCodeEmail({ to, username, code }) {
     throw new Error('Email is not enabled (EMAIL_ENABLED is false)');
   }
 
-  const subject = 'Your Lumen password reset code';
+  const subject = '[Lumen] Your password reset code';
   const text = [
     `Hi ${username || 'there'},`,
     '',
@@ -191,15 +191,15 @@ export async function sendScanSummaryEmail(scan) {
 
     let subject;
     if (!hasComparison) {
-      subject = `Scan complete (baseline) — ${targetLabel}`;
+      subject = `[Lumen] Scan complete (baseline) — ${targetLabel}`;
     } else if (importance === 'action_required') {
-      subject = `Action needed: ${newHighCritical.length} new high/critical finding${newHighCritical.length === 1 ? '' : 's'} — ${targetLabel}`;
+      subject = `[Lumen] Action needed: ${newHighCritical.length} new high/critical finding${newHighCritical.length === 1 ? '' : 's'} — ${targetLabel}`;
     } else if (newIssues.length) {
-      subject = `Scan complete: ${newIssues.length} new finding${newIssues.length === 1 ? '' : 's'} — ${targetLabel}`;
+      subject = `[Lumen] Scan complete: ${newIssues.length} new finding${newIssues.length === 1 ? '' : 's'} — ${targetLabel}`;
     } else if (fixedIssues.length) {
-      subject = `Scan complete: ${fixedIssues.length} finding${fixedIssues.length === 1 ? '' : 's'} fixed — ${targetLabel}`;
+      subject = `[Lumen] Scan complete: ${fixedIssues.length} finding${fixedIssues.length === 1 ? '' : 's'} fixed — ${targetLabel}`;
     } else {
-      subject = `Scan complete: no changes — ${targetLabel}`;
+      subject = `[Lumen] Scan complete: no changes — ${targetLabel}`;
     }
 
     // Build a clean, readable email body
@@ -281,7 +281,7 @@ export async function sendScanFailureEmail(scan, errorMessage) {
     const user = await User.findById(scan.userId);
     if (!user?.email || !user.emailAlertsEnabled) return;
 
-    const subject = `Scan failed — ${scan.targetUrl}`;
+    const subject = `[Lumen] Scan failed — ${scan.targetUrl}`;
     const text = [
       `Hi ${user.username || 'there'},`,
       '',
