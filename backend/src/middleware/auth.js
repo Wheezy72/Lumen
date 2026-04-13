@@ -45,7 +45,7 @@ export const clearAuthCookie = (res) => {
 
   res.clearCookie('session', options);
 
-  if (COOKIE_DOMAIN) {
+  if (shouldSetCookieDomain()) {
     res.clearCookie('session', { ...options, domain: COOKIE_DOMAIN });
   }
 };

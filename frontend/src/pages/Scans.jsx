@@ -22,8 +22,12 @@ export default function Scans() {
   const [deleting, setDeleting] = useState(null);
 
   const load = async () => {
-    const { data } = await axios.get('/api/scans');
-    setScans(data);
+    try {
+      const { data } = await axios.get('/api/scans');
+      setScans(data);
+    } catch {
+      // backend may not be running
+    }
   };
 
   useEffect(() => {
