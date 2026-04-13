@@ -41,8 +41,6 @@ function isRealFinding(finding) {
   return true;
 }
 
-
-
 function getTargetLabel(scan) {
   if (!scan) return '';
 
@@ -54,8 +52,6 @@ function getTargetLabel(scan) {
     return scan.targetUrl || '';
   }
 }
-
-
 
 export default function Dashboard() {
   const { theme } = useTheme();
@@ -218,7 +214,7 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <MetricCard label="Total scans" value={metrics.totalScans} color="text-blue-400" icon={<ScanIcon />} />
-        <MetricCard label="Running" value={metrics.openScans} color="text-amber-400" icon={<SpinnerIcon />} />
+        <MetricCard label="Active" value={metrics.openScans} color="text-amber-400" icon={<SpinnerIcon />} />
         <MetricCard label="Completed" value={metrics.success} color="text-emerald-400" icon={<CheckIcon />} />
         <MetricCard label="Failed" value={metrics.failed} color="text-red-400" icon={<XIcon />} />
       </div>

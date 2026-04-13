@@ -212,7 +212,7 @@ export async function sendScanSummaryEmail(scan) {
     if (total === 0) {
       lines.push('No findings were recorded.');
     } else {
-      lines.push(`Findings: ${total} total  (Critical: ${counts.critical}, High: ${counts.high}, Medium: ${counts.medium}, Low: ${counts.low})`);
+      lines.push(`Findings: ${total} total (Critical: ${counts.critical}, High: ${counts.high}, Medium: ${counts.medium}, Low: ${counts.low})`);
     }
 
     if (hasComparison) {

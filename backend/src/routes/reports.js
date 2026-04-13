@@ -31,8 +31,12 @@ function formatDateTime(value) {
 }
 
 function makeBaseName(scan) {
-  const url = new URL(scan.targetUrl);
-  const host = url.hostname || 'site';
+  let host = 'site';
+  try {
+    host = new URL(scan.targetUrl).hostname || 'site';
+  } catch {
+    // ignore invalid URL
+  }
   return sanitizeName(host);
 }
 

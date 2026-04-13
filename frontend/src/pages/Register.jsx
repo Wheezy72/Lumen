@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import axios from "axios";
 import { Link, useNavigate } from "react-router-dom";
 import AuthBackground from "../components/ui/AuthBackground.jsx";
+import { EyeIcon, EyeOffIcon } from "../components/ui/Icons.jsx";
 
 export default function Register({ onRegister }) {
   const navigate = useNavigate();
@@ -14,6 +15,9 @@ export default function Register({ onRegister }) {
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [pwFocused, setPwFocused] = useState(false);
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -25,6 +29,8 @@ export default function Register({ onRegister }) {
     upper: /[A-Z]/.test(form.password),
     special: /[^A-Za-z0-9]/.test(form.password),
   };
+  const allChecksPass = checks.length && checks.lower && checks.upper && checks.special;
+  const showRules = pwFocused || (form.password.length > 0 && !allChecksPass);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -111,8 +117,6 @@ export default function Register({ onRegister }) {
               </div>
             </div>
 
-            
-
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
                 Email <span className="text-primary-500">*</span>
@@ -156,26 +160,38 @@ export default function Register({ onRegister }) {
                   </svg>
                 </span>
                 <input
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   name="password"
                   value={form.password}
                   onChange={handleChange}
-                  className="input"
+                  onFocus={() => setPwFocused(true)}
+                  onBlur={() => setPwFocused(false)}
+                  className="input pr-10"
                   placeholder="Create a password"
                   required
                   minLength={8}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition z-10"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+                </button>
               </div>
 
-              <div className="mt-2 rounded-lg border border-slate-800 bg-black/5 dark:bg-black/25 p-3">
-                <p className="text-xs text-gray-500 mb-2">Password must include:</p>
-                <ul className="space-y-1">
-                  <PasswordRule ok={checks.length} label="At least 8 characters" />
-                  <PasswordRule ok={checks.lower} label="A lowercase letter" />
-                  <PasswordRule ok={checks.upper} label="An uppercase letter" />
-                  <PasswordRule ok={checks.special} label="A special character" />
-                </ul>
-              </div>
+              {showRules && (
+                <div className="mt-2 rounded-lg border border-slate-800 bg-black/5 dark:bg-black/25 p-3">
+                  <p className="text-xs text-gray-500 mb-2">Password must include:</p>
+                  <ul className="space-y-1">
+                    <PasswordRule ok={checks.length} label="At least 8 characters" />
+                    <PasswordRule ok={checks.lower} label="A lowercase letter" />
+                    <PasswordRule ok={checks.upper} label="An uppercase letter" />
+                    <PasswordRule ok={checks.special} label="A special character" />
+                  </ul>
+                </div>
+              )}
             </div>
 
             <div>
@@ -194,15 +210,23 @@ export default function Register({ onRegister }) {
                   </svg>
                 </span>
                 <input
-                  type="password"
+                  type={showConfirm ? "text" : "password"}
                   name="confirmPassword"
                   value={form.confirmPassword}
                   onChange={handleChange}
-                  className="input"
+                  className="input pr-10"
                   placeholder="Confirm your password"
                   required
                   minLength={8}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirm((v) => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition z-10"
+                  aria-label={showConfirm ? "Hide password" : "Show password"}
+                >
+                  {showConfirm ? <EyeOffIcon /> : <EyeIcon />}
+                </button>
               </div>
             </div>
 
