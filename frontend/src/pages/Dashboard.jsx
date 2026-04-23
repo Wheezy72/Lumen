@@ -4,9 +4,10 @@ import { Bar, Doughnut } from 'react-chartjs-2';
 import { Link } from 'react-router-dom';
 import { useTheme } from '../theme/ThemeProvider.jsx';
 import { Card } from '../components/ui/Card.jsx';
+import EmptyState from '../components/ui/EmptyState.jsx';
 import { displayFindingTitle } from '../utils/findingTitle.js';
 import { getSeverityRank, SEVERITY_COLORS, SEVERITY_ORDER } from '../utils/severity.js';
-import { formatLocalDateTime } from '../utils/dates.js';
+import { formatLocalDateTime, timeAgo } from '../utils/dates.js';
 import {
   Chart,
   ArcElement,
@@ -55,6 +56,7 @@ function getTargetLabel(scan) {
 
 export default function Dashboard() {
   const { theme } = useTheme();
+  const [loading, setLoading] = useState(true);
   const [metrics, setMetrics] = useState({ totalScans: 0, openScans: 0, success: 0, failed: 0 });
   const [vulnCounts, setVulnCounts] = useState({ low: 0, medium: 0, high: 0, critical: 0, info: 0 });
   const [recentScans, setRecentScans] = useState([]);
@@ -104,6 +106,8 @@ export default function Dashboard() {
       setQueuedScans(pending);
     } catch {
       // ignore — backend may not be running
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -213,10 +217,24 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <MetricCard label="Total scans" value={metrics.totalScans} color="text-blue-400" icon={<ScanIcon />} />
-        <MetricCard label="Active" value={metrics.openScans} color="text-amber-400" icon={<SpinnerIcon />} />
-        <MetricCard label="Completed" value={metrics.success} color="text-emerald-400" icon={<CheckIcon />} />
-        <MetricCard label="Failed" value={metrics.failed} color="text-red-400" icon={<XIcon />} />
+        {loading ? (
+          [1, 2, 3, 4].map((i) => (
+            <div key={i} className="rounded-xl border border-slate-800 bg-dark-200 p-4 flex items-center gap-4 shadow-soft">
+              <div className="skeleton w-10 h-10 rounded-lg shrink-0" />
+              <div className="flex-1">
+                <div className="skeleton h-3 w-16 mb-2" />
+                <div className="skeleton h-7 w-10" />
+              </div>
+            </div>
+          ))
+        ) : (
+          <>
+            <MetricCard label="Total scans" value={metrics.totalScans} color="text-blue-400" icon={<ScanIcon />} />
+            <MetricCard label="Active" value={metrics.openScans} color="text-amber-400" icon={<SpinnerIcon />} />
+            <MetricCard label="Completed" value={metrics.success} color="text-emerald-400" icon={<CheckIcon />} />
+            <MetricCard label="Failed" value={metrics.failed} color="text-red-400" icon={<XIcon />} />
+          </>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-4">
@@ -227,7 +245,13 @@ export default function Dashboard() {
               <p className="text-xs text-gray-600 mt-1">Severity totals across your latest completed scans.</p>
             </div>
           </div>
-          {barScans.length === 0 ? (
+          {loading ? (
+            <div className="h-48 flex flex-col justify-end gap-2 px-2">
+              {[60, 80, 45, 90, 55, 70].map((h, i) => (
+                <div key={i} className="skeleton rounded" style={{ height: `${h}%`, maxHeight: '2rem' }} />
+              ))}
+            </div>
+          ) : barScans.length === 0 ? (
             <div className="h-48 flex items-center justify-center text-gray-600 text-sm">
               No completed scans yet.
             </div>
@@ -241,19 +265,25 @@ export default function Dashboard() {
             <h3 className="text-sm font-semibold text-gray-200">Severity breakdown</h3>
             <p className="text-xs text-gray-600 mt-1">Across the last 10 scans.</p>
           </div>
-          <div className="w-44 h-44 mt-4">
-            <Doughnut data={doughnutData} options={doughnutOptions} plugins={[centreTextPlugin]} />
-          </div>
+          {loading ? (
+            <div className="w-44 h-44 mt-4 flex items-center justify-center">
+              <div className="skeleton w-full h-full rounded-full" />
+            </div>
+          ) : (
+            <div className="w-44 h-44 mt-4">
+              <Doughnut data={doughnutData} options={doughnutOptions} plugins={[centreTextPlugin]} />
+            </div>
+          )}
         </Card>
       </div>
 
-      {queuedScans.length > 0 && (
+      {(loading || queuedScans.length > 0) && (
         <Card className="p-5">
           <div className="flex items-start justify-between gap-3 mb-4">
             <div>
               <h3 className="text-sm font-semibold text-gray-200">Queued</h3>
               <p className="text-xs text-gray-600 mt-1">
-                {queuedScans.length} scan{queuedScans.length !== 1 ? 's' : ''} waiting to run.
+                {loading ? '\u00A0' : `${queuedScans.length} scan${queuedScans.length !== 1 ? 's' : ''} waiting to run.`}
               </p>
             </div>
             <Link to="/scans" className="text-xs font-semibold text-primary-400 hover:text-primary-300 transition">
@@ -261,31 +291,42 @@ export default function Dashboard() {
             </Link>
           </div>
 
-          <ul className="divide-y divide-slate-800">
-            {queuedScans.map((scan) => {
-              const label = getTargetLabel(scan) || scan._id?.slice(-6);
-              const isScheduled = scan.status === 'scheduled';
-              return (
-                <li key={scan._id} className="py-2.5 flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-sm text-gray-200 truncate">{label}</p>
-                    {isScheduled && scan.scheduledFor && (
-                      <p className="text-xs text-gray-600 mt-0.5">
-                        Runs {formatLocalDateTime(scan.scheduledFor, { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                      </p>
-                    )}
-                  </div>
-                  <span className={`text-[11px] px-2.5 py-0.5 rounded-full font-medium border shrink-0 ${
-                    isScheduled
-                      ? 'bg-purple-500/15 text-purple-400 border-purple-500/30'
-                      : 'bg-amber-500/15 text-amber-400 border-amber-500/30'
-                  }`}>
-                    {scan.status}
-                  </span>
+          {loading ? (
+            <ul className="divide-y divide-slate-800">
+              {[1, 2].map((i) => (
+                <li key={i} className="py-2.5 flex items-center justify-between gap-3">
+                  <div className="skeleton h-4 w-40" />
+                  <div className="skeleton h-5 w-16 rounded-full" />
                 </li>
-              );
-            })}
-          </ul>
+              ))}
+            </ul>
+          ) : (
+            <ul className="divide-y divide-slate-800">
+              {queuedScans.map((scan) => {
+                const label = getTargetLabel(scan) || scan._id?.slice(-6);
+                const isScheduled = scan.status === 'scheduled';
+                return (
+                  <li key={scan._id} className="py-2.5 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm text-gray-200 truncate" title={label}>{label}</p>
+                      {isScheduled && scan.scheduledFor && (
+                        <p className="text-xs text-gray-600 mt-0.5">
+                          Runs {formatLocalDateTime(scan.scheduledFor, { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      )}
+                    </div>
+                    <span className={`text-[11px] px-2.5 py-0.5 rounded-full font-medium border shrink-0 ${
+                      isScheduled
+                        ? 'bg-purple-500/15 text-purple-400 border-purple-500/30'
+                        : 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                    }`}>
+                      {scan.status}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </Card>
       )}
 
@@ -301,18 +342,31 @@ export default function Dashboard() {
             </Link>
           </div>
 
-          {topIssues.length === 0 ? (
-            <p className="text-sm text-gray-600">No findings yet.</p>
+          {loading ? (
+            <ul className="space-y-2">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <li key={i} className="flex items-center justify-between gap-3">
+                  <div className="skeleton h-4 flex-1 max-w-[180px]" />
+                  <div className="flex items-center gap-2">
+                    <div className="skeleton h-5 w-14 rounded-full" />
+                    <div className="skeleton h-5 w-8 rounded-full" />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : topIssues.length === 0 ? (
+            <EmptyState title="No findings yet" description="Complete a scan to see the most common issues here." />
           ) : (
             <ul className="space-y-2">
               {topIssues.map((issue) => {
                 const sev = String(issue.maxSeverity || 'info').toLowerCase();
                 const color = SEVERITY_COLORS[sev] || SEVERITY_COLORS.info;
+                const title = displayFindingTitle(issue.title);
 
                 return (
                   <li key={issue.title} className="flex items-center justify-between gap-3">
-                    <span className="text-sm text-gray-300 truncate">
-                      {displayFindingTitle(issue.title)}
+                    <span className="text-sm text-gray-300 truncate" title={title}>
+                      {title}
                     </span>
 
                     <span className="flex items-center gap-2 shrink-0">
@@ -344,24 +398,39 @@ export default function Dashboard() {
             </Link>
           </div>
 
-          {recentFindings.length === 0 ? (
-            <p className="text-sm text-gray-600">No findings yet. Start a scan to see results here.</p>
+          {loading ? (
+            <ul className="divide-y divide-slate-800">
+              {[1, 2, 3, 4].map((i) => (
+                <li key={i} className="py-2.5 flex items-start justify-between gap-3">
+                  <div>
+                    <div className="skeleton h-4 w-40 mb-2" />
+                    <div className="skeleton h-3 w-28" />
+                  </div>
+                  <div className="skeleton h-5 w-14 rounded-full shrink-0" />
+                </li>
+              ))}
+            </ul>
+          ) : recentFindings.length === 0 ? (
+            <EmptyState title="No findings yet" description="Start a scan to see results here." />
           ) : (
             <ul className="divide-y divide-slate-800">
               {recentFindings.map((finding, idx) => {
                 const sev = String(finding.severity || 'info').toLowerCase();
                 const color = SEVERITY_COLORS[sev] || SEVERITY_COLORS.info;
+                const title = displayFindingTitle(finding);
+                const relativeTime = timeAgo(finding.scanCreatedAt);
+                const absoluteTime = formatLocalDateTime(finding.scanCreatedAt, {
+                  month: 'short',
+                  day: '2-digit',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                });
                 return (
                   <li key={`${finding.scanId}:${idx}`} className="py-2.5 flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="text-sm text-gray-200 truncate">{displayFindingTitle(finding)}</p>
-                      <p className="text-xs text-gray-600 truncate mt-0.5">
-                        {finding.scanTarget} • {formatLocalDateTime(finding.scanCreatedAt, {
-                          month: 'short',
-                          day: '2-digit',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
+                      <p className="text-sm text-gray-200 truncate" title={title}>{title}</p>
+                      <p className="text-xs text-gray-600 truncate mt-0.5" title={absoluteTime}>
+                        {finding.scanTarget} • {relativeTime ?? absoluteTime}
                       </p>
                     </div>
 

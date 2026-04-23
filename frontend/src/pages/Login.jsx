@@ -87,6 +87,7 @@ export default function Login({ onLogin, message }) {
                   className="input"
                   placeholder="Enter your username"
                   required
+                  autoFocus
                 />
               </div>
             </div>
