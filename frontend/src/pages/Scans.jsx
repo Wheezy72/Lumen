@@ -231,7 +231,7 @@ export default function Scans() {
   );
 }
 
-function CopyButton({ text }) {
+function CopyUrlButton({ text }) {
   const [copied, setCopied] = useState(false);
 
   const copy = async (e) => {
@@ -288,7 +288,7 @@ function ScanRow({ scan, onDownload, isDownloading, onDelete, isDeleting }) {
       <td className="px-4 py-3 align-middle">
         <div className="flex items-center gap-1">
           <span className="font-medium text-white truncate max-w-xs" title={host}>{host}</span>
-          <CopyButton text={targetUrl} />
+          <CopyUrlButton text={targetUrl} />
         </div>
         <div className="text-xs text-gray-600 mt-0.5 truncate max-w-xs" title={targetUrl}>{targetUrl}</div>
         <div className="text-xs text-gray-600 mt-1" title={absoluteTime}>

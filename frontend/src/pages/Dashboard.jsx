@@ -283,7 +283,9 @@ export default function Dashboard() {
             <div>
               <h3 className="text-sm font-semibold text-gray-200">Queued</h3>
               <p className="text-xs text-gray-600 mt-1">
-                {loading ? '\u00A0' : `${queuedScans.length} scan${queuedScans.length !== 1 ? 's' : ''} waiting to run.`}
+                {loading ? (
+                  <span className="skeleton inline-block h-3 w-32" />
+                ) : `${queuedScans.length} scan${queuedScans.length !== 1 ? 's' : ''} waiting to run.`}
               </p>
             </div>
             <Link to="/scans" className="text-xs font-semibold text-primary-400 hover:text-primary-300 transition">
