@@ -247,6 +247,7 @@ export default function Dashboard() {
           </div>
           {loading ? (
             <div className="h-48 flex flex-col justify-end gap-2 px-2">
+              {/* Varied heights give visual diversity to the skeleton bar chart placeholder */}
               {[60, 80, 45, 90, 55, 70].map((h, i) => (
                 <div key={i} className="skeleton rounded" style={{ height: `${h}%`, maxHeight: '2rem' }} />
               ))}

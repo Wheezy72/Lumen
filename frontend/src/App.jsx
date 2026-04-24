@@ -32,10 +32,11 @@ export default function App() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
 
-  // Track time between route changes so that rapid / programmatic navigations
-  // (< 150 ms apart) don't trigger the fade-in animation and cause visual flicker.
-  // Normal human navigations (user reads a page for > 150 ms before clicking a link)
-  // always get the smooth entrance.
+  // Minimum time (ms) a user must stay on a page before the next navigation
+  // triggers the fade-in animation. Prevents visual flicker on rapid or
+  // programmatic navigations while still giving human-paced transitions a
+  // smooth entrance.
+  const MIN_NAV_DURATION_FOR_ANIMATION = 150;
   const navTimestampRef = useRef({ prevTime: 0, currentTime: Date.now(), key: null });
   if (navTimestampRef.current.key !== location.key) {
     navTimestampRef.current = {
@@ -45,7 +46,7 @@ export default function App() {
     };
   }
   const navElapsed = navTimestampRef.current.currentTime - navTimestampRef.current.prevTime;
-  const shouldAnimatePage = navElapsed > 150;
+  const shouldAnimatePage = navElapsed > MIN_NAV_DURATION_FOR_ANIMATION;
 
   useEffect(() => {
     // Check for existing session
