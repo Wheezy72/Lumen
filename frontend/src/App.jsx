@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
 import Landing from "./pages/Landing.jsx";
@@ -31,6 +31,21 @@ export default function App() {
   const { theme, toggleTheme } = useTheme();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+
+  // Track time between route changes so that rapid / programmatic navigations
+  // (< 150 ms apart) don't trigger the fade-in animation and cause visual flicker.
+  // Normal human navigations (user reads a page for > 150 ms before clicking a link)
+  // always get the smooth entrance.
+  const navTimestampRef = useRef({ prevTime: 0, currentTime: Date.now(), key: null });
+  if (navTimestampRef.current.key !== location.key) {
+    navTimestampRef.current = {
+      prevTime: navTimestampRef.current.currentTime,
+      currentTime: Date.now(),
+      key: location.key,
+    };
+  }
+  const navElapsed = navTimestampRef.current.currentTime - navTimestampRef.current.prevTime;
+  const shouldAnimatePage = navElapsed > 150;
 
   useEffect(() => {
     // Check for existing session
@@ -104,7 +119,7 @@ export default function App() {
 
       <main className={isAuthRoute ? "min-h-screen" : "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8"}>
         <ErrorBoundary key={location.pathname}>
-          <div key={location.key} className="animate-fade-in">
+          <div key={location.key} className={shouldAnimatePage ? "animate-fade-in" : ""}>
             <Routes>
               <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <Landing />} />
               <Route path="/learn" element={<Vulnerabilities />} />
