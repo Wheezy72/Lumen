@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router-dom';
 import AnimatedProgressBar from '../components/ui/AnimatedProgressBar.jsx';
 import EmptyState from '../components/ui/EmptyState.jsx';
 import Modal from '../components/ui/Modal.jsx';
+import { useToast } from '../components/ui/Toast.jsx';
 import { displayFindingTitle, getHeaderHint } from '../utils/findingTitle.js';
 import { getSeverityRank } from '../utils/severity.js';
 import { formatLocalDateTime } from '../utils/dates.js';
@@ -18,6 +19,7 @@ const SEV = {
 
 export default function ReportView() {
   const { scanId } = useParams();
+  const toast = useToast();
 
   const [scan, setScan] = useState(null);
   const [scanLoading, setScanLoading] = useState(true);
@@ -70,8 +72,9 @@ export default function ReportView() {
     try {
       const { data } = await axios.post('/api/reports/pdf', { scanId });
       window.open(data.url, '_blank');
+      toast({ type: 'success', message: 'PDF report ready.' });
     } catch {
-      alert('Failed to generate PDF');
+      toast({ type: 'error', message: 'Failed to generate PDF report.' });
     } finally {
       setPdfLoading(false);
     }
@@ -83,8 +86,9 @@ export default function ReportView() {
     try {
       const { data } = await axios.post('/api/reports/csv', { scanId });
       window.open(data.url, '_blank');
+      toast({ type: 'success', message: 'CSV report ready.' });
     } catch {
-      alert('Failed to generate CSV');
+      toast({ type: 'error', message: 'Failed to generate CSV report.' });
     } finally {
       setCsvLoading(false);
     }
@@ -304,16 +308,18 @@ export default function ReportView() {
             >
               Scan report
             </h1>
-            <p
-              className="
-                text-gray-500
-                mt-1
-                break-all
-                text-sm
-              "
-            >
-              {scan?.targetUrl}
-            </p>
+            <div className="flex items-center gap-1.5 mt-1">
+              <p
+                className="
+                  text-gray-500
+                  break-all
+                  text-sm
+                "
+              >
+                {scan?.targetUrl}
+              </p>
+              {scan?.targetUrl && <ReportCopyButton url={scan.targetUrl} />}
+            </div>
           </div>
 
           <div
@@ -1350,6 +1356,38 @@ export default function ReportView() {
 }
 
 
+
+function ReportCopyButton({ url }) {
+  const [copied, setCopied] = useState(false);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {}
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      title={copied ? 'Copied!' : 'Copy URL'}
+      className="inline-flex items-center text-gray-500 hover:text-gray-300 transition shrink-0"
+      aria-label="Copy target URL"
+    >
+      {copied ? (
+        <svg className="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+        </svg>
+      ) : (
+        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+        </svg>
+      )}
+    </button>
+  );
+}
 
 function getStatusColor(status) {
   if (status === 'completed') return 'text-emerald-400';

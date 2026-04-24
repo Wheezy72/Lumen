@@ -113,6 +113,7 @@ export default function Register({ onRegister }) {
                   className="input"
                   placeholder="Choose a username"
                   required
+                  autoFocus
                 />
               </div>
             </div>

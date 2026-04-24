@@ -159,15 +159,21 @@ router.post('/scans', async (req, res, next) => {
   try {
     const data = await startScanSchema.validateAsync(req.body, { stripUnknown: true });
 
-    let host;
+    let hostname;
+    let targetHost;
     try {
-      host = new URL(data.target).hostname?.toLowerCase();
+      const parsed = new URL(data.target);
+      hostname = parsed.hostname?.toLowerCase();
+      // Use host (hostname:port) as the stable identity key so that
+      // localhost:3000 and localhost:4000 are treated as distinct targets.
+      targetHost = parsed.host?.toLowerCase();
     } catch {
-      host = null;
+      hostname = null;
+      targetHost = null;
     }
 
     const allowPrivate = process.env.ALLOW_PRIVATE_TARGETS === 'true';
-    if (!allowPrivate && isBlockedHost(host)) {
+    if (!allowPrivate && isBlockedHost(hostname)) {
       return res.status(400).json({
         error: 'This target is not allowed. For safety, localhost/private network targets are blocked in this deployment.',
       });
@@ -176,7 +182,7 @@ router.post('/scans', async (req, res, next) => {
     const scan = await Scan.create({
       userId: null,
       targetUrl: data.target,
-      targetHost: host || undefined,
+      targetHost: targetHost || undefined,
       scanProfile: data.modules || [],
       status: 'queued',
       progress: 0,

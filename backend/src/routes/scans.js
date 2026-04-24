@@ -141,15 +141,19 @@ router.post('/recurring', async (req, res, next) => {
   try {
     const data = await recurringScanSchema.validateAsync(req.body, { stripUnknown: true });
 
-    let host;
+    let hostname;
+    let targetHost;
     try {
-      host = new URL(data.targetUrl).hostname?.toLowerCase();
+      const parsed = new URL(data.targetUrl);
+      hostname = parsed.hostname?.toLowerCase();
+      targetHost = parsed.host?.toLowerCase();
     } catch {
-      host = null;
+      hostname = null;
+      targetHost = null;
     }
 
     const allowPrivate = process.env.ALLOW_PRIVATE_TARGETS === 'true';
-    if (!allowPrivate && isBlockedHost(host)) {
+    if (!allowPrivate && isBlockedHost(hostname)) {
       return res.status(400).json({
         error: 'This target is not allowed. For safety, localhost/private network targets are blocked in this deployment.',
       });
@@ -158,7 +162,7 @@ router.post('/recurring', async (req, res, next) => {
     const recurring = await RecurringScan.create({
       userId: req.user.id,
       targetUrl: data.targetUrl,
-      targetHost: host || undefined,
+      targetHost: targetHost || undefined,
       scanProfile: data.scanProfile,
       cron: data.cron,
       timezone: data.timezone || undefined,
@@ -179,7 +183,7 @@ router.post('/recurring', async (req, res, next) => {
       const scan = await Scan.create({
         userId: req.user.id,
         targetUrl: data.targetUrl,
-        targetHost: host || undefined,
+        targetHost: targetHost || undefined,
         scanProfile: data.scanProfile,
         status: 'queued',
         scheduled: true,
@@ -218,22 +222,26 @@ router.patch('/recurring/:id', async (req, res, next) => {
     const prevTz = recurring.timezone;
 
     if (data.targetUrl) {
-      let host;
+      let hostname;
+      let targetHost;
       try {
-        host = new URL(data.targetUrl).hostname?.toLowerCase();
+        const parsed = new URL(data.targetUrl);
+        hostname = parsed.hostname?.toLowerCase();
+        targetHost = parsed.host?.toLowerCase();
       } catch {
-        host = null;
+        hostname = null;
+        targetHost = null;
       }
 
       const allowPrivate = process.env.ALLOW_PRIVATE_TARGETS === 'true';
-      if (!allowPrivate && isBlockedHost(host)) {
+      if (!allowPrivate && isBlockedHost(hostname)) {
         return res.status(400).json({
           error: 'This target is not allowed. For safety, localhost/private network targets are blocked in this deployment.',
         });
       }
 
       recurring.targetUrl = data.targetUrl;
-      recurring.targetHost = host || undefined;
+      recurring.targetHost = targetHost || undefined;
     }
 
     if (data.scanProfile) recurring.scanProfile = data.scanProfile;
@@ -324,22 +332,28 @@ router.post('/', async (req, res, next) => {
     const scheduledTime = data.scheduledFor ? new Date(data.scheduledFor) : null;
     const isScheduled = scheduledTime && scheduledTime > new Date();
 
-    let host;
+    let hostname;
+    let targetHost;
     try {
-      host = new URL(data.targetUrl).hostname?.toLowerCase();
+      const parsed = new URL(data.targetUrl);
+      hostname = parsed.hostname?.toLowerCase();
+      // Use host (hostname:port) as the stable identity key so that
+      // localhost:3000 and localhost:4000 are treated as distinct targets.
+      targetHost = parsed.host?.toLowerCase();
     } catch {
-      host = null;
+      hostname = null;
+      targetHost = null;
     }
 
     const allowPrivate = process.env.ALLOW_PRIVATE_TARGETS === 'true';
-    if (!allowPrivate && isBlockedHost(host)) {
+    if (!allowPrivate && isBlockedHost(hostname)) {
       return res.status(400).json({
         error: 'This target is not allowed. For safety, localhost/private network targets are blocked in this deployment.',
       });
     }
 
     const scan = await Scan.create({
-      targetHost: host || undefined,
+      targetHost: targetHost || undefined,
       targetUrl: data.targetUrl,
       scanProfile: data.scanProfile || [],
       scheduledFor: scheduledTime,
