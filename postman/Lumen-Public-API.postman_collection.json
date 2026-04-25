@@ -7,7 +7,7 @@
   },
   "variable": [
     { "key": "baseUrl", "value": "http://localhost:4000" },
-    { "key": "publicApiKey", "value": "your_public_api_key_here" },
+    { "key": "publicApiKey", "value": "E4A2B8C0D1E3F5A7B9C2D7D4E2A1B9C7D0F6" },
     { "key": "scanId", "value": "" },
     { "key": "scheduleId", "value": "" }
   ],
