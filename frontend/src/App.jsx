@@ -20,6 +20,9 @@ import { useTheme } from "./theme/ThemeProvider.jsx";
 
 import AppHeader, { ThemeToggleButton } from "./components/AppHeader.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
+import { AppFooter } from "./components/Footer.jsx";
+import BackToTop from "./components/ui/BackToTop.jsx";
+import TopLoadingBar from "./components/ui/TopLoadingBar.jsx";
 
 axios.defaults.withCredentials = true;
 
@@ -99,7 +102,8 @@ export default function App() {
     || location.pathname === "/reset-password";
 
   return (
-    <div className="min-h-screen app-shell text-white">
+    <div className="min-h-screen app-shell text-white flex flex-col">
+      <TopLoadingBar />
       {isAuthRoute ? (
         <div className="fixed top-5 right-5 z-50">
           <ThemeToggleButton theme={theme} toggleTheme={toggleTheme} iconOnly />
@@ -118,7 +122,7 @@ export default function App() {
         />
       )}
 
-      <main className={isAuthRoute ? "min-h-screen" : "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8"}>
+      <main className={`flex-1 ${isAuthRoute ? "min-h-screen" : "max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8"}`}>
         <ErrorBoundary key={location.pathname}>
           <div key={location.key} className={shouldAnimatePage ? "animate-fade-in" : ""}>
             <Routes>
@@ -195,6 +199,10 @@ export default function App() {
           </div>
         </ErrorBoundary>
       </main>
+
+      {!isAuthRoute && location.pathname !== '/' && <AppFooter />}
+
+      <BackToTop />
     </div>
   );
 }
