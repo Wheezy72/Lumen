@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
 import Landing from "./pages/Landing.jsx";
@@ -15,6 +15,7 @@ import Vulnerabilities from "./pages/Vulnerabilities.jsx";
 import Settings from "./pages/Settings.jsx";
 import NotFound from "./pages/NotFound.jsx";
 import ErrorPage from "./pages/ErrorPage.jsx";
+import ErrorBoundary from "./components/ErrorBoundary.jsx";
 import { useTheme } from "./theme/ThemeProvider.jsx";
 
 import AppHeader, { ThemeToggleButton } from "./components/AppHeader.jsx";
@@ -30,6 +31,22 @@ export default function App() {
   const { theme, toggleTheme } = useTheme();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+
+  // Minimum time (ms) a user must stay on a page before the next navigation
+  // triggers the fade-in animation. Prevents visual flicker on rapid or
+  // programmatic navigations while still giving human-paced transitions a
+  // smooth entrance.
+  const MIN_NAV_DURATION_FOR_ANIMATION = 150;
+  const navTimestampRef = useRef({ prevTime: 0, currentTime: Date.now(), key: null });
+  if (navTimestampRef.current.key !== location.key) {
+    navTimestampRef.current = {
+      prevTime: navTimestampRef.current.currentTime,
+      currentTime: Date.now(),
+      key: location.key,
+    };
+  }
+  const navElapsed = navTimestampRef.current.currentTime - navTimestampRef.current.prevTime;
+  const shouldAnimatePage = navElapsed > MIN_NAV_DURATION_FOR_ANIMATION;
 
   useEffect(() => {
     // Check for existing session
@@ -50,6 +67,7 @@ export default function App() {
   useEffect(() => {
     setMobileOpen(false);
     setProfileOpen(false);
+    window.scrollTo(0, 0);
   }, [location.pathname]);
 
   const logout = async () => {
@@ -101,79 +119,81 @@ export default function App() {
       )}
 
       <main className={isAuthRoute ? "min-h-screen" : "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8"}>
-        <div className="animate-fade-in">
-          <Routes>
-            <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <Landing />} />
-            <Route path="/learn" element={<Vulnerabilities />} />
+        <ErrorBoundary key={location.pathname}>
+          <div key={location.key} className={shouldAnimatePage ? "animate-fade-in" : ""}>
+            <Routes>
+              <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <Landing />} />
+              <Route path="/learn" element={<Vulnerabilities />} />
 
-            <Route
-              path="/dashboard"
-              element={
-                <ProtectedRoute user={user} message="Please sign in to view the dashboard.">
-                  <Dashboard />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/scans"
-              element={
-                <ProtectedRoute user={user} message="Please sign in to view your scans.">
-                  <Scans />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/changes"
-              element={
-                <ProtectedRoute user={user} message="Please sign in to view changes.">
-                  <Changes />
-                </ProtectedRoute>
-              }
-            />
-            {/* Alias kept for older links */}
-            <Route
-              path="/regressions"
-              element={
-                <ProtectedRoute user={user} message="Please sign in to view changes.">
-                  <Changes />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/new"
-              element={
-                <ProtectedRoute user={user} message="Please sign in to start a new scan.">
-                  <NewScan />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/settings"
-              element={
-                <ProtectedRoute user={user} message="Please sign in to manage your settings.">
-                  <Settings user={user} onUpdateUser={setUser} />
-                </ProtectedRoute>
-              }
-            />
+              <Route
+                path="/dashboard"
+                element={
+                  <ProtectedRoute user={user} message="Please sign in to view the dashboard.">
+                    <Dashboard />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/scans"
+                element={
+                  <ProtectedRoute user={user} message="Please sign in to view your scans.">
+                    <Scans />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/changes"
+                element={
+                  <ProtectedRoute user={user} message="Please sign in to view changes.">
+                    <Changes />
+                  </ProtectedRoute>
+                }
+              />
+              {/* Alias kept for older links */}
+              <Route
+                path="/regressions"
+                element={
+                  <ProtectedRoute user={user} message="Please sign in to view changes.">
+                    <Changes />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/new"
+                element={
+                  <ProtectedRoute user={user} message="Please sign in to start a new scan.">
+                    <NewScan />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/settings"
+                element={
+                  <ProtectedRoute user={user} message="Please sign in to manage your settings.">
+                    <Settings user={user} onUpdateUser={setUser} />
+                  </ProtectedRoute>
+                }
+              />
 
-            <Route path="/login" element={<Login onLogin={setUser} />} />
-            <Route path="/register" element={<Register onRegister={setUser} />} />
-            <Route path="/forgot-password" element={<ForgotPassword />} />
-            <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/login" element={<Login onLogin={setUser} />} />
+              <Route path="/register" element={<Register onRegister={setUser} />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
 
-            <Route
-              path="/report/:scanId"
-              element={
-                <ProtectedRoute user={user} message="Please sign in to view this report.">
-                  <ReportView />
-                </ProtectedRoute>
-              }
-            />
+              <Route
+                path="/report/:scanId"
+                element={
+                  <ProtectedRoute user={user} message="Please sign in to view this report.">
+                    <ReportView />
+                  </ProtectedRoute>
+                }
+              />
 
-            <Route path="/error" element={<ErrorPage />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </div>
+              <Route path="/error" element={<ErrorPage />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </div>
+        </ErrorBoundary>
       </main>
     </div>
   );

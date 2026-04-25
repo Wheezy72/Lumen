@@ -208,6 +208,7 @@ export default function NewScan() {
               onChange={(e) => setTargetUrl(e.target.value)}
               placeholder="https://example.com"
               className="input input-plain"
+              autoFocus
             />
             <p className="text-sm text-gray-500 mt-2">Example: https://example.com</p>
           </div>

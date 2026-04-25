@@ -87,6 +87,7 @@ export default function ForgotPassword() {
                     className="input"
                     placeholder="you@example.com"
                     required
+                    autoFocus
                   />
                 </div>
               </div>
