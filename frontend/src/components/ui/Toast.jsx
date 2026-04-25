@@ -35,9 +35,9 @@ export function useToast() {
 }
 
 const STYLES = {
-  success: 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300',
-  error:   'bg-red-500/15 border-red-500/30 text-red-300',
-  info:    'bg-blue-500/15 border-blue-500/30 text-blue-300',
+  success: 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300 border-l-emerald-400',
+  error:   'bg-red-500/15 border-red-500/30 text-red-300 border-l-red-400',
+  info:    'bg-blue-500/15 border-blue-500/30 text-blue-300 border-l-blue-400',
 };
 
 function ToastStack({ toasts, onDismiss }) {

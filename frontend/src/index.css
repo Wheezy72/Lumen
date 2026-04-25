@@ -57,6 +57,17 @@ body {
     var(--app-surface-300);
 }
 
+/* Subtle dot-mesh texture */
+.app-shell::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: radial-gradient(circle, rgba(148, 163, 184, 0.12) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
 .app-shell::before {
   content: '';
   position: fixed;
@@ -164,6 +175,24 @@ svg.text-white {
 .btn-primary:hover {
   background: linear-gradient(135deg, #1d4ed8, #16a34a);
   box-shadow: 0 10px 26px rgba(15, 23, 42, 0.35);
+}
+
+/* Pill variant for auth submit buttons */
+.btn-pill {
+  border-radius: 9999px !important;
+}
+
+/* Glass card — used on auth pages */
+.glass-card {
+  background-color: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+}
+
+html.dark .glass-card {
+  background-color: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 
@@ -350,4 +379,8 @@ svg.text-white {
   100% { background-position: 0 0, 44px 0; }
 }
 
-
+/* ─── Staggered entrance for dashboard metric cards ─────────────────────── */
+.stagger-1 { animation-delay: 0ms; }
+.stagger-2 { animation-delay: 60ms; }
+.stagger-3 { animation-delay: 120ms; }
+.stagger-4 { animation-delay: 180ms; }

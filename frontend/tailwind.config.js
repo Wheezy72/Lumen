@@ -79,6 +79,7 @@ export default {
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'monospace'],
       },
       fontSize: {
         'xs': '0.75rem',
@@ -100,6 +101,8 @@ export default {
       animation: {
         'fade-in': 'fadeIn 0.25s ease-out both',
         'slide-up': 'slideUp 0.3s ease-out',
+        'slide-right': 'slideInRight 0.25s ease-out both',
+        'modal-in': 'modalIn 0.2s ease-out both',
         'pulse-slow': 'pulse 3s linear infinite',
         'spin-slow': 'spin 3s linear infinite',
       },
@@ -111,7 +114,15 @@ export default {
         slideUp: {
           '0%': { transform: 'translateY(10px)', opacity: '0' },
           '100%': { transform: 'translateY(0)', opacity: '1' },
-        }
+        },
+        slideInRight: {
+          '0%': { opacity: '0', transform: 'translateX(16px)' },
+          '100%': { opacity: '1', transform: 'translateX(0)' },
+        },
+        modalIn: {
+          '0%': { opacity: '0', transform: 'scale(0.95) translateY(4px)' },
+          '100%': { opacity: '1', transform: 'scale(1) translateY(0)' },
+        },
       },
       boxShadow: {
         'soft': '0 2px 15px -3px rgba(0, 0, 0, 0.07), 0 10px 20px -2px rgba(0, 0, 0, 0.04)',
