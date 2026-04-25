@@ -261,6 +261,81 @@ svg.text-white {
   }
 }
 
+/* ─── Scroll-reveal ─────────────────────────────────────────────────────── */
+.reveal {
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity 0.55s cubic-bezier(0.4, 0, 0.2, 1),
+              transform 0.55s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.reveal-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Staggered grid children — add to a parent alongside .reveal */
+.reveal-stagger > * {
+  opacity: 0;
+  transform: translateY(14px);
+  transition: opacity 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+              transform 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.reveal-stagger.reveal-visible > *:nth-child(1) { opacity: 1; transform: translateY(0); transition-delay: 0.00s; }
+.reveal-stagger.reveal-visible > *:nth-child(2) { opacity: 1; transform: translateY(0); transition-delay: 0.08s; }
+.reveal-stagger.reveal-visible > *:nth-child(3) { opacity: 1; transform: translateY(0); transition-delay: 0.16s; }
+.reveal-stagger.reveal-visible > *:nth-child(4) { opacity: 1; transform: translateY(0); transition-delay: 0.24s; }
+
+/* ─── Card hover lift ────────────────────────────────────────────────────── */
+.card-hover {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card-hover:hover {
+  transform: translateY(-3px);
+  box-shadow:
+    0 8px 32px -6px rgba(37, 99, 235, 0.18),
+    0 4px 14px -4px rgba(0, 0, 0, 0.14);
+}
+
+/* ─── Glow effect on primary buttons ────────────────────────────────────── */
+.btn-primary:hover:not(:disabled) {
+  box-shadow:
+    0 0 22px rgba(37, 99, 235, 0.40),
+    0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+/* ─── Running/live status pulse dot ─────────────────────────────────────── */
+.status-pulse {
+  animation: statusPulse 1.8s ease-in-out infinite;
+}
+
+@keyframes statusPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.45; transform: scale(0.80); }
+}
+
+/* ─── Interactive link underline wipe ───────────────────────────────────── */
+.link-underline {
+  position: relative;
+}
+
+.link-underline::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  width: 0;
+  height: 1px;
+  background: currentColor;
+  transition: width 0.22s ease;
+}
+
+.link-underline:hover::after {
+  width: 100%;
+}
+
 .progress-fill-running {
   background-image:
     linear-gradient(90deg, #2563eb, #22c55e),

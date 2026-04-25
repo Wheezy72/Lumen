@@ -1,8 +1,13 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useScrollReveal } from '../hooks/useScrollReveal.js';
+import { LandingFooter } from '../components/Footer.jsx';
 
 export default function Landing() {
   const [imageStatus, setImageStatus] = useState(() => ({}));
+  const howItWorksRef = useScrollReveal();
+  const findingsRef = useScrollReveal();
+  const ctaRef = useScrollReveal();
 
   const getStepImageSrc = (step) => {
     const n = parseInt(step, 10);
@@ -69,11 +74,11 @@ export default function Landing() {
 
       {/* How It Works */}
 
-      <section className="max-w-5xl mx-auto px-6 py-16">
+      <section ref={howItWorksRef} className="reveal max-w-5xl mx-auto px-6 py-16">
         <h2 className="text-2xl font-bold text-center text-slate-900 dark:text-white mb-2">How it works</h2>
         <p className="text-center text-gray-500 text-sm mb-10">Three steps from zero to report.</p>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 reveal-stagger">
           {[
             {
               step: '01',
@@ -100,7 +105,7 @@ export default function Landing() {
             const showPlaceholder = status !== 'loaded';
 
             return (
-              <div key={step} className="flex flex-col rounded-xl border border-slate-800 bg-dark-200 overflow-hidden">
+              <div key={step} className="card-hover flex flex-col rounded-xl border border-slate-800 bg-dark-200 overflow-hidden">
                 <div className="relative h-44 bg-dark-300 border-b border-slate-800 overflow-hidden">
                   {showImage ? (
                     <img
@@ -136,7 +141,7 @@ export default function Landing() {
 
       {/*Example findings card */}
 
-      <section className="max-w-5xl mx-auto px-6 py-16">
+      <section ref={findingsRef} className="reveal max-w-5xl mx-auto px-6 py-16">
         <div className="grid md:grid-cols-2 gap-10 items-center">
           <div>
             <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Clear findings and fixes</h2>
@@ -186,7 +191,7 @@ export default function Landing() {
 
       {/*CTA*/}
 
-      <section className="max-w-5xl mx-auto px-6 py-16 text-center">
+      <section ref={ctaRef} className="reveal max-w-5xl mx-auto px-6 py-16 text-center">
         <div className="rounded-2xl border border-primary-500/20 dark:border-primary-800/40 bg-primary-500/10 dark:bg-primary-900/20 px-8 py-12">
           <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Start using Lumen, free of charge</h2>
           <p className="mt-2 text-slate-600 dark:text-gray-400 text-sm">Runs locally. No payment setup.</p>
@@ -198,6 +203,8 @@ export default function Landing() {
           </Link>
         </div>
       </section>
+
+      <LandingFooter />
 
     </div>
   );
