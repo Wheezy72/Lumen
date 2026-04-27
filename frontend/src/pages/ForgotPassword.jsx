@@ -14,7 +14,6 @@ export default function ForgotPassword() {
     e.preventDefault();
     setError("");
     setLoading(true);
-
     try {
       await axios.post("/api/auth/forgot-password", { email });
       setSent(true);
@@ -28,41 +27,40 @@ export default function ForgotPassword() {
   return (
     <AuthBackground variant="primary" className="min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-md">
-        <div className="bg-dark-200 border border-slate-800 rounded-lg shadow-soft p-8">
-          <div className="text-center mb-8">
-            <div className="w-16 h-16 rounded-2xl overflow-hidden mx-auto mb-4 ring-1 ring-black/10 dark:ring-white/10 shadow-soft">
+        <div className="relative rounded-4xl glass-strong shadow-strong p-8 overflow-hidden">
+          {/* Glow halo */}
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-primary-500/20 rounded-full blur-3xl pointer-events-none" />
+
+          <div className="text-center mb-8 relative">
+            <div className="w-16 h-16 rounded-2xl overflow-hidden mx-auto mb-4 ring-2 ring-primary-500/30 shadow-soft">
               <img src="/logo.jpg" alt="Logo" className="w-full h-full object-cover" />
             </div>
             <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Reset your password</h1>
-            <p className="text-gray-400 mt-2">We’ll email you a 6-digit code.</p>
+            <p className="text-gray-400 mt-1.5 text-sm">We'll email you a 6-digit code.</p>
           </div>
 
           {error && (
-            <div className="mb-6 p-4 bg-red-900/30 border border-red-500/30 rounded-lg">
+            <div className="mb-5 p-3.5 bg-red-900/25 border border-red-500/25 rounded-xl">
               <p className="text-red-400 text-sm text-center">{error}</p>
             </div>
           )}
 
           {sent ? (
             <div className="space-y-5">
-              <div className="p-4 bg-emerald-900/20 border border-emerald-500/25 rounded-lg">
-                <p className="text-emerald-300 text-sm">
+              <div className="p-4 bg-emerald-900/20 border border-emerald-500/25 rounded-xl">
+                <p className="text-emerald-300 text-sm text-center">
                   If that email is registered, a reset code has been sent.
                 </p>
               </div>
-
               <button
                 type="button"
                 onClick={() => navigate(`/reset-password?email=${encodeURIComponent(email)}`)}
-                className="w-full py-3 btn-primary transition"
+                className="w-full py-3 rounded-full btn-primary font-semibold transition"
               >
                 Enter reset code
               </button>
-
               <p className="text-center text-gray-400 text-sm">
-                <Link to="/login" className="text-primary-500 hover:text-primary-400 font-medium">
-                  Back to sign in
-                </Link>
+                <Link to="/login" className="text-primary-400 hover:text-primary-300 font-semibold link-underline">Back to sign in</Link>
               </p>
             </div>
           ) : (
@@ -70,40 +68,19 @@ export default function ForgotPassword() {
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">Email</label>
                 <div className="relative">
-                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 input-icon z-10">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 input-icon z-10">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-                      />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                     </svg>
                   </span>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="input"
-                    placeholder="you@example.com"
-                    required
-                    autoFocus
-                  />
+                  <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="input" placeholder="you@example.com" required autoFocus />
                 </div>
               </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-3 btn-primary transition disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loading ? "Sending..." : "Send reset code"}
+              <button type="submit" disabled={loading} className="w-full py-3 rounded-full btn-primary font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed">
+                {loading ? "Sending…" : "Send reset code"}
               </button>
-
               <p className="text-center text-gray-400 text-sm">
-                <Link to="/login" className="text-primary-500 hover:text-primary-400 font-medium">
-                  Back to sign in
-                </Link>
+                <Link to="/login" className="text-primary-400 hover:text-primary-300 font-semibold link-underline">Back to sign in</Link>
               </p>
             </form>
           )}

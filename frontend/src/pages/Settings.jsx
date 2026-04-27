@@ -60,7 +60,7 @@ export default function Settings({ user, onUpdateUser }) {
   return (
     <div className="max-w-2xl">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold bg-gradient-to-r from-primary-400 to-secondary-400 bg-clip-text text-transparent">Settings</h1>
+        <h1 className="text-2xl font-bold text-slate-900 dark:bg-gradient-to-r dark:from-primary-400 dark:to-secondary-400 dark:bg-clip-text dark:text-transparent">Settings</h1>
         <p className="text-gray-500 mt-1 text-sm">Manage your profile and notification preferences.</p>
       </div>
 
@@ -78,7 +78,7 @@ export default function Settings({ user, onUpdateUser }) {
 
       <form onSubmit={save} className="space-y-6">
         <div className="bg-dark-200 rounded-xl border border-slate-800 p-6">
-          <h2 className="text-sm font-semibold text-gray-200 mb-4">Profile</h2>
+          <h2 className="text-sm font-semibold text-slate-800 dark:text-gray-200 mb-4">Profile</h2>
 
           <div className="space-y-4">
             <div>
@@ -118,7 +118,7 @@ export default function Settings({ user, onUpdateUser }) {
         </div>
 
         <div className="bg-dark-200 rounded-xl border border-slate-800 p-6">
-          <h2 className="text-sm font-semibold text-gray-200 mb-4">Notifications</h2>
+          <h2 className="text-sm font-semibold text-slate-800 dark:text-gray-200 mb-4">Notifications</h2>
 
           <label className="flex items-start gap-3">
             <input

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import AnimatedProgressBar from '../components/ui/AnimatedProgressBar.jsx';
 import EmptyState from '../components/ui/EmptyState.jsx';
 import Modal from '../components/ui/Modal.jsx';
@@ -19,6 +19,7 @@ const SEV = {
 
 export default function ReportView() {
   const { scanId } = useParams();
+  const navigate = useNavigate();
   const toast = useToast();
 
   const [scan, setScan] = useState(null);
@@ -33,10 +34,17 @@ export default function ReportView() {
   const [pdfLoading, setPdfLoading] = useState(false);
   const [csvLoading, setCsvLoading] = useState(false);
 
+  // Scheduled scan editing
+  const [editingSchedule, setEditingSchedule] = useState(false);
+  const [newScheduledTime, setNewScheduledTime] = useState('');
+  const [savingSchedule, setSavingSchedule] = useState(false);
+
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [assistantLoading, setAssistantLoading] = useState(false);
   const [assistantErrorMessage, setAssistantErrorMessage] = useState('');
   const [assistantText, setAssistantText] = useState('');
+
+  const [scanFinalising, setScanFinalising] = useState(false);
 
   const loadScan = async () => {
     setScanErrorMessage('');
@@ -50,6 +58,19 @@ export default function ReportView() {
       setScanErrorMessage('Failed to load scan results');
     } finally {
       setScanLoading(false);
+    }
+  };
+
+  // Silent refresh — does NOT set scanLoading so there's no spinner flash.
+  const refreshScan = async () => {
+    try {
+      const { data } = await axios.get('/api/scans/' + scanId);
+      setScan(data);
+      setSelectedFindingListIndex(0);
+    } catch {
+      // Silently ignore — the existing data stays on screen.
+    } finally {
+      setScanFinalising(false);
     }
   };
 
@@ -94,6 +115,31 @@ export default function ReportView() {
     }
   };
 
+  const saveSchedule = async () => {
+    if (!newScheduledTime) return;
+    const iso = new Date(newScheduledTime).toISOString();
+    setSavingSchedule(true);
+    try {
+      await axios.patch(`/api/scans/${scanId}`, { scheduledFor: iso });
+      setScan((prev) => prev ? { ...prev, scheduledFor: iso } : prev);
+      setEditingSchedule(false);
+      toast({ type: 'success', message: 'Schedule updated.' });
+    } catch {
+      toast({ type: 'error', message: 'Failed to update schedule.' });
+    } finally { setSavingSchedule(false); }
+  };
+
+  const toLocalDateTimeValue = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  };
+
+  const getMinDateTime = () => {
+    const d = new Date(Date.now() + 5 * 60 * 1000);
+    return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  };
+
   useEffect(() => {
     loadScan();
     loadDiff();
@@ -122,7 +168,11 @@ export default function ReportView() {
         }
 
         if (msg.type === 'completed') {
-          loadScan();
+          // Pin the bar at 100 and show 'Finalising…' label while the
+          // backend commits the report. Then silently swap in fresh data.
+          setScan((prev) => prev ? { ...prev, progress: 100 } : prev);
+          setScanFinalising(true);
+          refreshScan();
           loadDiff();
         }
       } catch {
@@ -396,17 +446,65 @@ export default function ReportView() {
             >
               Summary
             </h2>
-            <p
-              className="
-                text-sm
-                text-gray-500
-                mt-1
-              "
-            >
+            <p className="text-sm text-gray-500 mt-1">
               {findings.length === 0
-                ? (isRunning ? 'Scanning…' : 'No issues found.')
+                ? (scan?.status === 'scheduled'
+                    ? 'This scan is waiting to run.'
+                    : isRunning ? 'Scanning…' : 'No issues found.')
                 : `${findings.length} issues found. Top ones are below.`}
             </p>
+
+            {/* Scheduled scan panel */}
+            {scan?.status === 'scheduled' && (
+              <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold text-amber-400 uppercase tracking-wide mb-1">Scheduled</p>
+                    {scan.scheduledFor ? (
+                      <p className="text-sm text-gray-200">
+                        Runs {formatLocalDateTime(scan.scheduledFor)}
+                      </p>
+                    ) : (
+                      <p className="text-sm text-gray-500">No time set</p>
+                    )}
+                  </div>
+                  <div className="flex gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => { setEditingSchedule((v) => !v); setNewScheduledTime(toLocalDateTimeValue(scan.scheduledFor)); }}
+                      className="text-xs font-semibold text-amber-400 hover:text-amber-300 transition"
+                    >
+                      {editingSchedule ? 'Cancel' : 'Reschedule'}
+                    </button>
+                    <span className="text-white/20">·</span>
+                    <Link to={`/new?edit=${scanId}`} className="text-xs font-semibold text-primary-400 hover:text-primary-300 transition">
+                      Edit modules
+                    </Link>
+                  </div>
+                </div>
+
+                {editingSchedule && (
+                  <div className="mt-3 flex items-center gap-2 flex-wrap animate-slide-up">
+                    <input
+                      type="datetime-local"
+                      value={newScheduledTime}
+                      onChange={(e) => setNewScheduledTime(e.target.value)}
+                      min={getMinDateTime()}
+                      className="input input-plain font-mono text-sm flex-1 min-w-0"
+                    />
+                    <button
+                      type="button"
+                      onClick={saveSchedule}
+                      disabled={savingSchedule || !newScheduledTime}
+                      className="px-4 py-2 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-semibold hover:bg-amber-500/30 transition disabled:opacity-40"
+                    >
+                      {savingSchedule ? 'Saving…' : 'Save'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
 
             {topFindings.length > 0 ? (
               <ul
@@ -822,7 +920,11 @@ export default function ReportView() {
               mt-4
             "
           >
-            <AnimatedProgressBar progress={scan?.progress ?? 0} running={isRunning} />
+            <AnimatedProgressBar
+              progress={scan?.progress ?? 0}
+              running={isRunning}
+              label={scanFinalising ? 'Finalising…' : undefined}
+            />
           </div>
         </div>
 
@@ -1164,8 +1266,10 @@ export default function ReportView() {
                   className="
                     rounded-lg
                     border
-                    border-emerald-800/40
-                    bg-emerald-900/10
+                    border-emerald-600/30
+                    dark:border-emerald-800/40
+                    bg-emerald-50
+                    dark:bg-emerald-900/10
                     p-4
                   "
                 >
@@ -1173,7 +1277,8 @@ export default function ReportView() {
                     className="
                       text-xs
                       font-semibold
-                      text-emerald-400
+                      text-emerald-700
+                      dark:text-emerald-400
                       uppercase
                       tracking-wide
                       mb-2
@@ -1184,7 +1289,8 @@ export default function ReportView() {
 
                   <p
                     className="
-                      text-emerald-300/80
+                      text-emerald-800
+                      dark:text-emerald-300/80
                       text-sm
                       mb-3
                     "
@@ -1197,13 +1303,15 @@ export default function ReportView() {
                       className="
                         mt-2
                         rounded-lg
-                        bg-black/5
+                        bg-emerald-100
                         dark:bg-black/60
                         border
-                        border-slate-800
+                        border-emerald-200
+                        dark:border-slate-800
                         p-3
                         text-xs
-                        text-emerald-400
+                        text-emerald-800
+                        dark:text-emerald-400
                         font-mono
                         overflow-x-auto
                         whitespace-pre
@@ -1320,16 +1428,7 @@ export default function ReportView() {
               Generating explanation…
             </div>
           ) : assistantText ? (
-            <div
-              className="
-                whitespace-pre-wrap
-                leading-relaxed
-                text-sm
-                text-gray-200
-              "
-            >
-              {assistantText}
-            </div>
+            <ExplainBlock text={assistantText} />
           ) : (
             <div
               className="
@@ -1537,3 +1636,34 @@ function getCodeExample(category) {
 
   return examples[category] || null;
 }
+
+function ExplainBlock({ text }) {
+  if (!text) return null;
+
+  // Split on ## section headers
+  const raw = String(text);
+  const parts = raw.split(/\n\n(?=##\s)/);
+
+  return (
+    <div className="space-y-4 text-sm">
+      {parts.map((part, i) => {
+        const headerMatch = part.match(/^##\s+(.+)\n\n?([\s\S]*)$/);
+
+        if (headerMatch) {
+          const [, label, body] = headerMatch;
+          return (
+            <div key={i}>
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-primary-400 mb-1">{label}</p>
+              <p className="text-gray-300 leading-relaxed">{body.trim()}</p>
+            </div>
+          );
+        }
+
+        // First part — severity + title line
+        return (
+          <p key={i} className="font-semibold text-white leading-snug">{part.trim()}</p>
+        );
+      })}
+    </div>
+  );
+}

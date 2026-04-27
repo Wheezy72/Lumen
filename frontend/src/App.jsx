@@ -35,11 +35,7 @@ export default function App() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
 
-  // Minimum time (ms) a user must stay on a page before the next navigation
-  // triggers the fade-in animation. Prevents visual flicker on rapid or
-  // programmatic navigations while still giving human-paced transitions a
-  // smooth entrance.
-  const MIN_NAV_DURATION_FOR_ANIMATION = 150;
+  const MIN_NAV_DURATION_FOR_ANIMATION = 50;
   const navTimestampRef = useRef({ prevTime: 0, currentTime: Date.now(), key: null });
   if (navTimestampRef.current.key !== location.key) {
     navTimestampRef.current = {
@@ -124,7 +120,7 @@ export default function App() {
 
       <main className={`flex-1 ${isAuthRoute ? "min-h-screen" : "max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8"}`}>
         <ErrorBoundary key={location.pathname}>
-          <div key={location.key} className={shouldAnimatePage ? "animate-fade-in" : ""}>
+          <div key={location.key} className={shouldAnimatePage ? "animate-fade-in" : "opacity-100"}>
             <Routes>
               <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <Landing />} />
               <Route path="/learn" element={<Vulnerabilities />} />

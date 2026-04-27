@@ -1,7 +1,4 @@
 // ── UNUSED — safe to delete ──────────────────────────────────────────────────
-// backend/src/index.js now imports from ./routes/publicApi/index.js directly.
-// This file is kept only to avoid a hard crash if something outside the main
-// app still has a stale import. You can remove it once you confirm nothing else
-// references this path.
+// PDF logic lives in utils/pdfReport.js — nothing imports this path.
 // ─────────────────────────────────────────────────────────────────────────────
-export { default } from './publicApi/index.js';
+export * from '../utils/pdfReport.js';

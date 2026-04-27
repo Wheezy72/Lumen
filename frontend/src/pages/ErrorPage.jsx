@@ -39,7 +39,7 @@ export default function ErrorPage({ error, onRetry }) {
           )}
         </div>
 
-        <h1 className="text-2xl font-bold text-gray-200 mb-2">{title}</h1>
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-gray-200 mb-2">{title}</h1>
         <p className="text-sm text-gray-500 mb-6">{description}</p>
 
         {error?.message && process.env.NODE_ENV === 'development' && (

@@ -1,8 +1,0 @@
-$kind: http-request
-name: Get Scan by ID
-url: "{{baseUrl}}/api/publicApi/scans/{{scanId}}"
-method: GET
-headers:
-  - name: Authorization
-    value: "Bearer {{publicApiKey}}"
-order: 3000

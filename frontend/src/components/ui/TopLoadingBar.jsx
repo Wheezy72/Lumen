@@ -45,7 +45,7 @@ export default function TopLoadingBar() {
       aria-hidden="true"
     >
       <div
-        className="h-full bg-gradient-to-r from-primary-500 to-secondary-400 transition-all duration-300 ease-out"
+        className="h-full bg-gradient-to-r from-primary-500 via-violet-400 to-teal-400 transition-all duration-300 ease-out"
         style={{
           width: `${progress}%`,
           opacity: visible ? 1 : 0,

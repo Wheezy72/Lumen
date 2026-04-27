@@ -12,7 +12,7 @@ export default function NotFound() {
           </svg>
         </div>
 
-        <h1 className="text-4xl font-bold text-gray-200 mb-2">404</h1>
+        <h1 className="text-4xl font-bold text-slate-900 dark:text-gray-200 mb-2">404</h1>
         <h2 className="text-xl font-semibold text-gray-300 mb-2">Page not found!</h2>
         <p className="text-sm text-gray-500 mb-8">
           The page you’re looking for is non-existent or may have moved.

@@ -1,11 +1,15 @@
-const timingSafeEqual = (a, b) => {
+import { timingSafeEqual } from 'crypto';
+
+const safeCompare = (a, b) => {
   const ba = Buffer.from(String(a || ''));
   const bb = Buffer.from(String(b || ''));
-
-  if (ba.length !== bb.length) return false;
-
-  // Buffer.timingSafeEqual throws if lengths differ.
-  return Buffer.timingSafeEqual(ba, bb);
+  // timingSafeEqual requires equal lengths; pad to avoid length leak
+  const len = Math.max(ba.length, bb.length);
+  const pa = Buffer.alloc(len);
+  const pb = Buffer.alloc(len);
+  ba.copy(pa);
+  bb.copy(pb);
+  return timingSafeEqual(pa, pb) && ba.length === bb.length;
 };
 
 export const apiKeyAuthMiddleware = (req, res, next) => {
@@ -22,7 +26,7 @@ export const apiKeyAuthMiddleware = (req, res, next) => {
   const key = bearer || req.headers?.['x-api-key'];
   if (!key) return res.status(401).json({ error: 'API key required.' });
 
-  if (!timingSafeEqual(key, expected)) {
+  if (!safeCompare(key, expected)) {
     return res.status(401).json({ error: 'API key is not valid.' });
   }
 

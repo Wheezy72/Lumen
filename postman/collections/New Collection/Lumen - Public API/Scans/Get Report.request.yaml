@@ -1,8 +1,0 @@
-$kind: http-request
-name: Get Report (JSON)
-url: "{{baseUrl}}/api/publicApi/scans/{{scanId}}/report"
-method: GET
-headers:
-  - name: Authorization
-    value: "Bearer {{publicApiKey}}"
-order: 4000

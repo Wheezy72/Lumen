@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import EmptyState from '../components/ui/EmptyState.jsx';
 import { useToast } from '../components/ui/Toast.jsx';
 import { formatLocalDateTime, timeAgo } from '../utils/dates.js';
+import { targetLabel } from '../utils/targetLabel.js';
 
 const WARNING_STYLE = 'bg-red-500/15 text-red-400 border border-red-500/30';
 
@@ -68,13 +69,7 @@ export default function Changes() {
 
   const rows = useMemo(() => {
     return (items || []).map((scan) => {
-      const host = scan.targetHost || (() => {
-        try {
-          return new URL(scan.targetUrl).hostname;
-        } catch {
-          return scan.targetUrl;
-        }
-      })();
+      const host = targetLabel(scan.targetUrl, scan.targetHost);
 
       const newHighCritical = scan.diffSummary?.newBlockedCount ?? 0;
 
@@ -95,7 +90,7 @@ export default function Changes() {
     <div className="space-y-5">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold bg-gradient-to-r from-primary-400 to-secondary-400 bg-clip-text text-transparent">Changes</h1>
+          <h1 className="text-2xl font-bold text-slate-900 dark:bg-gradient-to-r dark:from-primary-400 dark:to-secondary-400 dark:bg-clip-text dark:text-transparent">Changes</h1>
           <p className="text-sm text-gray-500 mt-1">What changed since the previous scan for each site.</p>
         </div>
         <div className="flex items-center gap-3">

@@ -1,3 +1,4 @@
+console.log("Current Email User:", process.env.SMTP_USER);
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -24,7 +25,7 @@ import authRouter from './routes/auth.js';
 import userRouter from './routes/users.js';
 import scanRouter from './routes/scans.js';
 import reportRouter from './routes/reports.js';
-import publicApiRouter from './routes/publicApi.js';
+import publicApiRouter from './routes/publicApi/index.js';
 import aiRouter from './routes/ai.js';
 import { authMiddleware } from './middleware/auth.js';
 import { apiKeyAuthMiddleware } from './middleware/apiKeyAuth.js';
@@ -129,6 +130,16 @@ app.get('/health', (req, res) => {
   const dbReady = mongoose.connection.readyState === 1;
   const status = dbReady ? 'ok' : 'degraded';
   res.json({ status, env: NODE_ENV, db: dbReady ? 'connected' : 'disconnected' });
+});
+
+app.get('/api', (req, res) => {
+  res.json({
+    name: 'Lumen Scanner API',
+    version: '1.0.0',
+    status: 'online',
+    message: 'API is running successfully. See documentation for available endpoints.',
+    endpoints: ['/api/auth', '/api/scans', '/api/reports', '/api/publicApi']
+  });
 });
 
 app.use(errorHandler);

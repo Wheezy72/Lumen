@@ -34,10 +34,31 @@ export function useToast() {
   return ctx;
 }
 
-const STYLES = {
-  success: 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300',
-  error:   'bg-red-500/15 border-red-500/30 text-red-300',
-  info:    'bg-blue-500/15 border-blue-500/30 text-blue-300',
+const TYPE_CONFIG = {
+  success: {
+    strip: 'bg-emerald-500',
+    text: 'text-emerald-300',
+    bg: 'bg-emerald-500/10 border-emerald-500/25',
+    iconBg: 'bg-emerald-500/20',
+  },
+  error: {
+    strip: 'bg-red-500',
+    text: 'text-red-300',
+    bg: 'bg-red-500/10 border-red-500/25',
+    iconBg: 'bg-red-500/20',
+  },
+  warning: {
+    strip: 'bg-amber-500',
+    text: 'text-amber-300',
+    bg: 'bg-amber-500/10 border-amber-500/25',
+    iconBg: 'bg-amber-500/20',
+  },
+  info: {
+    strip: 'bg-blue-500',
+    text: 'text-blue-300',
+    bg: 'bg-blue-500/10 border-blue-500/25',
+    iconBg: 'bg-blue-500/20',
+  },
 };
 
 function ToastStack({ toasts, onDismiss }) {
@@ -48,26 +69,37 @@ function ToastStack({ toasts, onDismiss }) {
       aria-live="polite"
       aria-label="Notifications"
     >
-      {toasts.map((t) => (
-        <div
-          key={t.id}
-          role="alert"
-          className={`pointer-events-auto flex items-start gap-3 px-4 py-3 rounded-lg border shadow-medium backdrop-blur-sm text-sm font-medium animate-slide-up max-w-sm ${STYLES[t.type] || STYLES.info}`}
-        >
-          <ToastIcon type={t.type} />
-          <span className="flex-1 leading-snug">{t.message}</span>
-          <button
-            type="button"
-            onClick={() => onDismiss(t.id)}
-            className="mt-0.5 opacity-60 hover:opacity-100 transition shrink-0"
-            aria-label="Dismiss"
+      {toasts.map((t) => {
+        const cfg = TYPE_CONFIG[t.type] || TYPE_CONFIG.info;
+        return (
+          <div
+            key={t.id}
+            role="alert"
+            className={`pointer-events-auto relative flex items-start gap-3 pl-0 pr-4 py-3 rounded-xl border shadow-medium backdrop-blur-md text-sm font-medium animate-slide-in-right max-w-sm overflow-hidden ${cfg.bg}`}
           >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-      ))}
+            {/* Left color strip */}
+            <span className={`absolute left-0 top-0 bottom-0 w-[3px] rounded-l-xl ${cfg.strip}`} />
+
+            {/* Icon */}
+            <span className={`ml-4 shrink-0 w-7 h-7 rounded-full flex items-center justify-center ${cfg.iconBg} ${cfg.text}`}>
+              <ToastIcon type={t.type} />
+            </span>
+
+            <span className={`flex-1 leading-snug pt-[3px] ${cfg.text}`}>{t.message}</span>
+
+            <button
+              type="button"
+              onClick={() => onDismiss(t.id)}
+              className="mt-0.5 opacity-50 hover:opacity-100 transition shrink-0"
+              aria-label="Dismiss"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -75,20 +107,27 @@ function ToastStack({ toasts, onDismiss }) {
 function ToastIcon({ type }) {
   if (type === 'success') {
     return (
-      <svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
       </svg>
     );
   }
   if (type === 'error') {
     return (
-      <svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
       </svg>
     );
   }
+  if (type === 'warning') {
+    return (
+      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+      </svg>
+    );
+  }
   return (
-    <svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
     </svg>
   );

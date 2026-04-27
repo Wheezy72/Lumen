@@ -57,6 +57,7 @@ yarn.lock
 reports/
 *.zip
 
+# Others (Miscellaneous)
 postman
 API.txt
 targets.txt

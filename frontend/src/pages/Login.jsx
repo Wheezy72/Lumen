@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-
 import axios from "axios";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import AuthBackground from "../components/ui/AuthBackground.jsx";
@@ -15,26 +14,18 @@ export default function Login({ onLogin, message }) {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
-  };
+  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
     setLoading(true);
-
     try {
       const response = await axios.post("/api/auth/login", form);
-
-      if (onLogin) {
-        onLogin(response.data);
-      }
-
+      if (onLogin) onLogin(response.data);
       navigate("/dashboard");
     } catch (err) {
-      const errMessage = err.response?.data?.error || "Login failed. Please try again.";
-      setError(errMessage);
+      setError(err.response?.data?.error || "Login failed. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -43,24 +34,26 @@ export default function Login({ onLogin, message }) {
   return (
     <AuthBackground variant="primary" className="min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-md">
-        <div className="bg-dark-200 border border-slate-800 rounded-lg shadow-soft p-8">
-          <div className="text-center mb-8">
-            <div className="w-16 h-16 rounded-2xl overflow-hidden mx-auto mb-4 ring-1 ring-black/10 dark:ring-white/10 shadow-soft">
+        <div className="relative rounded-4xl glass-strong shadow-strong p-8 overflow-hidden">
+          {/* Logo glow halo */}
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-primary-500/20 rounded-full blur-3xl pointer-events-none" />
+
+          <div className="text-center mb-8 relative">
+            <div className="w-16 h-16 rounded-2xl overflow-hidden mx-auto mb-4 ring-2 ring-primary-500/30 shadow-glow-primary">
               <img src="/logo.jpg" alt="Logo" className="w-full h-full object-cover" />
             </div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Welcome back</h1>
-            <p className="text-gray-400 mt-2">Sign in to your account</p>
+            <h1 className="text-2xl font-bold auth-heading">Welcome back</h1>
+            <p className="text-gray-400 mt-1.5 text-sm">Your workspace is waiting.</p>
           </div>
 
-          {/* App.jsx routing message (e.g., "Please sign in to view the dashboard") */}
           {routingMessage && !error && (
-            <div className="mb-6 p-4 bg-primary-900/30 border border-primary-500/30 rounded-lg">
+            <div className="mb-6 p-3.5 bg-primary-900/30 border border-primary-500/25 rounded-xl">
               <p className="text-primary-400 text-sm text-center">{routingMessage}</p>
             </div>
           )}
 
           {error && (
-            <div className="mb-6 p-4 bg-red-900/30 border border-red-500/30 rounded-lg">
+            <div className="mb-6 p-3.5 bg-red-900/25 border border-red-500/25 rounded-xl">
               <p className="text-red-400 text-sm text-center">{error}</p>
             </div>
           )}
@@ -69,14 +62,9 @@ export default function Login({ onLogin, message }) {
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">Username</label>
               <div className="relative">
-                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 input-icon z-10">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 input-icon z-10">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                    />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                   </svg>
                 </span>
                 <input
@@ -95,19 +83,14 @@ export default function Login({ onLogin, message }) {
             <div>
               <div className="flex items-center justify-between mb-2">
                 <label className="block text-sm font-medium text-gray-300">Password</label>
-                <Link to="/forgot-password" className="text-xs text-primary-500 hover:text-primary-400 font-medium">
+                <Link to="/forgot-password" className="text-xs text-primary-500 hover:text-primary-400 font-medium link-underline">
                   Forgot password?
                 </Link>
               </div>
               <div className="relative">
-                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 input-icon z-10">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 input-icon z-10">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                    />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                   </svg>
                 </span>
                 <input
@@ -133,15 +116,15 @@ export default function Login({ onLogin, message }) {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 btn-primary transition disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full py-3 rounded-full btn-primary font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? "Authenticating..." : "Sign In"}
+              {loading ? "Authenticating…" : "Sign in"}
             </button>
           </form>
 
-          <p className="mt-6 text-center text-gray-400">
+          <p className="mt-6 text-center text-gray-400 text-sm">
             Don't have an account?{" "}
-            <Link to="/register" className="text-primary-500 hover:text-primary-400 font-medium">
+            <Link to="/register" className="text-primary-400 hover:text-primary-300 font-semibold link-underline">
               Create one
             </Link>
           </p>

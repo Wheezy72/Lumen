@@ -218,7 +218,7 @@ export default function Vulnerabilities() {
 
         <div className="relative flex flex-col md:flex-row md:items-end md:justify-between gap-5">
           <div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-primary-400 to-secondary-400 bg-clip-text text-transparent">
+            <h1 className="text-3xl font-bold text-slate-900 dark:bg-gradient-to-r dark:from-primary-400 dark:to-secondary-400 dark:bg-clip-text dark:text-transparent">
               Learning centre
             </h1>
             <p className="text-sm text-gray-500 mt-2 max-w-2xl">
@@ -243,7 +243,7 @@ export default function Vulnerabilities() {
       {activeTab === 'vulnerabilities' && (
         <div className="mt-6 space-y-4">
           <div className="rounded-xl border border-slate-800 bg-dark-200 p-5">
-            <h2 className="text-sm font-semibold text-gray-200">Common topics</h2>
+            <h2 className="text-sm font-semibold text-slate-800 dark:text-gray-200">Common topics</h2>
             <p className="text-sm text-gray-500 mt-2">
               Expand a card for a short explanation and a fix checklist.
             </p>
@@ -271,7 +271,7 @@ export default function Vulnerabilities() {
       {activeTab === 'breaches' && (
         <div className="mt-6 space-y-4">
           <div className="rounded-xl border border-slate-800 bg-dark-200 p-5">
-            <h2 className="text-sm font-semibold text-gray-200">Security incidents</h2>
+            <h2 className="text-sm font-semibold text-slate-800 dark:text-gray-200">Security incidents</h2>
             <p className="text-sm text-gray-500 mt-2">
               A few examples that show the impact when security goes wrong.
             </p>
@@ -282,7 +282,7 @@ export default function Vulnerabilities() {
               <article key={i} className="rounded-xl border border-slate-800 bg-dark-200 p-5 flex flex-col gap-3">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <h3 className="text-sm font-semibold text-gray-200">{b.name}</h3>
+                    <h3 className="text-sm font-semibold text-slate-800 dark:text-gray-200">{b.name}</h3>
                     <p className="text-xs text-gray-500 mt-1">{b.affected} • {b.impact}</p>
                   </div>
                   <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-500/10 text-gray-400 border border-slate-800">
