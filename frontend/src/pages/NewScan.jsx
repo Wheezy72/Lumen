@@ -8,6 +8,7 @@ const SCAN_MODULES = [
   { id: 'cookies',      name: 'Cookie Security',   description: 'Check cookie security flags' },
   { id: 'tls',          name: 'TLS/SSL',            description: 'Check certificate and protocol security' },
   { id: 'xss',          name: 'XSS Detection',      description: 'Test for cross-site scripting' },
+  { id: 'client_sast',  name: 'Client-side SAST',   description: 'Statically inspect discovered JavaScript, source maps, secrets, and DOM sinks' },
   { id: 'sqli',         name: 'SQL Injection',      description: 'Test for SQL injection vulnerabilities' },
   { id: 'traversal',    name: 'Path Traversal',     description: 'Test for directory traversal' },
   { id: 'subdomain',    name: 'Subdomain Scan',     description: 'Discover subdomains' },
@@ -18,8 +19,8 @@ const SCAN_MODULES = [
 
 const SCAN_PROFILES = {
   quick:    { name: 'Quick scan',    description: 'Headers + cookies only (~10 seconds)', modules: ['headers', 'cookies'] },
-  standard: { name: 'Standard scan', description: 'A sensible default set of checks (~30 seconds)', modules: ['headers','cookies','tls','error','rate_limit'] },
-  full:     { name: 'Full scan',     description: 'Runs all checks (~2 minutes)', modules: SCAN_MODULES.map((m) => m.id) },
+  standard: { name: 'Standard scan', description: 'Fast DAST-focused baseline checks (~30 seconds)', modules: ['headers','cookies','tls','error','rate_limit'] },
+  full:     { name: 'Full scan',     description: 'Runs hybrid DAST + client-side SAST checks (~2 minutes)', modules: SCAN_MODULES.map((m) => m.id) },
   custom:   { name: 'Custom',        description: 'Choose checks manually', modules: [] },
 };
 

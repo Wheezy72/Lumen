@@ -1,10 +1,13 @@
 import os
 import json
+import html
+import re
 import ssl
 import socket
 import threading
 import urllib.parse
-from typing import List, Dict, Optional
+from dataclasses import dataclass, field
+from typing import List, Dict, Optional, Tuple, Union, Set
 
 import dns.resolver
 import redis
@@ -64,101 +67,264 @@ def heartbeat_loop(stop_event: threading.Event) -> None:
 # --- Auto-crawler --------------------------------------------------------------
 
 
-def auto_crawl_targets(base_url: str, headers: Optional[Dict] = None) -> List[str]:
-    """
-    Crawl the given URL for <a href> links and <form> inputs.
+@dataclass
+class DiscoveredTarget:
+    method: str
+    url: str
+    params: Dict[str, str] = field(default_factory=dict)
+    data: Dict[str, str] = field(default_factory=dict)
+    source_url: str = ""
+    source_type: str = "base"
+    metadata: Dict[str, str] = field(default_factory=dict)
 
-    Returns a list of parameterised URLs discovered on the page so that
-    active checks (XSS, SQLi, traversal …) can be run against real
-    parameter names rather than a blind injection into the base URL.
-    """
-    targets: List[str] = [base_url]
-    seen: set = {base_url}
 
+TargetLike = Union[str, DiscoveredTarget]
+
+
+def _single_value_params(query: str) -> Dict[str, str]:
+    parsed = urllib.parse.parse_qs(query, keep_blank_values=True)
+    return {key: values[0] if values else "" for key, values in parsed.items()}
+
+
+def _target_key(target: DiscoveredTarget) -> Tuple[str, str, Tuple[Tuple[str, str], ...], Tuple[Tuple[str, str], ...]]:
+    return (
+        target.method.upper(),
+        target.url,
+        tuple(sorted(target.params.items())),
+        tuple(sorted(target.data.items())),
+    )
+
+
+def _dedupe_targets(targets: List[DiscoveredTarget]) -> List[DiscoveredTarget]:
+    seen: Set[Tuple[str, str, Tuple[Tuple[str, str], ...], Tuple[Tuple[str, str], ...]]] = set()
+    deduped: List[DiscoveredTarget] = []
+    for target in targets:
+        key = _target_key(target)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(target)
+    return deduped
+
+
+def _normalize_target(target: TargetLike) -> DiscoveredTarget:
+    if isinstance(target, DiscoveredTarget):
+        method = target.method.upper()
+        if method == "GET" and not target.params:
+            parsed = urllib.parse.urlparse(target.url)
+            target.params.update(_single_value_params(parsed.query))
+        return target
+
+    parsed = urllib.parse.urlparse(target)
+    return DiscoveredTarget(
+        method="GET",
+        url=target,
+        params=_single_value_params(parsed.query),
+        source_url=target,
+        source_type="base",
+    )
+
+
+def _target_display(target: TargetLike) -> str:
+    normalized = _normalize_target(target)
+    return f"{normalized.method.upper()} {normalized.url}"
+
+
+def _same_origin(url: str, base: urllib.parse.ParseResult) -> bool:
+    parsed = urllib.parse.urlparse(url)
+    return parsed.scheme in ("http", "https") and parsed.netloc == base.netloc
+
+
+def _strip_fragment(url: str) -> str:
+    parsed = urllib.parse.urlparse(url)
+    return urllib.parse.urlunparse(parsed._replace(fragment=""))
+
+
+def _page_url_key(url: str) -> str:
+    parsed = urllib.parse.urlparse(_strip_fragment(url))
+    return urllib.parse.urlunparse(parsed._replace(query=""))
+
+
+def _is_probable_html(resp: requests.Response) -> bool:
+    content_type = resp.headers.get("Content-Type", "").lower()
+    return "text/html" in content_type or not content_type
+
+
+def _parse_html(markup: str) -> BeautifulSoup:
     try:
-        resp = requests.get(base_url, timeout=10, headers=headers)
-        soup = BeautifulSoup(resp.text, "lxml")
-        parsed_base = urllib.parse.urlparse(base_url)
+        return BeautifulSoup(markup, "lxml")
+    except Exception:
+        return BeautifulSoup(markup, "html.parser")
 
-        # ── <a href> links ──────────────────────────────────────────────────
+
+def _extract_form_fields(form: BeautifulSoup) -> Dict[str, str]:
+    fields: Dict[str, str] = {}
+
+    for inp in form.find_all("input"):
+        input_type = inp.get("type", "text").strip().lower()
+        name = inp.get("name", "").strip()
+        if not name or input_type in ("button", "reset", "image", "file"):
+            continue
+        if input_type == "submit":
+            fields[name] = inp.get("value", "Submit")
+        elif input_type in ("radio", "checkbox"):
+            if inp.get("checked") is not None:
+                fields[name] = inp.get("value", "on")
+        else:
+            fields[name] = inp.get("value", "test")
+
+    for select in form.find_all("select"):
+        name = select.get("name", "").strip()
+        if not name:
+            continue
+        selected = select.find("option", selected=True) or select.find("option")
+        if selected is None:
+            fields[name] = "test"
+        else:
+            fields[name] = selected.get("value", selected.get_text(strip=True) or "test")
+
+    for textarea in form.find_all("textarea"):
+        name = textarea.get("name", "").strip()
+        if name:
+            fields[name] = textarea.get("value", textarea.get_text() or "test")
+
+    for btn in form.find_all("button"):
+        btn_type = btn.get("type", "submit").strip().lower()
+        name = btn.get("name", "").strip()
+        if btn_type == "submit" and name:
+            fields[name] = btn.get("value", btn.get_text(strip=True) or "Submit")
+
+    return fields
+
+
+def _merge_url_query(url: str, params: Dict[str, str]) -> str:
+    parsed = urllib.parse.urlparse(url)
+    query_params = _single_value_params(parsed.query)
+    query_params.update(params)
+    return urllib.parse.urlunparse(parsed._replace(query=urllib.parse.urlencode(query_params)))
+
+
+def _crawl_site(
+    base_url: str,
+    headers: Optional[Dict] = None,
+    max_depth: int = 2,
+    max_pages: int = 25,
+    max_targets: int = 100,
+) -> Tuple[List[DiscoveredTarget], Dict[str, str]]:
+    base = urllib.parse.urlparse(base_url)
+    targets: List[DiscoveredTarget] = [
+        DiscoveredTarget(
+            method="GET",
+            url=base_url,
+            params=_single_value_params(base.query),
+            source_url=base_url,
+            source_type="base",
+        )
+    ]
+    crawled_pages: Dict[str, str] = {}
+    queued: Set[str] = {_page_url_key(base_url)}
+    visited: Set[str] = set()
+    queue: List[Tuple[str, int]] = [(base_url, 0)]
+
+    while queue and len(visited) < max_pages and len(targets) < max_targets:
+        page_url, depth = queue.pop(0)
+        page_key = _page_url_key(page_url)
+        if page_key in visited or not _same_origin(page_url, base):
+            continue
+        visited.add(page_key)
+
+        try:
+            resp = requests.get(page_url, timeout=10, headers=headers)
+        except Exception as e:
+            print(f"Auto-crawl fetch error for {page_url}: {e}")
+            continue
+
+        if not _is_probable_html(resp):
+            continue
+
+        crawled_pages[page_url] = resp.text
+        soup = _parse_html(resp.text)
+
         for tag in soup.find_all("a", href=True):
             href = tag["href"].strip()
-            if not href or href.startswith("#") or href.startswith("javascript:"):
+            if not href or href.startswith("#") or href.lower().startswith(("javascript:", "mailto:", "tel:")):
                 continue
 
-            full = urllib.parse.urljoin(base_url, href)
-            parsed = urllib.parse.urlparse(full)
-
-            # Stay on the same host
-            if parsed.netloc != parsed_base.netloc:
+            full = _strip_fragment(urllib.parse.urljoin(page_url, href))
+            parsed_link = urllib.parse.urlparse(full)
+            if not _same_origin(full, base):
                 continue
 
-            if "?" in full and full not in seen:
-                seen.add(full)
-                targets.append(full)
+            if parsed_link.query and len(targets) < max_targets:
+                targets.append(DiscoveredTarget(
+                    method="GET",
+                    url=full,
+                    params=_single_value_params(parsed_link.query),
+                    source_url=page_url,
+                    source_type="link",
+                ))
 
-        # ── <form> inputs ───────────────────────────────────────────────────
+            link_page_key = _page_url_key(full)
+            if depth < max_depth and link_page_key not in visited and link_page_key not in queued:
+                queued.add(link_page_key)
+                queue.append((urllib.parse.urlunparse(parsed_link._replace(query="")), depth + 1))
+
         for form in soup.find_all("form"):
+            if len(targets) >= max_targets:
+                break
             action = form.get("action", "").strip()
-            method = form.get("method", "get").strip().lower()
+            method = form.get("method", "get").strip().upper()
+            if method not in ("GET", "POST"):
+                method = "GET"
 
-            form_url = urllib.parse.urljoin(base_url, action) if action else base_url
-            parsed_form = urllib.parse.urlparse(form_url)
-
-            # Stay on same host and only bother with GET-style forms for now
-            if parsed_form.netloc and parsed_form.netloc != parsed_base.netloc:
+            form_url = _strip_fragment(urllib.parse.urljoin(page_url, action) if action else page_url)
+            if not _same_origin(form_url, base):
                 continue
 
-            params: Dict[str, str] = {}
-            for inp in form.find_all(["input", "select", "textarea"]):
-                inp_type = inp.get("type", "text").strip().lower()
-                name = inp.get("name", "").strip()
-                if not name:
-                    continue
-
-                # ── Include submit buttons (name + value) ──────────────────
-                # Critical for apps like DVWA where the submit button's
-                # name/value (e.g. Submit=Submit) must be present in the
-                # query string to trigger the back-end handler.
-                if inp_type == "submit":
-                    value = inp.get("value", "Submit")
-                    params[name] = value
-                elif inp_type in ("hidden", "text", "number", "email",
-                                  "search", "tel", "url", "password"):
-                    value = inp.get("value", "test")
-                    params[name] = value
-                # radio / checkbox: include only checked ones
-                elif inp_type in ("radio", "checkbox"):
-                    if inp.get("checked") is not None:
-                        value = inp.get("value", "on")
-                        params[name] = value
-                else:
-                    # select, textarea, unknown — grab whatever value is set
-                    value = inp.get("value", "test")
-                    params[name] = value
-
-            # Also pick up <button type="submit"> elements
-            for btn in form.find_all("button"):
-                btn_type = btn.get("type", "submit").strip().lower()
-                if btn_type == "submit":
-                    name = btn.get("name", "").strip()
-                    if name:
-                        params[name] = btn.get("value", btn.get_text(strip=True) or "Submit")
-
-            if not params:
+            fields = _extract_form_fields(form)
+            if not fields:
                 continue
 
-            qs = urllib.parse.urlencode(params)
-            target = urllib.parse.urlunparse(parsed_form._replace(query=qs))
+            if method == "GET":
+                target_url = _merge_url_query(form_url, fields)
+                targets.append(DiscoveredTarget(
+                    method="GET",
+                    url=target_url,
+                    params=fields,
+                    source_url=page_url,
+                    source_type="form",
+                ))
+            else:
+                targets.append(DiscoveredTarget(
+                    method="POST",
+                    url=form_url,
+                    data=fields,
+                    source_url=page_url,
+                    source_type="form",
+                ))
 
-            if target not in seen:
-                seen.add(target)
-                targets.append(target)
+    return _dedupe_targets(targets)[:max_targets], crawled_pages
 
+
+def auto_crawl_targets(
+    base_url: str,
+    headers: Optional[Dict] = None,
+    max_depth: int = 2,
+    max_pages: int = 25,
+    max_targets: int = 100,
+) -> List[DiscoveredTarget]:
+    """
+    Bounded same-host crawl for links and forms.
+
+    Returns discovered GET/POST targets. Public callers that still pass URL
+    strings to active checks remain supported by target normalization helpers.
+    """
+    try:
+        targets, _ = _crawl_site(base_url, headers, max_depth, max_pages, max_targets)
+        return targets
     except Exception as e:
         print(f"Auto-crawl error for {base_url}: {e}")
-
-    return targets
+        return [_normalize_target(base_url)]
 
 
 # --- Individual scan functions -------------------------------------------------
@@ -236,29 +402,54 @@ def check_http_headers(url: str, headers: Optional[Dict] = None) -> List[Dict]:
     return issues
 
 
-def check_xss(url: str, headers: Optional[Dict] = None) -> List[Dict]:
-    """Try to reflect a harmless script tag via every query parameter found in the URL."""
+def _send_probe(target: DiscoveredTarget, key: str, value: str, headers: Optional[Dict]) -> Tuple[str, requests.Response]:
+    method = target.method.upper()
+    if method == "POST":
+        data = dict(target.data)
+        data[key] = value
+        return target.url, requests.post(target.url, data=data, timeout=10, headers=headers)
+
+    params = dict(target.params)
+    if not params:
+        parsed = urllib.parse.urlparse(target.url)
+        params = _single_value_params(parsed.query)
+    params[key] = value
+    parsed = urllib.parse.urlparse(target.url)
+    test_url = urllib.parse.urlunparse(parsed._replace(query=urllib.parse.urlencode(params)))
+    return test_url, requests.get(test_url, timeout=10, headers=headers)
+
+
+def _target_field_names(target: DiscoveredTarget, fallback_get_params: Optional[List[str]] = None) -> List[str]:
+    method = target.method.upper()
+    if method == "POST":
+        return list(target.data.keys())
+
+    params = dict(target.params)
+    if not params:
+        parsed = urllib.parse.urlparse(target.url)
+        params = _single_value_params(parsed.query)
+
+    if params:
+        return list(params.keys())
+    return fallback_get_params or []
+
+
+def check_xss(target: TargetLike, headers: Optional[Dict] = None) -> List[Dict]:
+    """Try to reflect a harmless script tag via every query parameter or POST field."""
     issues: List[Dict] = []
     probe = "<script>alert(1)</script>"
 
     try:
-        parsed = urllib.parse.urlparse(url)
-        qs = urllib.parse.parse_qs(parsed.query, keep_blank_values=True)
+        normalized = _normalize_target(target)
+        keys = _target_field_names(normalized)
 
-        if not qs:
-            # No query params — nothing to inject into for reflected XSS
+        if not keys:
             return issues
 
-        for key in list(qs.keys()):
-            test_qs = {k: v[:] for k, v in qs.items()}
-            test_qs[key] = [probe]
-            test_url = urllib.parse.urlunparse(
-                parsed._replace(query=urllib.parse.urlencode(test_qs, doseq=True))
-            )
+        for key in keys:
             try:
-                resp = requests.get(test_url, timeout=10, headers=headers)
+                test_url, resp = _send_probe(normalized, key, probe, headers)
                 # Check raw text and HTML-decoded text
-                import html
                 decoded = html.unescape(resp.text)
                 if probe in resp.text or probe in decoded:
                     issues.append({
@@ -268,10 +459,9 @@ def check_xss(url: str, headers: Optional[Dict] = None) -> List[Dict]:
                             f"Script tag injected into param '{key}' was reflected unescaped in the response, "
                             "indicating a Reflected Cross-Site Scripting vulnerability."
                         ),
-                        "evidence": f"Param: {key} | URL: {test_url}",
+                        "evidence": f"Method: {normalized.method.upper()} | Param: {key} | URL: {test_url}",
                         "category": "xss",
                     })
-                    break  # One confirmed finding is enough per URL
             except Exception:
                 continue
 
@@ -315,27 +505,21 @@ _SQLI_PAYLOADS = [
 ]
 
 
-def check_sql_injection(url: str, headers: Optional[Dict] = None) -> List[Dict]:
-    """Inject SQL payloads into every query parameter and look for error messages."""
+def check_sql_injection(target: TargetLike, headers: Optional[Dict] = None) -> List[Dict]:
+    """Inject SQL payloads into every query parameter or POST field and look for error messages."""
     issues: List[Dict] = []
     try:
-        parsed = urllib.parse.urlparse(url)
-        qs = urllib.parse.parse_qs(parsed.query, keep_blank_values=True)
+        normalized = _normalize_target(target)
+        keys = _target_field_names(normalized)
 
-        if not qs:
-            # No query params — nothing to inject
+        if not keys:
             return issues
 
-        for key in list(qs.keys()):
+        for key in keys:
             for payload in _SQLI_PAYLOADS:
-                test_qs = {k: v[:] for k, v in qs.items()}
-                test_qs[key] = [payload]
-                test_url = urllib.parse.urlunparse(
-                    parsed._replace(query=urllib.parse.urlencode(test_qs, doseq=True))
-                )
                 try:
-                    resp = requests.get(test_url, timeout=10, headers=headers)
-                    soup = BeautifulSoup(resp.text, "lxml")
+                    test_url, resp = _send_probe(normalized, key, payload, headers)
+                    soup = _parse_html(resp.text)
                     body = soup.get_text(" ", strip=True).lower()
                     matched = next((p for p in _SQLI_PATTERNS if p in body), None)
                     if matched:
@@ -346,10 +530,13 @@ def check_sql_injection(url: str, headers: Optional[Dict] = None) -> List[Dict]:
                                 f"Injecting `{payload}` into param '{key}' triggered a database error, "
                                 "confirming SQL Injection."
                             ),
-                            "evidence": f"Param: {key} | Payload: {payload} | Match: '{matched}' | URL: {test_url}",
+                            "evidence": (
+                                f"Method: {normalized.method.upper()} | Param: {key} | "
+                                f"Payload: {payload} | Match: '{matched}' | URL: {test_url}"
+                            ),
                             "category": "sqli",
                         })
-                        return issues  # One confirmed finding is enough
+                        break
                 except Exception:
                     continue
 
@@ -374,25 +561,18 @@ _TRAVERSAL_PAYLOADS = [
 _TRAVERSAL_MARKERS = ["root:x:", "[fonts]", "[extensions]", "boot loader"]
 
 
-def check_directory_traversal(url: str, headers: Optional[Dict] = None) -> List[Dict]:
-    """Inject path-traversal payloads into every query parameter."""
+def check_directory_traversal(target: TargetLike, headers: Optional[Dict] = None) -> List[Dict]:
+    """Inject path-traversal payloads into every query parameter or POST field."""
     issues: List[Dict] = []
     try:
-        parsed = urllib.parse.urlparse(url)
-        qs = urllib.parse.parse_qs(parsed.query, keep_blank_values=True)
-
-        # Test existing params first; fall back to adding a 'file' param if none exist
-        keys_to_test = list(qs.keys()) if qs else ["file", "page", "path"]
+        normalized = _normalize_target(target)
+        fallback = ["file", "page", "path"] if normalized.method.upper() == "GET" else []
+        keys_to_test = _target_field_names(normalized, fallback)
 
         for key in keys_to_test:
             for payload in _TRAVERSAL_PAYLOADS:
-                test_qs = {k: v[:] for k, v in qs.items()} if qs else {}
-                test_qs[key] = [payload]
-                test_url = urllib.parse.urlunparse(
-                    parsed._replace(query=urllib.parse.urlencode(test_qs, doseq=True))
-                )
                 try:
-                    resp = requests.get(test_url, timeout=10, headers=headers)
+                    test_url, resp = _send_probe(normalized, key, payload, headers)
                     matched = next((m for m in _TRAVERSAL_MARKERS if m in resp.text.lower()), None)
                     if matched:
                         issues.append({
@@ -402,10 +582,13 @@ def check_directory_traversal(url: str, headers: Optional[Dict] = None) -> List[
                                 f"Injecting `{payload}` into param '{key}' returned file system content, "
                                 "indicating a Path Traversal or Local File Inclusion vulnerability."
                             ),
-                            "evidence": f"Param: {key} | Payload: {payload} | Marker: '{matched}' | URL: {test_url}",
+                            "evidence": (
+                                f"Method: {normalized.method.upper()} | Param: {key} | "
+                                f"Payload: {payload} | Marker: '{matched}' | URL: {test_url}"
+                            ),
                             "category": "traversal",
                         })
-                        return issues
+                        break
                 except Exception:
                     continue
 
@@ -608,7 +791,263 @@ def check_rate_limiting(url: str, headers: Optional[Dict] = None) -> List[Dict]:
     return issues
 
 
+_SECRET_PATTERNS = [
+    ("AWS access key", re.compile(r"\bAKIA[0-9A-Z]{16}\b")),
+    ("JWT token", re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b")),
+    ("Bearer token", re.compile(r"\bBearer\s+[A-Za-z0-9._~+/=-]{20,}\b", re.IGNORECASE)),
+    (
+        "Hardcoded client secret",
+        re.compile(
+            r"\b(apiKey|api_key|token|secret|password|clientSecret)\b\s*[:=]\s*['\"]([^'\"]{16,})['\"]",
+            re.IGNORECASE,
+        ),
+    ),
+]
+
+_DOM_SINK_PATTERNS = [
+    ("Dangerous DOM sink: innerHTML", re.compile(r"\.innerHTML\s*=", re.IGNORECASE)),
+    ("Dangerous DOM sink: outerHTML", re.compile(r"\.outerHTML\s*=", re.IGNORECASE)),
+    ("Dangerous DOM sink: document.write", re.compile(r"\bdocument\.write\s*\(", re.IGNORECASE)),
+    ("Dangerous JavaScript execution: eval", re.compile(r"\beval\s*\(", re.IGNORECASE)),
+    ("String-based setTimeout", re.compile(r"\bsetTimeout\s*\(\s*['\"]", re.IGNORECASE)),
+    ("String-based setInterval", re.compile(r"\bsetInterval\s*\(\s*['\"]", re.IGNORECASE)),
+]
+
+_TOKEN_STORAGE_RE = re.compile(
+    r"\b(localStorage|sessionStorage)\.setItem\s*\([^)]*(token|jwt|auth|secret)[^)]*\)",
+    re.IGNORECASE,
+)
+_SOURCEMAP_RE = re.compile(r"sourceMappingURL\s*=\s*([^\s*]+)")
+_STRING_LITERAL_RE = re.compile(r"['\"]([^'\"]{2,300})['\"]")
+_SUSPICIOUS_ENDPOINT_RE = re.compile(r"/[^'\"\s<>]*(debug|admin|internal|hidden|test|dev|api|swagger|graphql)[^'\"\s<>]*", re.IGNORECASE)
+
+
+def _short_match(value: str, limit: int = 160) -> str:
+    value = value.strip()
+    return value if len(value) <= limit else value[:limit] + "…"
+
+
+def _add_static_finding(
+    issues: List[Dict],
+    seen: Set[Tuple[str, str, str, str]],
+    *,
+    title: str,
+    severity: str,
+    description: str,
+    evidence: str,
+    category: str,
+    matched: str,
+) -> None:
+    key = (category, title, evidence, matched)
+    if key in seen:
+        return
+    seen.add(key)
+    issues.append({
+        "title": title,
+        "severity": severity,
+        "description": description,
+        "evidence": evidence,
+        "category": category,
+    })
+
+
+def _script_sources_from_pages(
+    crawled_pages_or_targets: Optional[Union[Dict[str, str], List[TargetLike]]],
+    headers: Optional[Dict],
+) -> Tuple[Dict[str, str], List[Tuple[str, Optional[str], str]]]:
+    pages: Dict[str, str] = {}
+    scripts: List[Tuple[str, Optional[str], str]] = []
+
+    if isinstance(crawled_pages_or_targets, dict):
+        pages = crawled_pages_or_targets
+    elif isinstance(crawled_pages_or_targets, list):
+        for target in crawled_pages_or_targets[:25]:
+            normalized = _normalize_target(target)
+            if normalized.method.upper() != "GET":
+                continue
+            page_url = urllib.parse.urlunparse(urllib.parse.urlparse(normalized.url)._replace(query=""))
+            if page_url in pages:
+                continue
+            try:
+                resp = requests.get(page_url, timeout=10, headers=headers)
+                if _is_probable_html(resp):
+                    pages[page_url] = resp.text
+            except Exception:
+                continue
+
+    for page_url, html_text in pages.items():
+        soup = _parse_html(html_text)
+        for index, tag in enumerate(soup.find_all("script")):
+            src = tag.get("src")
+            if src:
+                scripts.append((page_url, urllib.parse.urljoin(page_url, src), ""))
+            else:
+                scripts.append((page_url, None, tag.string or tag.get_text() or ""))
+
+    return pages, scripts
+
+
+def check_client_sast(
+    crawled_pages_or_targets: Optional[Union[Dict[str, str], List[TargetLike], TargetLike]],
+    headers: Optional[Dict] = None,
+    max_scripts: int = 50,
+    max_script_bytes: int = 500_000,
+) -> List[Dict]:
+    """Analyze same-origin JavaScript and inline scripts for conservative client-side findings."""
+    issues: List[Dict] = []
+    seen: Set[Tuple[str, str, str, str]] = set()
+
+    if isinstance(crawled_pages_or_targets, (str, DiscoveredTarget)):
+        pages_or_targets: Optional[Union[Dict[str, str], List[TargetLike]]] = [crawled_pages_or_targets]
+    else:
+        pages_or_targets = crawled_pages_or_targets
+
+    pages, scripts = _script_sources_from_pages(pages_or_targets, headers)
+    if not pages and not scripts:
+        return issues
+
+    script_count = 0
+    fetched_sources: Set[str] = set()
+
+    for page_url, script_url, inline_code in scripts:
+        if script_count >= max_scripts:
+            break
+
+        code = inline_code
+        source = f"{page_url} inline script"
+        base = urllib.parse.urlparse(page_url)
+
+        if script_url:
+            script_url = _strip_fragment(script_url)
+            if script_url in fetched_sources or not _same_origin(script_url, base):
+                continue
+            fetched_sources.add(script_url)
+            source = script_url
+            try:
+                resp = requests.get(script_url, timeout=10, headers=headers)
+                if resp.status_code >= 400:
+                    continue
+                code = resp.text
+            except Exception:
+                continue
+
+        script_count += 1
+        code = code[:max_script_bytes]
+
+        for title, pattern in _SECRET_PATTERNS:
+            for match in pattern.finditer(code):
+                matched = match.group(0)
+                if len(matched) < 16:
+                    continue
+                _add_static_finding(
+                    issues,
+                    seen,
+                    title=title,
+                    severity="high",
+                    description="JavaScript appears to contain a hardcoded credential or token-like value.",
+                    evidence=f"Source: {source} | Match: {_short_match(matched)}",
+                    category="secret",
+                    matched=matched,
+                )
+
+        for title, pattern in _DOM_SINK_PATTERNS:
+            for match in pattern.finditer(code):
+                matched = match.group(0)
+                _add_static_finding(
+                    issues,
+                    seen,
+                    title=title,
+                    severity="medium",
+                    description="Client-side JavaScript uses a sink commonly associated with DOM XSS when fed untrusted data.",
+                    evidence=f"Source: {source} | Sink: {matched}",
+                    category="client_sast",
+                    matched=matched,
+                )
+
+        for match in _TOKEN_STORAGE_RE.finditer(code):
+            matched = match.group(0)
+            _add_static_finding(
+                issues,
+                seen,
+                title="Sensitive token stored in web storage",
+                severity="medium",
+                description="Client-side code stores token/auth/secret material in localStorage or sessionStorage.",
+                evidence=f"Source: {source} | Code: {_short_match(matched)}",
+                category="secret",
+                matched=matched,
+            )
+
+        for match in _STRING_LITERAL_RE.finditer(code):
+            literal = match.group(1)
+            endpoint_match = _SUSPICIOUS_ENDPOINT_RE.search(literal)
+            if not endpoint_match:
+                continue
+            endpoint = endpoint_match.group(0)
+            _add_static_finding(
+                issues,
+                seen,
+                title="Suspicious endpoint discovered in client JavaScript",
+                severity="low",
+                description="JavaScript contains a relative or same-origin path that may expose hidden, debug, API, or admin functionality.",
+                evidence=f"Source: {source} | Endpoint: {endpoint}",
+                category="endpoint_discovery",
+                matched=endpoint,
+            )
+
+        for match in _SOURCEMAP_RE.finditer(code):
+            map_ref = match.group(1).strip()
+            _add_static_finding(
+                issues,
+                seen,
+                title="JavaScript source map reference exposed",
+                severity="low",
+                description="A JavaScript bundle references a source map, which can expose original source code.",
+                evidence=f"Source: {source} | sourceMappingURL={map_ref}",
+                category="source_map",
+                matched=map_ref,
+            )
+
+        if script_url:
+            candidates = []
+            for match in _SOURCEMAP_RE.finditer(code):
+                candidates.append(urllib.parse.urljoin(script_url, match.group(1).strip()))
+            candidates.append(script_url + ".map")
+
+            for map_url in candidates[:3]:
+                if not _same_origin(map_url, base):
+                    continue
+                try:
+                    map_resp = requests.get(map_url, timeout=5, headers=headers)
+                    if map_resp.status_code == 200:
+                        _add_static_finding(
+                            issues,
+                            seen,
+                            title="JavaScript source map is fetchable",
+                            severity="low",
+                            description="A JavaScript source map is publicly fetchable and may expose original source code.",
+                            evidence=f"Source map URL: {map_url}",
+                            category="source_map",
+                            matched=map_url,
+                        )
+                except Exception:
+                    continue
+
+    return issues
+
+
 # --- Orchestration -------------------------------------------------------------
+
+
+def _dedupe_issues(issues: List[Dict]) -> List[Dict]:
+    seen_keys: Set[Tuple[str, str, str]] = set()
+    deduped: List[Dict] = []
+    for issue in issues:
+        key = (issue.get("title", ""), issue.get("category", ""), issue.get("evidence", ""))
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+        deduped.append(issue)
+    return deduped
 
 
 def run_scan(
@@ -618,6 +1057,8 @@ def run_scan(
     headers: Optional[Dict] = None,
     progress_start: int = 5,
     progress_end: int = 95,
+    crawled_targets: Optional[List[TargetLike]] = None,
+    crawled_pages: Optional[Dict[str, str]] = None,
 ) -> List[Dict]:
     """Run selected scan modules and report progress."""
     issues: List[Dict] = []
@@ -649,6 +1090,7 @@ def run_scan(
         "error",
         "access_control",
         "rate_limit",
+        "client_sast",
     ]
 
     if profile is None:
@@ -662,6 +1104,7 @@ def run_scan(
     progress_range = progress_end - progress_start
     progress_step = progress_range / len(enabled)
     current_progress = progress_start
+    scan_targets = _dedupe_targets([_normalize_target(t) for t in (crawled_targets or [target_url])])
 
     for module in enabled:
         if module == "tls":
@@ -672,11 +1115,14 @@ def run_scan(
         elif module == "headers":
             issues.extend(check_http_headers(target_url, headers))
         elif module == "xss":
-            issues.extend(check_xss(target_url, headers))
+            for target in scan_targets:
+                issues.extend(check_xss(target, headers))
         elif module == "sqli":
-            issues.extend(check_sql_injection(target_url, headers))
+            for target in scan_targets:
+                issues.extend(check_sql_injection(target, headers))
         elif module == "traversal":
-            issues.extend(check_directory_traversal(target_url, headers))
+            for target in scan_targets:
+                issues.extend(check_directory_traversal(target, headers))
         elif module == "subdomain":
             issues.extend(discover_subdomains(hostname))
         elif module == "cookies":
@@ -687,12 +1133,14 @@ def run_scan(
             issues.extend(check_broken_access_control(target_url, headers))
         elif module == "rate_limit":
             issues.extend(check_rate_limiting(target_url, headers))
+        elif module == "client_sast":
+            issues.extend(check_client_sast(crawled_pages or scan_targets, headers))
 
         current_progress += progress_step
         if scan_id:
             send_progress(scan_id, int(current_progress))
 
-    return issues
+    return _dedupe_issues(issues)
 
 
 # --- Entry point ---------------------------------------------------------------
@@ -737,47 +1185,27 @@ def process_job(message: Dict) -> None:
     if scan_id:
         send_progress(scan_id, 5)
 
-    # ── Auto-crawl: if the URL has no query string, discover parameterised
-    #    targets from the page's links and forms, then scan each one.
-    parsed = urllib.parse.urlparse(target_url)
-    has_params = bool(parsed.query)
+    print(f"  Auto-crawling {target_url} for same-host links and forms…")
+    targets, crawled_pages = _crawl_site(target_url, request_headers)
+    print(f"  Discovered {len(targets)} target(s) across {len(crawled_pages)} page(s).")
 
-    if not has_params:
-        print(f"  Auto-crawling {target_url} for parameterised targets…")
-        targets = auto_crawl_targets(target_url, request_headers)
-        print(f"  Discovered {len(targets)} target(s) to scan.")
+    if scan_id:
+        send_progress(scan_id, 10)
 
-        if scan_id:
-            send_progress(scan_id, 10)
+    for i, target in enumerate(targets, start=1):
+        print(f"  Target {i}/{len(targets)}: {_target_display(target)}")
 
-        all_issues: List[Dict] = []
-        n = len(targets)
-
-        for i, t in enumerate(targets):
-            # Divide the 10–95 progress range evenly across all targets
-            p_start = 10 + int((i / n) * 85)
-            p_end   = 10 + int(((i + 1) / n) * 85)
-            print(f"  Scanning target {i + 1}/{n}: {t}")
-            issues = run_scan(t, scan_profile, scan_id, request_headers,
-                              progress_start=p_start, progress_end=p_end)
-            all_issues.extend(issues)
-
-        # De-duplicate by (title, category, evidence) to avoid noise from
-        # scanning many similar URLs.
-        seen_keys: set = set()
-        deduped: List[Dict] = []
-        for issue in all_issues:
-            key = (issue.get("title", ""), issue.get("category", ""), issue.get("evidence", ""))
-            if key not in seen_keys:
-                seen_keys.add(key)
-                deduped.append(issue)
-
-        send_results(scan_id, deduped)
-    else:
-        # URL already has parameters — scan it directly.
-        issues = run_scan(target_url, scan_profile, scan_id, request_headers,
-                          progress_start=10, progress_end=95)
-        send_results(scan_id, issues)
+    issues = run_scan(
+        target_url,
+        scan_profile,
+        scan_id,
+        request_headers,
+        progress_start=10,
+        progress_end=95,
+        crawled_targets=targets,
+        crawled_pages=crawled_pages,
+    )
+    send_results(scan_id, issues)
 
 
 def run_worker_loop(stop_event: threading.Event) -> None:
