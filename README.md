@@ -6,14 +6,18 @@
 ![MongoDB](https://img.shields.io/badge/MongoDB-Database-47A248?logo=mongodb&logoColor=white)
 ![Redis](https://img.shields.io/badge/Redis-Queue%20%2B%20PubSub-DC382D?logo=redis&logoColor=white)
 
-A small web application security scanner built for coursework and demos.
+A small hybrid DAST + client-side SAST web application security scanner built for coursework and demos.
 
 - Web UI to create scans and view reports
 - Node/Express API + MongoDB for storage
 - Redis/Bull for background jobs
-- Python worker runs HTTP-focused checks and publishes progress/results
+- Python worker runs bounded crawling, active DAST probes, optional client-side static analysis, and publishes progress/results
 
 Important: only scan targets you own or have explicit permission to test.
+
+## Scanner coverage
+
+Lumen performs bounded crawling of the target site, runs active HTTP-focused DAST probes, and can statically inspect discovered client-side assets. Scan modules include examples such as `headers`, `cookies`, `xss`, `sqli`, and `client_sast`; coverage is intentionally bounded and should not be treated as exhaustive.
 
 ## Tech stack
 
@@ -126,7 +130,7 @@ Name them by slug (png/jpg/jpeg). Examples:
 
 ## Verification (recommended)
 
-I can review and edit files here, but I can’t run your local environment. After pulling changes, run:
+After pulling changes, run:
 
 ```bash
 cd frontend && npm run build
