@@ -3,7 +3,7 @@
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
 ![Redis](https://img.shields.io/badge/Redis-PubSub-DC382D?logo=redis&logoColor=white)
 
-The Python worker is the scan engine. It listens for jobs on Redis and publishes progress + results back to the Node backend.
+The Python worker is the scan engine. It listens for jobs on Redis and publishes progress + results back to the Node backend. It performs bounded crawling, active HTTP-focused DAST probes, and optional client-side static analysis when the `client_sast` module is selected.
 
 ## Install
 
@@ -22,6 +22,10 @@ python worker.py
 ## Configuration (environment variables)
 
 - `REDIS_URL` (default: `redis://127.0.0.1:6379`)
+
+## Scan modules
+
+Jobs can select scan modules such as `headers`, `cookies`, `xss`, `sqli`, and `client_sast`. The `client_sast` module statically inspects discovered JavaScript, source maps, potential secrets, and DOM sinks as a client-side companion to the active DAST checks.
 
 Heartbeat (used by the backend to fail fast if the worker is offline):
 
