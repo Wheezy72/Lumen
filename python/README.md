@@ -54,6 +54,8 @@ python worker.py
 - `LUMEN_BROWSER_DISCOVERY` (default: `auto`; use `on`/`off` to force/disable Playwright discovery)
 - `LUMEN_BROWSER_DISCOVERY_TIMEOUT_MS` (default: `12000`)
 - `LUMEN_BROWSER_DISCOVERY_MAX_REQUESTS` (default: `40`)
+- `LUMEN_BROWSER_MAX_INTERACTIONS` (default: `12`, set `0` to skip interactions)
+- `LUMEN_BROWSER_INTERACTION_WAIT_MS` (default: `700`)
 
 Scanner modules:
 

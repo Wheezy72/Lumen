@@ -100,9 +100,13 @@ Browser discovery is controlled by:
 LUMEN_BROWSER_DISCOVERY=auto
 LUMEN_BROWSER_DISCOVERY_TIMEOUT_MS=12000
 LUMEN_BROWSER_DISCOVERY_MAX_REQUESTS=40
+LUMEN_BROWSER_MAX_INTERACTIONS=12
+LUMEN_BROWSER_INTERACTION_WAIT_MS=700
 ```
 
 Use `LUMEN_BROWSER_DISCOVERY=on` for SPA-heavy lab targets. Use `off` to disable browser discovery.
+
+Bounded interactions click visible navigation-style elements after the initial page load to surface API requests that only fire on user actions. Interaction labels are filtered through allow/deny lists in `scanner/config.py` so destructive verbs (`delete`, `pay`, `logout`, `submit`, etc.) are skipped even on intentionally vulnerable apps.
 
 ## Current module IDs
 

@@ -106,6 +106,7 @@ def build_coverage_summary(stats: Dict, request_headers: Optional[Dict], modules
             f"API templates: {stats.get('api_templates_discovered', 0)} | "
             f"Scripts fetched: {stats.get('scripts_fetched', 0)} | "
             f"Browser templates: {stats.get('browser_templates_discovered', 0)} | "
+            f"Browser interactions: {stats.get('browser_interactions', 0)} | "
             f"Max depth: {stats.get('max_depth', 0)} | "
             f"Max pages: {max_pages_label} | "
             f"Modules: {modules_run}"
@@ -218,6 +219,7 @@ def process_job(message: Dict) -> None:
             "api_templates_discovered": 0,
             "scripts_fetched": 0,
             "browser_templates_discovered": 0,
+            "browser_interactions": 0,
             "browser_discovery_error": None,
             "input_fields": len(iter_input_fields(direct_template)),
             "max_pages": 1,

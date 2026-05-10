@@ -17,6 +17,25 @@ MAX_SCRIPT_FETCHES = env_int("LUMEN_MAX_SCRIPT_FETCHES", 8)
 BROWSER_DISCOVERY_ENABLED = os.getenv("LUMEN_BROWSER_DISCOVERY", "auto").lower()
 BROWSER_DISCOVERY_TIMEOUT_MS = env_int("LUMEN_BROWSER_DISCOVERY_TIMEOUT_MS", 12000)
 BROWSER_DISCOVERY_MAX_REQUESTS = env_int("LUMEN_BROWSER_DISCOVERY_MAX_REQUESTS", 40)
+BROWSER_MAX_INTERACTIONS = env_int("LUMEN_BROWSER_MAX_INTERACTIONS", 12)
+BROWSER_INTERACTION_WAIT_MS = env_int("LUMEN_BROWSER_INTERACTION_WAIT_MS", 700)
+
+# Substrings used to filter clickable element labels during browser discovery.
+# We deliberately keep allow-list scoped to navigation-style verbs so we never
+# trigger destructive actions even on misconfigured test apps.
+BROWSER_SAFE_LABEL_HINTS = {
+    "menu", "nav", "search", "view", "details", "profile", "account",
+    "products", "orders", "more", "next", "open", "browse", "explore",
+    "dashboard", "feed", "list", "filter", "sort", "tab",
+}
+
+BROWSER_BLOCKED_LABEL_HINTS = {
+    "delete", "remove", "destroy", "drop", "wipe", "purge",
+    "pay", "payment", "checkout", "purchase", "buy", "order now",
+    "confirm", "submit", "save", "update", "apply", "send",
+    "logout", "log out", "sign out", "deactivate",
+    "import", "export", "transfer",
+}
 
 STATIC_EXTENSIONS = (
     ".css", ".js", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico",
