@@ -9,6 +9,7 @@ import redis
 from scanner.config import ORIGIN_LEVEL_MODULES
 from scanner.crawler import crawl_site
 from scanner.engine import run_scan
+from scanner.findings import normalize_finding
 from scanner.templates import iter_input_fields, make_get_template, template_to_url
 
 
@@ -105,6 +106,7 @@ def build_coverage_summary(stats: Dict, request_headers: Optional[Dict], modules
             f"API templates: {stats.get('api_templates_discovered', 0)} | "
             f"Scripts fetched: {stats.get('scripts_fetched', 0)} | "
             f"Browser templates: {stats.get('browser_templates_discovered', 0)} | "
+            f"Browser interactions: {stats.get('browser_interactions', 0)} | "
             f"Max depth: {stats.get('max_depth', 0)} | "
             f"Max pages: {max_pages_label} | "
             f"Modules: {modules_run}"
@@ -185,12 +187,13 @@ def process_job(message: Dict) -> None:
 
         all_issues.append(build_coverage_summary(stats, request_headers, scan_profile))
 
-        # De-duplicate by (title, category, evidence) to avoid noise from
-        # scanning many similar URLs.
+        # De-duplicate by stable fingerprint first, falling back to the older
+        # title/category/evidence tuple for any legacy finding shape.
         seen_keys: set = set()
         deduped: List[Dict] = []
         for issue in all_issues:
-            key = (issue.get("title", ""), issue.get("category", ""), issue.get("evidence", ""))
+            issue = normalize_finding(issue)
+            key = issue.get("fingerprint") or (issue.get("title", ""), issue.get("category", ""), issue.get("evidence", ""))
             if key not in seen_keys:
                 seen_keys.add(key)
                 deduped.append(issue)
@@ -216,12 +219,14 @@ def process_job(message: Dict) -> None:
             "api_templates_discovered": 0,
             "scripts_fetched": 0,
             "browser_templates_discovered": 0,
+            "browser_interactions": 0,
             "browser_discovery_error": None,
             "input_fields": len(iter_input_fields(direct_template)),
             "max_pages": 1,
             "max_depth": 0,
         }
         issues.append(build_coverage_summary(direct_stats, request_headers, scan_profile))
+        issues = [normalize_finding(issue) for issue in issues]
         send_results(scan_id, issues)
 
 

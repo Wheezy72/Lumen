@@ -43,6 +43,7 @@ def make_get_template(url: str, source: str = "link") -> Dict:
         "url": clean_url,
         "params": params,
         "data": {},
+        "json": {},
         "headers": {},
         "source": source,
     }

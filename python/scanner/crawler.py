@@ -109,6 +109,7 @@ def extract_form_template(form, page_url: str) -> Optional[Dict]:
         "url": base_url,
         "params": params,
         "data": data,
+        "json": {},
         "headers": {},
         "source": "form",
     }
@@ -237,6 +238,7 @@ def crawl_site(base_url: str, headers: Optional[Dict] = None) -> Dict:
                 queue.append((full, depth + 1))
 
     browser_templates_discovered = 0
+    browser_interactions = 0
     browser_discovery_error = None
     if should_run_browser_discovery(len(pages), forms_discovered, scripts_fetched, api_templates_discovered):
         try:
@@ -247,6 +249,7 @@ def crawl_site(base_url: str, headers: Optional[Dict] = None) -> Dict:
                 max_requests=BROWSER_DISCOVERY_MAX_REQUESTS,
             )
             browser_discovery_error = browser_result.get("error")
+            browser_interactions = browser_result.get("stats", {}).get("browser_interactions", 0)
             for browser_template in browser_result.get("templates", []):
                 if add_template(templates, seen_templates, browser_template):
                     browser_templates_discovered += 1
@@ -260,6 +263,7 @@ def crawl_site(base_url: str, headers: Optional[Dict] = None) -> Dict:
         "api_templates_discovered": api_templates_discovered,
         "scripts_fetched": scripts_fetched,
         "browser_templates_discovered": browser_templates_discovered,
+        "browser_interactions": browser_interactions,
         "browser_discovery_error": browser_discovery_error,
         "input_fields": sum(len(iter_input_fields(template)) for template in templates),
         "max_pages": MAX_CRAWL_PAGES,

@@ -2,12 +2,32 @@ import urllib.parse
 import json
 from typing import Dict, List, Optional
 
+from .config import (
+    BROWSER_BLOCKED_LABEL_HINTS,
+    BROWSER_INTERACTION_WAIT_MS,
+    BROWSER_MAX_INTERACTIONS,
+    BROWSER_SAFE_LABEL_HINTS,
+)
+
+
+def _is_safe_label(label: str) -> bool:
+    text = (label or "").strip().lower()
+    if not text or len(text) > 64:
+        return False
+    if any(bad in text for bad in BROWSER_BLOCKED_LABEL_HINTS):
+        return False
+    if any(good in text for good in BROWSER_SAFE_LABEL_HINTS):
+        return True
+    # Allow short labels that look like navigation chips/links.
+    return len(text) <= 24 and not any(ch in text for ch in "?$#@%")
+
 
 def browser_discover_templates(
     base_url: str,
     headers: Optional[Dict] = None,
     timeout_ms: int = 12000,
     max_requests: int = 40,
+    max_interactions: Optional[int] = None,
 ) -> Dict:
     """
     Use a headless browser to discover same-origin requests made by JS apps.
@@ -18,7 +38,11 @@ def browser_discover_templates(
     try:
         from playwright.sync_api import sync_playwright
     except Exception as e:
-        return {"templates": [], "stats": {"browser_requests": 0}, "error": f"Playwright unavailable: {e}"}
+        return {
+            "templates": [],
+            "stats": {"browser_requests": 0, "browser_interactions": 0},
+            "error": f"Playwright unavailable: {e}",
+        }
 
     parsed_base = urllib.parse.urlparse(base_url)
     captured: List[Dict] = []
@@ -84,6 +108,45 @@ def browser_discover_templates(
             "source": "browser",
         })
 
+    interactions_done = 0
+    interaction_cap = max_interactions if max_interactions is not None else BROWSER_MAX_INTERACTIONS
+
+    def perform_safe_interactions(page) -> None:
+        nonlocal interactions_done
+        if interaction_cap <= 0:
+            return
+
+        try:
+            elements = page.query_selector_all("a, button, [role='link'], [role='button'], [role='tab']")
+        except Exception:
+            return
+
+        clicked_labels: set = set()
+        for element in elements:
+            if interactions_done >= interaction_cap:
+                return
+            if len(captured) >= max_requests:
+                return
+
+            try:
+                if not element.is_visible() or not element.is_enabled():
+                    continue
+                label = (element.inner_text() or element.get_attribute("aria-label") or "").strip()
+            except Exception:
+                continue
+
+            if not _is_safe_label(label) or label.lower() in clicked_labels:
+                continue
+
+            clicked_labels.add(label.lower())
+
+            try:
+                element.click(timeout=2000, no_wait_after=True)
+                interactions_done += 1
+                page.wait_for_timeout(BROWSER_INTERACTION_WAIT_MS)
+            except Exception:
+                continue
+
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
@@ -91,8 +154,17 @@ def browser_discover_templates(
             page = context.new_page()
             page.on("request", capture_request)
             page.goto(base_url, wait_until="networkidle", timeout=timeout_ms)
+            perform_safe_interactions(page)
             browser.close()
     except Exception as e:
-        return {"templates": captured, "stats": {"browser_requests": len(captured)}, "error": str(e)}
+        return {
+            "templates": captured,
+            "stats": {"browser_requests": len(captured), "browser_interactions": interactions_done},
+            "error": str(e),
+        }
 
-    return {"templates": captured, "stats": {"browser_requests": len(captured)}, "error": None}
+    return {
+        "templates": captured,
+        "stats": {"browser_requests": len(captured), "browser_interactions": interactions_done},
+        "error": None,
+    }

@@ -3,6 +3,7 @@ import urllib.parse
 from typing import Dict, List, Optional
 
 from .templates import make_get_template, template_to_url
+from .findings import normalize_findings
 from .modules.access_control import check_broken_access_control
 from .modules.command_injection import check_command_injection_template
 from .modules.cookies import check_cookie_flags
@@ -123,4 +124,4 @@ def run_scan(
         if scan_id and progress_callback:
             progress_callback(scan_id, int(current_progress))
 
-    return issues
+    return normalize_findings(issues)
