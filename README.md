@@ -11,7 +11,7 @@ A small web application security scanner built for coursework and demos.
 - Web UI to create scans and view reports
 - Node/Express API + MongoDB for storage
 - Redis/Bull for background jobs
-- Python worker runs HTTP-focused checks and publishes progress/results
+- Python worker crawls targets, builds request templates, runs modular DAST checks, and publishes progress/results
 
 Important: only scan targets you own or have explicit permission to test.
 
@@ -21,7 +21,7 @@ Important: only scan targets you own or have explicit permission to test.
 - Backend: Node.js (Express)
 - Data: MongoDB
 - Queue + pub/sub: Redis (Bull)
-- Worker: Python (requests, BeautifulSoup, dnspython, redis)
+- Worker: Python (requests, BeautifulSoup, Playwright optional browser discovery, dnspython, redis)
 
 ## Architecture
 
@@ -40,9 +40,10 @@ Python worker
 ## Repository layout
 
 ```text
-backend/    Express API + queue worker + reporting
-frontend/   React UI
-python/     Scan worker
+backend/          Express API + queue worker + reporting
+frontend/         React UI
+python/           Scan worker
+python/scanner/   Scanner engine, crawler, request templates, check modules
 start-all.js
 ```
 
@@ -66,6 +67,13 @@ See service-specific docs:
 cd backend && npm install
 cd ../frontend && npm install
 cd ../python && python -m pip install -r requirements.txt
+```
+
+Optional JavaScript/browser discovery for SPA-heavy targets:
+
+```bash
+cd python
+python -m playwright install chromium
 ```
 
 ### Configure backend
@@ -110,7 +118,38 @@ Set `PUBLIC_API_KEY` in `backend/.env`, then call:
 curl -sS http://localhost:4000/api/publicApi/scans \
   -H "Authorization: Bearer $PUBLIC_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"target":"https://example.com","modules":["headers","cookies"]}'
+  -d '{"target":"https://example.com","modules":["headers","cookies","exposure","cors","xss","sqli"]}'
+```
+
+Current scanner modules:
+
+- `headers`
+- `cookies`
+- `tls`
+- `exposure`
+- `cors`
+- `redirect`
+- `xss`
+- `sqli`
+- `traversal`
+- `command_injection`
+- `csrf`
+- `subdomain`
+- `error`
+- `access_control`
+- `rate_limit`
+
+For authenticated DAST scans through the public API, pass target auth material in `requestHeaders`:
+
+```json
+{
+  "target": "https://example.com/protected",
+  "modules": ["headers", "xss", "sqli", "csrf"],
+  "requestHeaders": {
+    "Cookie": "session=...",
+    "Authorization": "Bearer eyJ..."
+  }
+}
 ```
 
 ## Learn page images

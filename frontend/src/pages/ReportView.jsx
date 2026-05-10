@@ -188,6 +188,10 @@ export default function ReportView() {
   }, [scanId]);
 
   const findings = scan?.results || [];
+  const issueFindings = useMemo(
+    () => findings.filter((f) => String(f.category || '').toLowerCase() !== 'coverage'),
+    [findings],
+  );
 
   const sortedFindings = useMemo(() => {
     const findingsWithIndex = findings.map((f, idx) => ({ ...f, __index: idx }));
@@ -199,7 +203,10 @@ export default function ReportView() {
     });
   }, [findings]);
 
-  const topFindings = useMemo(() => sortedFindings.slice(0, 3), [sortedFindings]);
+  const topFindings = useMemo(
+    () => sortedFindings.filter((f) => String(f.category || '').toLowerCase() !== 'coverage').slice(0, 3),
+    [sortedFindings],
+  );
 
   const safeSelectedIndex = Math.min(selectedFindingListIndex, Math.max(sortedFindings.length - 1, 0));
   const selectedFinding = sortedFindings[safeSelectedIndex];
@@ -447,11 +454,11 @@ export default function ReportView() {
               Summary
             </h2>
             <p className="text-sm text-gray-500 mt-1">
-              {findings.length === 0
+              {issueFindings.length === 0
                 ? (scan?.status === 'scheduled'
                     ? 'This scan is waiting to run.'
                     : isRunning ? 'Scanning…' : 'No issues found.')
-                : `${findings.length} issues found. Top ones are below.`}
+                : `${issueFindings.length} issues found. Top ones are below.`}
             </p>
 
             {/* Scheduled scan panel */}
@@ -1239,6 +1246,54 @@ export default function ReportView() {
                   </div>
                 ) : null}
 
+                {(() => {
+                  const rows = [
+                    ['Method', selectedFinding.method],
+                    ['URL', selectedFinding.url],
+                    ['Parameter', selectedFinding.parameter],
+                    ['Payload', selectedFinding.payload],
+                    ['Confidence', selectedFinding.confidence],
+                  ].filter(([, value]) => value);
+
+                  if (!rows.length) return null;
+
+                  return (
+                    <div>
+                      <h4
+                        className="
+                          text-xs
+                          font-semibold
+                          text-primary-500
+                          uppercase
+                          tracking-wide
+                          mb-2
+                        "
+                      >
+                        Request details
+                      </h4>
+                      <div
+                        className="
+                          rounded-lg
+                          border
+                          border-slate-800
+                          bg-black/5
+                          dark:bg-black/30
+                          divide-y
+                          divide-slate-800
+                          overflow-hidden
+                        "
+                      >
+                        {rows.map(([label, value]) => (
+                          <div key={label} className="grid grid-cols-[90px_1fr] gap-3 px-3 py-2 text-xs">
+                            <span className="text-gray-500">{label}</span>
+                            <span className="font-mono text-gray-300 break-all">{String(value)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 <div>
                   <h4
                     className="
@@ -1509,10 +1564,16 @@ function formatCategoryLabel(category) {
     xss: 'XSS',
     sqli: 'SQL injection',
     traversal: 'Path traversal',
+    exposure: 'Sensitive exposure',
+    cors: 'CORS policy',
+    redirect: 'Open redirect',
+    command_injection: 'Command injection',
+    csrf: 'CSRF protection',
     subdomain: 'Subdomains',
     error: 'Error details',
     rate_limit: 'Rate limiting',
     access_control: 'Access control',
+    coverage: 'Scan coverage',
   };
 
   return map[c] || c.replace(/_/g, ' ');
@@ -1597,11 +1658,17 @@ function getDetectionMethod(category) {
     ssl: 'We checked the TLS/SSL connection and certificate.',
     tls: 'We checked the TLS/SSL connection and certificate.',
     traversal: 'We tried ../ style paths and checked for file leaks.',
+    exposure: 'We checked a short list of high-signal exposed files such as environment files, Git metadata, backups, and debug pages.',
+    cors: 'We sent a test Origin header and checked whether the site allowed credentialed cross-origin reads.',
+    redirect: 'We changed likely redirect fields and checked for external Location redirects.',
+    command_injection: 'We tested command-like fields with harmless echo markers and checked for command output.',
+    csrf: 'We inspected state-changing POST forms for obvious anti-CSRF token fields.',
     subdomain: 'We tried common subdomain names and checked what exists.',
     cookies: 'We checked cookies for missing security flags.',
     error: 'We checked if the site shows detailed errors or stack traces.',
     access_control: 'We changed IDs in the URL to see if other data is reachable.',
     rate_limit: 'We sent a burst of requests and checked for rate limiting.',
+    coverage: 'We crawled same-origin pages and collected links/forms before running selected checks.',
   };
 
   return methods[category] || 'We ran automated checks.';
@@ -1615,11 +1682,17 @@ function getRemediationAdvice(category) {
     ssl: 'Use TLS 1.2+ only and keep certificates valid.',
     tls: 'Use TLS 1.2+ only and keep certificates valid.',
     traversal: 'Do not use user input as file paths. Use allow-lists.',
+    exposure: 'Remove exposed files from the web root and block access to backups, debug pages, repository metadata, and environment files.',
+    cors: 'Allow only trusted origins and avoid combining arbitrary origins with credentialed responses.',
+    redirect: 'Only redirect to allow-listed relative paths or trusted domains.',
+    command_injection: 'Never pass raw user input to shell commands. Use safe APIs, strict allow-lists, and argument arrays.',
+    csrf: 'Add unpredictable per-session CSRF tokens or require same-origin custom headers for state-changing requests.',
     subdomain: 'Check if the subdomain should be public. Add auth if needed.',
     cookies: 'Set HttpOnly, Secure, and SameSite on session cookies.',
     error: 'Do not show stack traces to users. Log them on the server.',
     access_control: 'Check permissions on every request (server-side).',
     rate_limit: 'Add rate limiting to login and other sensitive routes.',
+    coverage: 'Use the coverage summary to confirm the scanner reached the expected authenticated pages and forms.',
   };
 
   return advice[category] || 'Fix the root cause, then run the scan again.';
@@ -1666,4 +1739,4 @@ function ExplainBlock({ text }) {
       })}
     </div>
   );
-}
+}
