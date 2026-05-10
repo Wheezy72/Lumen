@@ -19,6 +19,7 @@ const SCAN_MODULES = [
   { id: 'error',        name: 'Error Disclosure',   description: 'Check for verbose error messages' },
   { id: 'rate_limit',   name: 'Rate Limiting',      description: 'Check for rate limit protection' },
   { id: 'access_control', name: 'Access Control',  description: 'Test access control issues' },
+  { id: 'sast',         name: 'Lightweight SAST',  description: 'Local source scan for secrets, risky code, dependency hygiene' },
 ];
 
 const SCAN_PROFILES = {
@@ -46,6 +47,7 @@ export default function NewScan() {
   const [authEnabled, setAuthEnabled] = useState(false);
   const [cookieHeader, setCookieHeader] = useState('');
   const [authorizationHeader, setAuthorizationHeader] = useState('');
+  const [sourcePath, setSourcePath] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -81,6 +83,8 @@ export default function NewScan() {
       const cookie = cookieHeader.trim();
       const authorization = authorizationHeader.trim();
       if (authEnabled && (cookie || authorization)) payload.authHeaders = { cookie: cookie || undefined, authorization: authorization || undefined };
+      const trimmedSource = sourcePath.trim();
+      if (modules.includes('sast') && trimmedSource) payload.sourcePath = trimmedSource;
       const response = await axios.post('/api/scans', payload);
       navigate('/report/' + response.data._id);
     } catch (err) {
@@ -225,6 +229,28 @@ export default function NewScan() {
                   </button>
                 );
               })}
+            </div>
+          </Card>
+        )}
+
+        {/* SAST source path — only meaningful when 'sast' is selected */}
+        {selectedModules.includes('sast') && (
+          <Card className="p-6 animate-slide-up">
+            <CardHeader
+              title="SAST source path"
+              description="Local directory the worker will scan for secrets and risky patterns."
+            />
+            <div className="mt-5 space-y-3">
+              <input
+                type="text"
+                value={sourcePath}
+                onChange={(e) => setSourcePath(e.target.value)}
+                placeholder="/path/to/repo"
+                className="input input-plain font-mono"
+              />
+              <p className="text-xs text-gray-500">
+                Lumen reads files under this path on the worker host. Leave empty to skip the SAST module.
+              </p>
             </div>
           </Card>
         )}

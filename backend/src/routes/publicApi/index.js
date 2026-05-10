@@ -108,6 +108,7 @@ router.post('/scans', async (req, res, next) => {
         // Auth cookies/headers forwarded to the Python crawler so it can
         // bypass login screens (e.g. PHPSESSID for DVWA).
         requestHeaders: data.requestHeaders || null,
+        sourcePath:     data.sourcePath || null,
       },
       { attempts: 3, backoff: { type: 'exponential', delay: 5000 } },
     );

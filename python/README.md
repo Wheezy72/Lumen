@@ -56,6 +56,10 @@ python worker.py
 - `LUMEN_BROWSER_DISCOVERY_MAX_REQUESTS` (default: `40`)
 - `LUMEN_BROWSER_MAX_INTERACTIONS` (default: `12`, set `0` to skip interactions)
 - `LUMEN_BROWSER_INTERACTION_WAIT_MS` (default: `700`)
+- `LUMEN_SAST_MAX_FILE_BYTES` (default: `1000000`)
+- `LUMEN_SAST_MAX_TOTAL_BYTES` (default: `50000000`)
+- `LUMEN_SAST_MAX_FILES` (default: `5000`)
+- `LUMEN_SAST_MAX_FINDINGS_PER_RULE` (default: `20`)
 
 Scanner modules:
 
@@ -74,6 +78,7 @@ Scanner modules:
 - `error` — verbose errors/stack traces
 - `access_control` — ID-like field mutation, path-segment IDOR probes, and authenticated/unauthenticated differential when auth headers are supplied
 - `rate_limit` — missing throttling on auth-like endpoints
+- `sast` — lightweight local source scan for secrets, risky code patterns, and dependency hygiene; runs only when `sourcePath` is supplied on the scan request
 
 Heartbeat (used by the backend to fail fast if the worker is offline):
 

@@ -47,6 +47,7 @@ const scanSchema = Joi.object({
     cookie: Joi.string().max(8192).allow(''),
     authorization: Joi.string().max(8192).allow(''),
   }).optional(),
+  sourcePath: Joi.string().min(1).max(1024).optional(),
 });
 
 const recurringScanSchema = Joi.object({
@@ -388,6 +389,7 @@ router.post('/', async (req, res, next) => {
         scanProfile: data.scanProfile,
         webhookUrl: data.webhookUrl || undefined,
         requestHeaders: Object.keys(requestHeaders).length ? requestHeaders : undefined,
+        sourcePath: data.sourcePath || undefined,
       },
       jobOptions,
     );

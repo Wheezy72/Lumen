@@ -79,11 +79,16 @@ def parse_job_payload(message: Dict) -> Dict:
     if not isinstance(request_headers, dict):
         request_headers = None
 
+    source_path = payload.get("sourcePath")
+    if not isinstance(source_path, str) or not source_path.strip():
+        source_path = None
+
     return {
         "scan_id": payload.get("scanId"),
         "target_url": payload.get("targetUrl"),
         "scan_profile": payload.get("scanProfile"),
         "request_headers": request_headers,
+        "source_path": source_path,
     }
 
 
@@ -122,6 +127,7 @@ def process_job(message: Dict) -> None:
     target_url = job.get("target_url")
     scan_profile = job.get("scan_profile")
     request_headers = job.get("request_headers")
+    source_path = job.get("source_path")
 
     if not target_url:
         print("Received job without a targetUrl, skipping.")
@@ -180,6 +186,7 @@ def process_job(message: Dict) -> None:
                 template=template,
                 skip_modules=skip_modules,
                 progress_callback=send_progress,
+                source_path=source_path,
             )
             all_issues.extend(issues)
             if not skip_modules:
@@ -211,6 +218,7 @@ def process_job(message: Dict) -> None:
             progress_end=95,
             template=direct_template,
             progress_callback=send_progress,
+            source_path=source_path,
         )
         direct_stats = {
             "pages_crawled": 1,

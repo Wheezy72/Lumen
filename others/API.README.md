@@ -181,6 +181,24 @@ subdomain
 error
 access_control
 rate_limit
+sast
+```
+
+### 1c) Start a SAST-enabled scan
+
+The `sast` module performs a lightweight local source scan for secrets, risky
+code patterns, and dependency hygiene. It only runs when `sourcePath` points
+at a directory the worker process can read.
+
+```bash
+curl -i http://localhost:4000/api/publicApi/scans \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $PUBLIC_API_KEY" \
+  -d '{
+    "target": "https://example.com",
+    "modules": ["sast"],
+    "sourcePath": "/srv/projects/my-app"
+  }'
 ```
 
 ### 1b) Start an authenticated public scan
