@@ -43,6 +43,7 @@ Python worker
 backend/    Express API + queue worker + reporting
 frontend/   React UI
 python/     Scan worker
+postman/    Postman JSON collection for the Public API
 start-all.js
 ```
 
@@ -104,14 +105,9 @@ The backend exposes an API-key protected interface under:
 - `GET /api/publicApi/scans/:id/report.pdf`
 - schedules: `POST/GET/DELETE /api/publicApi/schedules`
 
-Set `PUBLIC_API_KEY` in `backend/.env`, then call:
+Set `PUBLIC_API_KEY` in `backend/.env`.
 
-```bash
-curl -sS http://localhost:4000/api/publicApi/scans \
-  -H "Authorization: Bearer $PUBLIC_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"target":"https://example.com","modules":["headers","cookies"]}'
-```
+A ready-to-use Postman collection is included at `postman/Lumen-Public-API.postman_collection.json`. Import it into Postman to test all Public API endpoints — it covers creating scans, polling status, fetching JSON reports, and downloading PDF reports.
 
 ## Learn page images
 
@@ -137,4 +133,12 @@ Then run a scan end-to-end with Redis + MongoDB running.
 
 ## License
 
-No license file is included by default. If you plan to publish this project, add a `LICENSE` file (e.g. MIT) and update this section.
+MIT License
+
+Copyright (c) 2026 Lumen Contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

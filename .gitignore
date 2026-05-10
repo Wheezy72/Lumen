@@ -60,5 +60,7 @@ reports/
 # Others (Miscellaneous)
 postman
 API.txt
+env.txt
 targets.txt
 doctor.js
+others

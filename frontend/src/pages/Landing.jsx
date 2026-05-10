@@ -216,52 +216,68 @@ export default function Landing() {
             </div>
           </div>
 
-          {/* Right: video */}
-          <div ref={heroRightRef} className="relative group">
-            {/* Outer glow ring */}
-            <div className="absolute -inset-2 bg-gradient-to-br from-primary-500 via-violet-500 to-teal-500 rounded-3xl blur-xl opacity-20 group-hover:opacity-35 transition-opacity duration-700" />
+          {/* Right: 3-step visual guide */}
+          <div ref={heroRightRef} className="relative">
+            {/* Outer ambient glow */}
+            <div className="absolute -inset-3 bg-gradient-to-br from-primary-500/20 via-violet-500/10 to-teal-500/15 rounded-3xl blur-2xl pointer-events-none" />
 
-            {/* Video frame */}
-            <div className="relative rounded-2xl overflow-hidden border border-white/12 shadow-2xl bg-black">
-              {/* Browser chrome */}
-              <div className="flex items-center gap-1.5 px-4 py-2.5 bg-zinc-900/90 border-b border-white/8">
-                <span className="w-3 h-3 rounded-full bg-red-500/70" />
-                <span className="w-3 h-3 rounded-full bg-amber-500/70" />
-                <span className="w-3 h-3 rounded-full bg-emerald-500/70" />
-                <div className="ml-3 flex-1 bg-zinc-800/60 rounded-md px-3 py-1 text-xs text-gray-500 font-mono tracking-wide">
-                  lumen · security scanner
+            <div className="relative space-y-3">
+              {/* Section label */}
+              <p className="text-xs font-mono font-bold text-primary-400 tracking-widest uppercase mb-4">
+                How it works
+              </p>
+
+              {/* Step 1 */}
+              <div className="group relative rounded-2xl overflow-hidden border border-white/10 bg-zinc-950/80 shadow-xl hover:border-primary-500/30 transition-colors duration-300">
+                <div className="flex items-center gap-3 px-4 py-2.5 bg-zinc-900/80 border-b border-white/6">
+                  <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary-500/20 border border-primary-400/40 text-primary-400 font-mono font-bold text-[10px]">1</span>
+                  <span className="text-xs text-gray-400 font-medium tracking-wide">Start a new scan</span>
+                  <div className="ml-auto flex gap-1">
+                    <span className="w-2 h-2 rounded-full bg-red-500/60" />
+                    <span className="w-2 h-2 rounded-full bg-amber-500/60" />
+                    <span className="w-2 h-2 rounded-full bg-emerald-500/60" />
+                  </div>
                 </div>
+                <img
+                  src="/landing/step-1.png"
+                  alt="Step 1: New Scan"
+                  className="w-full object-cover group-hover:scale-[1.01] transition-transform duration-500"
+                />
               </div>
 
-              {/* <video src="/demo.mp4" autoPlay loop muted playsInline className="w-full aspect-video object-cover" /> */}
-
-              {/* Placeholder */}
-              <div className="aspect-video flex flex-col items-center justify-center bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950 relative overflow-hidden">
-                <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'linear-gradient(rgba(59,130,246,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(59,130,246,0.3) 1px, transparent 1px)', backgroundSize: '32px 32px' }} />
-
-                <button className="relative z-10 w-20 h-20 rounded-full bg-primary-500/20 border border-primary-400/30 text-primary-400 flex items-center justify-center hover:bg-primary-500/35 hover:scale-110 transition-all duration-300 shadow-lg shadow-primary-500/10">
-                  <svg className="w-9 h-9 ml-1.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
-                  <div className="absolute inset-0 rounded-full border border-primary-400/20 animate-ping opacity-30" />
-                </button>
-
-                <p className="relative z-10 mt-5 text-gray-500 font-mono text-xs tracking-widest uppercase">
-                  Demo — drop in /public/demo.mp4
-                </p>
-
-                <div className="absolute bottom-4 left-4 glass border border-white/10 rounded-xl px-3 py-2 flex items-center gap-2 text-xs">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 status-pulse" />
-                  <span className="text-emerald-400 font-medium font-mono">Scan complete — 42s</span>
+              {/* Step 2 */}
+              <div className="group relative rounded-2xl overflow-hidden border border-white/10 bg-zinc-950/80 shadow-xl hover:border-violet-500/30 transition-colors duration-300">
+                <div className="flex items-center gap-3 px-4 py-2.5 bg-zinc-900/80 border-b border-white/6">
+                  <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-violet-500/20 border border-violet-400/40 text-violet-400 font-mono font-bold text-[10px]">2</span>
+                  <span className="text-xs text-gray-400 font-medium tracking-wide">Live scan progress</span>
+                  <div className="ml-auto flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 status-pulse" />
+                    <span className="text-[10px] text-emerald-400 font-mono">Scanning…</span>
+                  </div>
                 </div>
+                <img
+                  src="/landing/step-2.png"
+                  alt="Step 2: Scan Progress"
+                  className="w-full object-cover group-hover:scale-[1.01] transition-transform duration-500"
+                />
+              </div>
 
-                <div className="absolute top-4 right-4 glass border border-red-500/20 rounded-xl px-3 py-2 text-xs text-red-400 font-mono font-semibold">
-                  3 Critical
+              {/* Step 3 */}
+              <div className="group relative rounded-2xl overflow-hidden border border-white/10 bg-zinc-950/80 shadow-xl hover:border-teal-500/30 transition-colors duration-300">
+                <div className="flex items-center gap-3 px-4 py-2.5 bg-zinc-900/80 border-b border-white/6">
+                  <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-teal-500/20 border border-teal-400/40 text-teal-400 font-mono font-bold text-[10px]">3</span>
+                  <span className="text-xs text-gray-400 font-medium tracking-wide">Vulnerability findings</span>
+                  <div className="ml-auto glass border border-red-500/20 rounded-lg px-2 py-0.5 text-[10px] text-red-400 font-mono font-semibold">
+                    Critical
+                  </div>
                 </div>
+                <img
+                  src="/landing/step-3.png"
+                  alt="Step 3: Vulnerability Findings"
+                  className="w-full object-cover group-hover:scale-[1.01] transition-transform duration-500"
+                />
               </div>
             </div>
-
-            <p className="mt-3 text-center text-xs text-gray-500 font-mono tracking-wide">
-              See a full scan from URL to report in real-time
-            </p>
           </div>
 
         </div>
