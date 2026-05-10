@@ -13,6 +13,7 @@ export default function SeverityMiniBar({ findings }) {
     const c = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
 
     (findings || []).forEach((f) => {
+      if (String(f.category || '').toLowerCase() === 'coverage') return;
       const s = (f.severity || 'info').toLowerCase();
       if (c[s] !== undefined) c[s] += 1;
     });

@@ -17,7 +17,7 @@ function isRealFinding(finding) {
   if (!finding || !finding.title) return false;
   const title = String(finding.title).toLowerCase();
   const category = String(finding.category || '').toLowerCase();
-  if (category === 'network' || category === 'policy' || category === 'http') return false;
+  if (category === 'network' || category === 'policy' || category === 'http' || category === 'coverage') return false;
   if (title.includes('scan error') || title.endsWith('enumeration error')) return false;
   if (title === 'dns resolution failed' || title === 'invalid site url') return false;
   if (title.includes('timeout') || title.includes('timed out') || title.includes('could not') || title.includes('unable to')) return false;
@@ -264,4 +264,3 @@ export default function Dashboard() {
     </div>
   );
 }
-

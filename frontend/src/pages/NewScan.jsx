@@ -18,8 +18,8 @@ const SCAN_MODULES = [
 
 const SCAN_PROFILES = {
   quick:    { name: 'Quick scan',    description: 'Headers + cookies only (~10 seconds)', modules: ['headers', 'cookies'] },
-  standard: { name: 'Standard scan', description: 'A sensible default set of checks (~30 seconds)', modules: ['headers','cookies','tls','error','rate_limit'] },
-  full:     { name: 'Full scan',     description: 'Runs all checks (~2 minutes)', modules: SCAN_MODULES.map((m) => m.id) },
+  standard: { name: 'Standard scan', description: 'Crawler + core injection checks (~1 minute)', modules: ['headers','cookies','tls','error','rate_limit','xss','sqli','traversal'] },
+  full:     { name: 'Full scan',     description: 'Recursive crawl and all checks (~2+ minutes)', modules: SCAN_MODULES.map((m) => m.id) },
   custom:   { name: 'Custom',        description: 'Choose checks manually', modules: [] },
 };
 

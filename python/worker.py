@@ -64,9 +64,17 @@ def heartbeat_loop(stop_event: threading.Event) -> None:
 # --- Request templates + auto-crawler -----------------------------------------
 
 
-MAX_CRAWL_PAGES = 30
-MAX_CRAWL_DEPTH = 2
-REQUEST_TIMEOUT = 8
+def env_int(name: str, default: int) -> int:
+    try:
+        return int(os.getenv(name, str(default)))
+    except ValueError:
+        return default
+
+
+# Set LUMEN_MAX_CRAWL_PAGES=0 to remove the page cap for local/lab scans.
+MAX_CRAWL_PAGES = env_int("LUMEN_MAX_CRAWL_PAGES", 30)
+MAX_CRAWL_DEPTH = env_int("LUMEN_MAX_CRAWL_DEPTH", 2)
+REQUEST_TIMEOUT = env_int("LUMEN_REQUEST_TIMEOUT", 8)
 
 STATIC_EXTENSIONS = (
     ".css", ".js", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico",
@@ -92,6 +100,10 @@ def is_crawlable_url(url: str) -> bool:
     parsed = urllib.parse.urlparse(url)
     path = parsed.path.lower()
     return not path.endswith(STATIC_EXTENSIONS)
+
+
+def under_page_limit(count: int) -> bool:
+    return MAX_CRAWL_PAGES <= 0 or count < MAX_CRAWL_PAGES
 
 
 def _single_value_params(params: Dict[str, List[str]]) -> Dict[str, str]:
@@ -146,6 +158,49 @@ def template_key(template: Dict) -> Tuple:
         tuple(sorted((template.get("params") or {}).items())),
         tuple(sorted((template.get("data") or {}).items())),
     )
+
+
+def clone_template(template: Dict) -> Dict:
+    return {
+        "method": str(template.get("method", "GET")).upper(),
+        "url": template.get("url", ""),
+        "params": dict(template.get("params") or {}),
+        "data": dict(template.get("data") or {}),
+        "headers": dict(template.get("headers") or {}),
+        "source": template.get("source", ""),
+    }
+
+
+def iter_input_fields(template: Dict) -> List[Tuple[str, str]]:
+    fields: List[Tuple[str, str]] = []
+    for key in (template.get("params") or {}).keys():
+        if is_injectable_field(key):
+            fields.append(("params", key))
+    for key in (template.get("data") or {}).keys():
+        if is_injectable_field(key):
+            fields.append(("data", key))
+    return fields
+
+
+def is_injectable_field(key: str) -> bool:
+    name = key.lower()
+    return name not in {
+        "submit",
+        "csrf",
+        "_csrf",
+        "csrf_token",
+        "token",
+        "nonce",
+        "authenticity_token",
+        "__requestverificationtoken",
+    }
+
+
+def set_input_field(template: Dict, location: str, key: str, value: str) -> None:
+    if location == "data":
+        template.setdefault("data", {})[key] = value
+    else:
+        template.setdefault("params", {})[key] = value
 
 
 def input_default_value(inp) -> str:
@@ -235,7 +290,7 @@ def crawl_site(base_url: str, headers: Optional[Dict] = None) -> Dict:
     templates: List[Dict] = []
     forms_discovered = 0
 
-    while queue and len(seen_pages) < MAX_CRAWL_PAGES:
+    while queue and under_page_limit(len(seen_pages)):
         current_url, depth = queue.pop(0)
         current_url = normalize_url(current_url)
 
@@ -298,13 +353,14 @@ def crawl_site(base_url: str, headers: Optional[Dict] = None) -> Dict:
                 seen_templates.add(key)
                 templates.append(link_template)
 
-            if len(seen_pages) + len(queue) < MAX_CRAWL_PAGES:
+            if MAX_CRAWL_PAGES <= 0 or len(seen_pages) + len(queue) < MAX_CRAWL_PAGES:
                 queue.append((full, depth + 1))
 
     stats = {
         "pages_crawled": len(pages),
         "forms_discovered": forms_discovered,
         "request_templates": len(templates),
+        "input_fields": sum(len(iter_input_fields(template)) for template in templates),
         "max_pages": MAX_CRAWL_PAGES,
         "max_depth": MAX_CRAWL_DEPTH,
     }
@@ -406,40 +462,41 @@ def check_http_headers(url: str, headers: Optional[Dict] = None) -> List[Dict]:
     return issues
 
 
-def check_xss(url: str, headers: Optional[Dict] = None) -> List[Dict]:
-    """Try to reflect a harmless script tag via every query parameter found in the URL."""
+def check_xss_template(template: Dict, headers: Optional[Dict] = None) -> List[Dict]:
+    """Try to reflect a harmless script tag via every discovered input field."""
     issues: List[Dict] = []
     probe = "<script>alert(1)</script>"
 
     try:
-        parsed = urllib.parse.urlparse(url)
-        qs = urllib.parse.parse_qs(parsed.query, keep_blank_values=True)
-
-        if not qs:
-            # No query params — nothing to inject into for reflected XSS
+        fields = iter_input_fields(template)
+        if not fields:
             return issues
 
-        for key in list(qs.keys()):
-            test_qs = {k: v[:] for k, v in qs.items()}
-            test_qs[key] = [probe]
-            test_url = urllib.parse.urlunparse(
-                parsed._replace(query=urllib.parse.urlencode(test_qs, doseq=True))
-            )
+        for location, key in fields:
+            test_template = clone_template(template)
+            set_input_field(test_template, location, key, probe)
+            test_url = template_to_url(test_template)
             try:
-                resp = requests.get(test_url, timeout=10, headers=headers)
+                resp = send_template(test_template, headers)
                 # Check raw text and HTML-decoded text
                 import html
                 decoded = html.unescape(resp.text)
                 if probe in resp.text or probe in decoded:
+                    method = str(test_template.get("method", "GET")).upper()
                     issues.append({
                         "title": "Reflected XSS",
                         "severity": "critical",
                         "description": (
-                            f"Script tag injected into param '{key}' was reflected unescaped in the response, "
+                            f"Script tag injected into field '{key}' was reflected unescaped in the response, "
                             "indicating a Reflected Cross-Site Scripting vulnerability."
                         ),
-                        "evidence": f"Param: {key} | URL: {test_url}",
+                        "evidence": f"Method: {method} | Field: {key} | URL: {test_url}",
                         "category": "xss",
+                        "url": test_template.get("url"),
+                        "method": method,
+                        "parameter": key,
+                        "payload": probe,
+                        "confidence": "confirmed",
                     })
                     break  # One confirmed finding is enough per URL
             except Exception:
@@ -454,6 +511,10 @@ def check_xss(url: str, headers: Optional[Dict] = None) -> List[Dict]:
         })
 
     return issues
+
+
+def check_xss(url: str, headers: Optional[Dict] = None) -> List[Dict]:
+    return check_xss_template(make_get_template(url, source="direct"), headers)
 
 
 # SQL error patterns covering MySQL, MSSQL, PostgreSQL, Oracle, SQLite, generic PHP
@@ -485,39 +546,43 @@ _SQLI_PAYLOADS = [
 ]
 
 
-def check_sql_injection(url: str, headers: Optional[Dict] = None) -> List[Dict]:
-    """Inject SQL payloads into every query parameter and look for error messages."""
+def check_sql_injection_template(template: Dict, headers: Optional[Dict] = None) -> List[Dict]:
+    """Inject SQL payloads into every discovered input field and look for error messages."""
     issues: List[Dict] = []
     try:
-        parsed = urllib.parse.urlparse(url)
-        qs = urllib.parse.parse_qs(parsed.query, keep_blank_values=True)
-
-        if not qs:
-            # No query params — nothing to inject
+        fields = iter_input_fields(template)
+        if not fields:
             return issues
 
-        for key in list(qs.keys()):
+        for location, key in fields:
             for payload in _SQLI_PAYLOADS:
-                test_qs = {k: v[:] for k, v in qs.items()}
-                test_qs[key] = [payload]
-                test_url = urllib.parse.urlunparse(
-                    parsed._replace(query=urllib.parse.urlencode(test_qs, doseq=True))
-                )
+                test_template = clone_template(template)
+                set_input_field(test_template, location, key, payload)
+                test_url = template_to_url(test_template)
                 try:
-                    resp = requests.get(test_url, timeout=10, headers=headers)
+                    resp = send_template(test_template, headers)
                     soup = BeautifulSoup(resp.text, "lxml")
                     body = soup.get_text(" ", strip=True).lower()
                     matched = next((p for p in _SQLI_PATTERNS if p in body), None)
                     if matched:
+                        method = str(test_template.get("method", "GET")).upper()
                         issues.append({
                             "title": "SQL Injection",
                             "severity": "critical",
                             "description": (
-                                f"Injecting `{payload}` into param '{key}' triggered a database error, "
+                                f"Injecting `{payload}` into field '{key}' triggered a database error, "
                                 "confirming SQL Injection."
                             ),
-                            "evidence": f"Param: {key} | Payload: {payload} | Match: '{matched}' | URL: {test_url}",
+                            "evidence": (
+                                f"Method: {method} | Field: {key} | Payload: {payload} | "
+                                f"Match: '{matched}' | URL: {test_url}"
+                            ),
                             "category": "sqli",
+                            "url": test_template.get("url"),
+                            "method": method,
+                            "parameter": key,
+                            "payload": payload,
+                            "confidence": "confirmed",
                         })
                         return issues  # One confirmed finding is enough
                 except Exception:
@@ -533,6 +598,10 @@ def check_sql_injection(url: str, headers: Optional[Dict] = None) -> List[Dict]:
     return issues
 
 
+def check_sql_injection(url: str, headers: Optional[Dict] = None) -> List[Dict]:
+    return check_sql_injection_template(make_get_template(url, source="direct"), headers)
+
+
 _TRAVERSAL_PAYLOADS = [
     "../../../../etc/passwd",
     "..%2F..%2F..%2F..%2Fetc%2Fpasswd",
@@ -544,36 +613,41 @@ _TRAVERSAL_PAYLOADS = [
 _TRAVERSAL_MARKERS = ["root:x:", "[fonts]", "[extensions]", "boot loader"]
 
 
-def check_directory_traversal(url: str, headers: Optional[Dict] = None) -> List[Dict]:
-    """Inject path-traversal payloads into every query parameter."""
+def check_directory_traversal_template(template: Dict, headers: Optional[Dict] = None) -> List[Dict]:
+    """Inject path-traversal payloads into every discovered input field."""
     issues: List[Dict] = []
     try:
-        parsed = urllib.parse.urlparse(url)
-        qs = urllib.parse.parse_qs(parsed.query, keep_blank_values=True)
+        fields = iter_input_fields(template)
+        if not fields:
+            fields = [("params", "file"), ("params", "page"), ("params", "path")]
 
-        # Test existing params first; fall back to adding a 'file' param if none exist
-        keys_to_test = list(qs.keys()) if qs else ["file", "page", "path"]
-
-        for key in keys_to_test:
+        for location, key in fields:
             for payload in _TRAVERSAL_PAYLOADS:
-                test_qs = {k: v[:] for k, v in qs.items()} if qs else {}
-                test_qs[key] = [payload]
-                test_url = urllib.parse.urlunparse(
-                    parsed._replace(query=urllib.parse.urlencode(test_qs, doseq=True))
-                )
+                test_template = clone_template(template)
+                set_input_field(test_template, location, key, payload)
+                test_url = template_to_url(test_template)
                 try:
-                    resp = requests.get(test_url, timeout=10, headers=headers)
+                    resp = send_template(test_template, headers)
                     matched = next((m for m in _TRAVERSAL_MARKERS if m in resp.text.lower()), None)
                     if matched:
+                        method = str(test_template.get("method", "GET")).upper()
                         issues.append({
                             "title": "Path Traversal / Local File Inclusion",
                             "severity": "critical",
                             "description": (
-                                f"Injecting `{payload}` into param '{key}' returned file system content, "
+                                f"Injecting `{payload}` into field '{key}' returned file system content, "
                                 "indicating a Path Traversal or Local File Inclusion vulnerability."
                             ),
-                            "evidence": f"Param: {key} | Payload: {payload} | Marker: '{matched}' | URL: {test_url}",
+                            "evidence": (
+                                f"Method: {method} | Field: {key} | Payload: {payload} | "
+                                f"Marker: '{matched}' | URL: {test_url}"
+                            ),
                             "category": "traversal",
+                            "url": test_template.get("url"),
+                            "method": method,
+                            "parameter": key,
+                            "payload": payload,
+                            "confidence": "confirmed",
                         })
                         return issues
                 except Exception:
@@ -587,6 +661,10 @@ def check_directory_traversal(url: str, headers: Optional[Dict] = None) -> List[
             "category": "traversal",
         })
     return issues
+
+
+def check_directory_traversal(url: str, headers: Optional[Dict] = None) -> List[Dict]:
+    return check_directory_traversal_template(make_get_template(url, source="direct"), headers)
 
 
 def discover_subdomains(hostname: str) -> List[Dict]:
@@ -788,9 +866,12 @@ def run_scan(
     headers: Optional[Dict] = None,
     progress_start: int = 5,
     progress_end: int = 95,
+    template: Optional[Dict] = None,
 ) -> List[Dict]:
     """Run selected scan modules and report progress."""
     issues: List[Dict] = []
+    request_template = template or make_get_template(target_url, source="direct")
+    target_url = template_to_url(request_template)
 
     parsed = urllib.parse.urlparse(target_url)
     hostname = parsed.hostname
@@ -842,11 +923,11 @@ def run_scan(
         elif module == "headers":
             issues.extend(check_http_headers(target_url, headers))
         elif module == "xss":
-            issues.extend(check_xss(target_url, headers))
+            issues.extend(check_xss_template(request_template, headers))
         elif module == "sqli":
-            issues.extend(check_sql_injection(target_url, headers))
+            issues.extend(check_sql_injection_template(request_template, headers))
         elif module == "traversal":
-            issues.extend(check_directory_traversal(target_url, headers))
+            issues.extend(check_directory_traversal_template(request_template, headers))
         elif module == "subdomain":
             issues.extend(discover_subdomains(hostname))
         elif module == "cookies":
@@ -892,18 +973,21 @@ def parse_job_payload(message: Dict) -> Dict:
 def build_coverage_summary(stats: Dict, request_headers: Optional[Dict], modules: Optional[List[str]]) -> Dict:
     auth_supplied = bool(request_headers)
     modules_run = ", ".join(modules) if modules else "default"
+    max_pages = stats.get("max_pages", 0)
+    max_pages_label = "unlimited" if max_pages == 0 else str(max_pages)
     return {
         "title": "Scan coverage summary",
         "severity": "info",
         "description": (
             f"Crawled {stats.get('pages_crawled', 0)} page(s), discovered "
             f"{stats.get('forms_discovered', 0)} form(s), and built "
-            f"{stats.get('request_templates', 0)} request template(s)."
+            f"{stats.get('request_templates', 0)} request template(s) with "
+            f"{stats.get('input_fields', 0)} testable input field(s)."
         ),
         "evidence": (
             f"Auth headers supplied: {'yes' if auth_supplied else 'no'} | "
             f"Max depth: {stats.get('max_depth', 0)} | "
-            f"Max pages: {stats.get('max_pages', 0)} | "
+            f"Max pages: {max_pages_label} | "
             f"Modules: {modules_run}"
         ),
         "category": "coverage",
@@ -929,9 +1013,8 @@ def process_job(message: Dict) -> None:
         send_progress(scan_id, 5)
 
     # ── Auto-crawl: if the URL has no query string, discover same-origin pages
-    #    and forms, then scan the GET-compatible templates with the current
-    #    URL-based modules. POST templates are collected for coverage now and
-    #    will be used by the next module upgrade pass.
+    #    and forms, then scan the resulting request templates. Active input
+    #    checks now use template params/data, so POST forms are included.
     parsed = urllib.parse.urlparse(target_url)
     has_params = bool(parsed.query)
 
@@ -941,18 +1024,8 @@ def process_job(message: Dict) -> None:
         templates = crawl["templates"]
         stats = crawl["stats"]
 
-        targets: List[str] = []
-        seen_targets: set = set()
-        for template in templates:
-            if str(template.get("method", "GET")).upper() != "GET":
-                continue
-            target = template_to_url(template)
-            if target not in seen_targets:
-                seen_targets.add(target)
-                targets.append(target)
-
-        if not targets:
-            targets = [target_url]
+        if not templates:
+            templates = [make_get_template(target_url, source="direct")]
 
         print(
             "  Crawl complete: "
@@ -960,21 +1033,29 @@ def process_job(message: Dict) -> None:
             f"{stats['forms_discovered']} form(s), "
             f"{stats['request_templates']} request template(s)."
         )
-        print(f"  Scanning {len(targets)} GET-compatible target(s).")
+        print(f"  Scanning {len(templates)} request template(s).")
 
         if scan_id:
             send_progress(scan_id, 10)
 
         all_issues: List[Dict] = []
-        n = len(targets)
+        n = len(templates)
 
-        for i, t in enumerate(targets):
-            # Divide the 10–95 progress range evenly across all targets
+        for i, template in enumerate(templates):
+            # Divide the 10–95 progress range evenly across all templates
             p_start = 10 + int((i / n) * 85)
             p_end   = 10 + int(((i + 1) / n) * 85)
-            print(f"  Scanning target {i + 1}/{n}: {t}")
-            issues = run_scan(t, scan_profile, scan_id, request_headers,
-                              progress_start=p_start, progress_end=p_end)
+            method = str(template.get("method", "GET")).upper()
+            print(f"  Scanning template {i + 1}/{n}: {method} {template_to_url(template)}")
+            issues = run_scan(
+                template_to_url(template),
+                scan_profile,
+                scan_id,
+                request_headers,
+                progress_start=p_start,
+                progress_end=p_end,
+                template=template,
+            )
             all_issues.extend(issues)
 
         all_issues.append(build_coverage_summary(stats, request_headers, scan_profile))
@@ -992,12 +1073,21 @@ def process_job(message: Dict) -> None:
         send_results(scan_id, deduped)
     else:
         # URL already has parameters — scan it directly.
-        issues = run_scan(target_url, scan_profile, scan_id, request_headers,
-                          progress_start=10, progress_end=95)
+        direct_template = make_get_template(target_url, source="direct")
+        issues = run_scan(
+            target_url,
+            scan_profile,
+            scan_id,
+            request_headers,
+            progress_start=10,
+            progress_end=95,
+            template=direct_template,
+        )
         direct_stats = {
             "pages_crawled": 1,
             "forms_discovered": 0,
             "request_templates": 1,
+            "input_fields": len(iter_input_fields(direct_template)),
             "max_pages": 1,
             "max_depth": 0,
         }
