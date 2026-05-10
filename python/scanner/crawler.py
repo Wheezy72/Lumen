@@ -109,6 +109,7 @@ def extract_form_template(form, page_url: str) -> Optional[Dict]:
         "url": base_url,
         "params": params,
         "data": data,
+        "json": {},
         "headers": {},
         "source": "form",
     }

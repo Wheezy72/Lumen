@@ -11,6 +11,7 @@ The Python worker is the scan engine. It listens for jobs on Redis and publishes
 worker.py                 Redis entrypoint and scan job orchestration
 scanner/config.py         Scanner environment settings and shared constants
 scanner/templates.py      Request-template helpers
+scanner/findings.py       Finding fingerprints and normalization
 scanner/crawler.py        Static crawler, form extraction, script/API discovery
 scanner/browser_discovery.py
                           Optional Playwright network discovery
@@ -19,6 +20,8 @@ scanner/modules/          Individual check modules
 ```
 
 Checks are split by concern so new modules can be added without growing `worker.py`.
+
+The scanner mutates query parameters, form fields, and flat top-level JSON request bodies through the shared request-template helpers. Findings are normalized with stable fingerprints before they are returned so repeated findings can be deduplicated consistently.
 
 ## Install
 

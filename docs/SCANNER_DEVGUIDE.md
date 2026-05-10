@@ -55,7 +55,9 @@ All active checks should operate on request templates instead of raw URLs.
         "email": "test@example.com",
         "Submit": "Save",
     },
-    "json": {},
+    "json": {
+        "displayName": "Alice"
+    },
     "headers": {},
     "source": "form",
 }
@@ -76,6 +78,10 @@ Use these helpers instead of hand-editing templates:
 - `iter_input_fields(template)`
 - `set_input_field(template, location, key, value)`
 - `add_template(templates, seen_templates, template)`
+
+`iter_input_fields()` returns fields from `params`, `data`, and flat top-level `json` bodies. Active modules should use it so JSON APIs, forms, and query strings are tested consistently.
+
+Browser-discovered `application/json` POST requests are captured as flat JSON templates when their top-level values are strings, numbers, booleans, or null. Deeply nested JSON mutation is intentionally out of scope for now.
 
 ## Discovery flow
 
@@ -159,8 +165,11 @@ def check_my_check_template(template: Dict, headers: Optional[Dict] = None) -> L
     "parameter": "id",
     "payload": "test",
     "confidence": "confirmed",
+    "fingerprint": "my_check:...",
 }
 ```
+
+You usually do not need to set `fingerprint` yourself. `scanner/findings.py` adds stable fingerprints centrally after modules return findings. Fingerprints are used for deduplication and should represent the root issue rather than the exact payload.
 
 4. Wire it into:
 

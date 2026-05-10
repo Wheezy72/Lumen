@@ -9,6 +9,7 @@ import redis
 from scanner.config import ORIGIN_LEVEL_MODULES
 from scanner.crawler import crawl_site
 from scanner.engine import run_scan
+from scanner.findings import normalize_finding
 from scanner.templates import iter_input_fields, make_get_template, template_to_url
 
 
@@ -185,12 +186,13 @@ def process_job(message: Dict) -> None:
 
         all_issues.append(build_coverage_summary(stats, request_headers, scan_profile))
 
-        # De-duplicate by (title, category, evidence) to avoid noise from
-        # scanning many similar URLs.
+        # De-duplicate by stable fingerprint first, falling back to the older
+        # title/category/evidence tuple for any legacy finding shape.
         seen_keys: set = set()
         deduped: List[Dict] = []
         for issue in all_issues:
-            key = (issue.get("title", ""), issue.get("category", ""), issue.get("evidence", ""))
+            issue = normalize_finding(issue)
+            key = issue.get("fingerprint") or (issue.get("title", ""), issue.get("category", ""), issue.get("evidence", ""))
             if key not in seen_keys:
                 seen_keys.add(key)
                 deduped.append(issue)
@@ -222,6 +224,7 @@ def process_job(message: Dict) -> None:
             "max_depth": 0,
         }
         issues.append(build_coverage_summary(direct_stats, request_headers, scan_profile))
+        issues = [normalize_finding(issue) for issue in issues]
         send_results(scan_id, issues)
 
 
