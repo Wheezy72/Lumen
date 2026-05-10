@@ -160,8 +160,62 @@ ALLOW_PRIVATE_TARGETS=true
 curl -i http://localhost:4000/api/publicApi/scans \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $PUBLIC_API_KEY" \
-  -d '{"target":"https://example.com","modules":["headers","xss"]}'
+  -d '{"target":"https://example.com","modules":["headers","exposure","cors","xss","sqli"]}'
 ```
+
+Available module IDs:
+
+```text
+headers
+cookies
+tls
+exposure
+cors
+redirect
+xss
+sqli
+traversal
+command_injection
+csrf
+subdomain
+error
+access_control
+rate_limit
+```
+
+### 1b) Start an authenticated public scan
+
+`requestHeaders` are forwarded only to the queued worker job so the crawler can reach pages behind login.
+
+```bash
+curl -i http://localhost:4000/api/publicApi/scans \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $PUBLIC_API_KEY" \
+  -d '{
+    "target":"https://example.com/protected",
+    "modules":["headers","xss","sqli","csrf","command_injection"],
+    "requestHeaders": {
+      "Cookie": "session=...",
+      "Authorization": "Bearer eyJ..."
+    }
+  }'
+```
+
+### 1c) Scanner depth and JavaScript discovery
+
+The Python worker supports these environment variables:
+
+```env
+LUMEN_MAX_CRAWL_PAGES=30
+LUMEN_MAX_CRAWL_DEPTH=2
+LUMEN_MAX_SCRIPT_FETCHES=8
+LUMEN_BROWSER_DISCOVERY=auto
+LUMEN_BROWSER_DISCOVERY_TIMEOUT_MS=12000
+LUMEN_BROWSER_DISCOVERY_MAX_REQUESTS=40
+```
+
+Set `LUMEN_MAX_CRAWL_PAGES=0` for local/lab scans with no page cap.
+Set `LUMEN_BROWSER_DISCOVERY=on` to force Playwright network discovery for SPA-heavy targets.
 
 ### 2) List public scans
 

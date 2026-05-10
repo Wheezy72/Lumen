@@ -1,11 +1,29 @@
 import Joi from 'joi';
 
+export const SCAN_MODULES = [
+  'headers',
+  'cookies',
+  'tls',
+  'exposure',
+  'cors',
+  'redirect',
+  'xss',
+  'sqli',
+  'traversal',
+  'command_injection',
+  'csrf',
+  'subdomain',
+  'error',
+  'access_control',
+  'rate_limit',
+];
+
 // Optional map of HTTP headers/cookies forwarded to the Python crawler so it
 // can authenticate against the target instead of landing on a login screen.
 // Example:  { "Cookie": "PHPSESSID=abc123; security=low" }
 export const startScanSchema = Joi.object({
   target:         Joi.string().uri({ allowRelative: false }).required(),
-  modules:        Joi.array().items(Joi.string()).optional(),
+  modules:        Joi.array().items(Joi.string().valid(...SCAN_MODULES)).optional(),
   webhookUrl:     Joi.string().uri({ allowRelative: false }).optional(),
   requestHeaders: Joi.object().pattern(Joi.string(), Joi.string()).optional(),
 });
@@ -13,7 +31,7 @@ export const startScanSchema = Joi.object({
 export const scheduleSchema = Joi.object({
   target:     Joi.string().uri({ allowRelative: false }).required(),
   cron:       Joi.string().required(),
-  modules:    Joi.array().items(Joi.string()).optional(),
+  modules:    Joi.array().items(Joi.string().valid(...SCAN_MODULES)).optional(),
   timezone:   Joi.string().optional(),
   webhookUrl: Joi.string().uri({ allowRelative: false }).optional(),
   runNow:     Joi.boolean().optional().default(false),

@@ -11,7 +11,7 @@ A small web application security scanner built for coursework and demos.
 - Web UI to create scans and view reports
 - Node/Express API + MongoDB for storage
 - Redis/Bull for background jobs
-- Python worker runs HTTP-focused checks and publishes progress/results
+- Python worker crawls targets, builds request templates, runs modular DAST checks, and publishes progress/results
 
 Important: only scan targets you own or have explicit permission to test.
 
@@ -21,7 +21,7 @@ Important: only scan targets you own or have explicit permission to test.
 - Backend: Node.js (Express)
 - Data: MongoDB
 - Queue + pub/sub: Redis (Bull)
-- Worker: Python (requests, BeautifulSoup, dnspython, redis)
+- Worker: Python (requests, BeautifulSoup, Playwright optional browser discovery, dnspython, redis)
 
 ## Architecture
 
@@ -67,6 +67,13 @@ See service-specific docs:
 cd backend && npm install
 cd ../frontend && npm install
 cd ../python && python -m pip install -r requirements.txt
+```
+
+Optional JavaScript/browser discovery for SPA-heavy targets:
+
+```bash
+cd python
+python -m playwright install chromium
 ```
 
 ### Configure backend
