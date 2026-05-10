@@ -1,0 +1,5 @@
+$kind: http-request
+description: Download findings as a CSV file. Useful for importing into a spreadsheet or another tool.
+url: "{{baseUrl}}/api/publicApi/scans/{{scanId}}/report.csv"
+method: GET
+order: 6000

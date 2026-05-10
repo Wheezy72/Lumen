@@ -1,0 +1,5 @@
+$kind: http-request
+description: List all scans created via the public API (up to 50 by default). Add `?limit=100` to get more.
+url: "{{baseUrl}}/api/publicApi/scans"
+method: GET
+order: 2000

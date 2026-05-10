@@ -1,0 +1,20 @@
+$kind: http-request
+description: |-
+  Queue a new scan. Returns a scan ID you can use in the other requests. Copy the `id` from the response into the `scanId` collection variable.
+
+  Use `requestHeaders` to pass authentication cookies or tokens so the Python crawler can bypass login screens. For DVWA, grab your `PHPSESSID` from the browser DevTools (Application → Cookies) after logging in, then paste it into the Cookie value above.
+url: "{{baseUrl}}/api/publicApi/scans"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "target": "http://localhost/DVWA-master/",
+      "modules": ["headers", "xss", "sqli", "cookies", "ssl", "rate_limit"],
+      "requestHeaders": {
+        "Cookie": "PHPSESSID=your_session_id_here; security=low"
+      }
+    }
+order: 1000

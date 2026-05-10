@@ -64,5 +64,7 @@ yarn.lock
 
 # Local scratch files
 API.txt
+env.txt
 targets.txt
 doctor.js
+others

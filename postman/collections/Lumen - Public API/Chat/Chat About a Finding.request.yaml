@@ -1,0 +1,19 @@
+$kind: http-request
+description: Ask the AI assistant about a specific finding. `findingIndex` is the zero-based index into the scan's `results` array. You can pass multiple messages to continue the conversation (max 12).
+url: "{{baseUrl}}/api/publicApi/scans/{{scanId}}/chat"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "findingIndex": 0,
+      "messages": [
+        {
+          "role": "user",
+          "content": "Can you explain this finding and how I should fix it?"
+        }
+      ]
+    }
+order: 1000
