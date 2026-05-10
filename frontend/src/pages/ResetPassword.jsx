@@ -3,6 +3,7 @@ import axios from "axios";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import AuthBackground from "../components/ui/AuthBackground.jsx";
 import { EyeIcon, EyeOffIcon } from "../components/ui/Icons.jsx";
+import { ButtonContent } from "../components/ui/Spinner.jsx";
 
 function useQuery() {
   const { search } = useLocation();
@@ -110,8 +111,13 @@ export default function ResetPassword() {
                 </button>
               </div>
             </div>
-            <button type="submit" disabled={loading} className="w-full py-3 rounded-full btn-primary font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed mt-2">
-              {loading ? "Resetting…" : "Reset password"}
+            <button
+              type="submit"
+              disabled={loading}
+              aria-busy={loading}
+              className="w-full py-3 rounded-full btn-primary font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed mt-2"
+            >
+              <ButtonContent loading={loading} loadingLabel="Resetting…">Reset password</ButtonContent>
             </button>
           </form>
 

@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import AnimatedProgressBar from '../components/ui/AnimatedProgressBar.jsx';
 import EmptyState from '../components/ui/EmptyState.jsx';
 import Modal from '../components/ui/Modal.jsx';
+import { ButtonContent } from '../components/ui/Spinner.jsx';
 import { useToast } from '../components/ui/Toast.jsx';
 import { displayFindingTitle, getHeaderHint } from '../utils/findingTitle.js';
 import { getSeverityRank } from '../utils/severity.js';
@@ -389,6 +390,7 @@ export default function ReportView() {
             <button
               onClick={generatePdf}
               disabled={pdfLoading}
+              aria-busy={pdfLoading}
               className="
                 px-4
                 py-2
@@ -404,11 +406,12 @@ export default function ReportView() {
                 transition
               "
             >
-              {pdfLoading ? 'Generating…' : 'Download PDF'}
+              <ButtonContent loading={pdfLoading} loadingLabel="Generating…">Download PDF</ButtonContent>
             </button>
             <button
               onClick={generateCsv}
               disabled={csvLoading}
+              aria-busy={csvLoading}
               className="
                 px-4
                 py-2
@@ -420,7 +423,7 @@ export default function ReportView() {
                 disabled:opacity-50
               "
             >
-              {csvLoading ? 'Generating…' : 'Download CSV'}
+              <ButtonContent loading={csvLoading} loadingLabel="Generating…">Download CSV</ButtonContent>
             </button>
           </div>
         </div>

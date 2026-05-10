@@ -1,6 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useScrollReveal } from '../hooks/useScrollReveal.js';
 import { LandingFooter } from '../components/Footer.jsx';
 
 /* ─── Animated counter (runs once on mount) ──────────────────────────────── */
@@ -127,15 +126,182 @@ const MARQUEE_ITEMS = [
   'Clickjacking', 'Mixed Content', 'Subdomain Takeover', 'CORS Misconfiguration',
 ];
 
+/* ─── How it works steps ──────────────────────────────────────────────────── */
+const HOW_IT_WORKS = [
+  {
+    step: '01',
+    title: 'Drop a URL',
+    body: 'Pick a target. Optionally paste your session cookie or bearer token to scan authenticated areas.',
+  },
+  {
+    step: '02',
+    title: 'Lumen crawls and probes',
+    body: 'A bounded crawler discovers pages, forms, and APIs, then runs scoped checks: XSS, SQLi, traversal, CSRF, CORS, and more.',
+  },
+  {
+    step: '03',
+    title: 'Read the report',
+    body: 'Severity-ranked findings with evidence, request details, fix guidance, and PDF/CSV export — ready for a human review.',
+  },
+];
+
+/* ─── Feature grid ────────────────────────────────────────────────────────── */
+const FEATURES = [
+  {
+    title: 'Authenticated DAST',
+    body: 'Forward your real session cookie or bearer token so the crawler can see what real users see.',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M12 11c0-1.66 1.34-3 3-3s3 1.34 3 3v2H6v-2a3 3 0 116 0z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M5 13h14v7H5z" />
+      </svg>
+    ),
+  },
+  {
+    title: 'JSON API mutation',
+    body: 'Captures JSON request templates from the browser and mutates flat fields for XSS, SQLi, traversal, command injection.',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M8 4l-4 4 4 4m8-8l4 4-4 4M14 4l-4 16" />
+      </svg>
+    ),
+  },
+  {
+    title: 'Bounded browser discovery',
+    body: 'Optional Playwright pass clicks safe nav-style elements to surface API calls that only fire after user interaction.',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M3 12a9 9 0 1118 0 9 9 0 01-18 0z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M3 12h18M12 3a14 14 0 010 18M12 3a14 14 0 000 18" />
+      </svg>
+    ),
+  },
+  {
+    title: 'Stable fingerprints',
+    body: 'Findings carry a stable fingerprint so duplicates collapse cleanly and you can diff across scans over time.',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M12 11c-1.66 0-3 1.34-3 3v3a3 3 0 006 0v-3c0-1.66-1.34-3-3-3zM7 9a5 5 0 0110 0v1M5 13a7 7 0 0114 0v2" />
+      </svg>
+    ),
+  },
+  {
+    title: 'Lightweight SAST',
+    body: 'Scan a local source path for hard-coded secrets, risky patterns (eval, shell=True), and dependency hygiene.',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M4 6h16M4 12h10M4 18h16" />
+      </svg>
+    ),
+  },
+  {
+    title: 'Public API + scheduling',
+    body: 'API-key access, recurring scans, and webhooks let Lumen plug into CI without a UI in the loop.',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M12 6v6l4 2M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    ),
+  },
+];
+
+/* ─── Animated demo terminal ──────────────────────────────────────────────── */
+const TERMINAL_LINES = [
+  { kind: 'cmd',  text: 'lumen scan https://juice-shop.local' },
+  { kind: 'info', text: 'Crawling target… 18 pages, 7 forms, 12 API templates discovered' },
+  { kind: 'info', text: 'Auth headers detected — running authenticated checks' },
+  { kind: 'crit', text: 'Reflected XSS in /search?q=… (param: q) — confirmed' },
+  { kind: 'high', text: 'SQL Injection on POST /api/login (field: email) — confirmed' },
+  { kind: 'med',  text: 'Open Redirect on /login?next=… (param: next) — confirmed' },
+  { kind: 'med',  text: 'Missing security header: Content-Security-Policy' },
+  { kind: 'low',  text: 'Cookie session missing Secure flag' },
+  { kind: 'ok',   text: 'Scan complete · 14 findings · 47.8s · fingerprints stable' },
+];
+
+const KIND_STYLES = {
+  cmd:  'text-emerald-300',
+  info: 'text-slate-400',
+  crit: 'text-fuchsia-300',
+  high: 'text-red-300',
+  med:  'text-amber-300',
+  low:  'text-teal-300',
+  ok:   'text-emerald-300',
+};
+
+const KIND_TAGS = {
+  crit: 'CRITICAL',
+  high: 'HIGH',
+  med:  'MEDIUM',
+  low:  'LOW',
+};
+
+function DemoTerminal() {
+  const [visibleCount, setVisibleCount] = useState(0);
+  const [tick, setTick] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setVisibleCount((count) => {
+        if (count < TERMINAL_LINES.length) return count + 1;
+        return count;
+      });
+    }, 520);
+    return () => clearInterval(id);
+  }, [tick]);
+
+  useEffect(() => {
+    if (visibleCount < TERMINAL_LINES.length) return undefined;
+    const id = setTimeout(() => {
+      setVisibleCount(0);
+      setTick((value) => value + 1);
+    }, 4200);
+    return () => clearTimeout(id);
+  }, [visibleCount]);
+
+  const lines = useMemo(() => TERMINAL_LINES.slice(0, visibleCount), [visibleCount]);
+
+  return (
+    <div className="terminal-card overflow-hidden">
+      <div className="flex items-center gap-1.5 px-4 py-2.5 border-b border-white/8">
+        <span className="w-3 h-3 rounded-full bg-red-500/70" />
+        <span className="w-3 h-3 rounded-full bg-amber-500/70" />
+        <span className="w-3 h-3 rounded-full bg-emerald-500/70" />
+        <div className="ml-3 flex-1 bg-white/5 rounded-md px-3 py-1 text-[11px] text-gray-500 font-mono tracking-wide">
+          lumen · live scan
+        </div>
+        <span className="text-[10px] text-emerald-300 font-mono">● live</span>
+      </div>
+      <div className="px-4 py-4 font-mono text-[12.5px] leading-6 min-h-[260px]">
+        {lines.map((line, index) => {
+          const tag = KIND_TAGS[line.kind];
+          return (
+            <div key={`${tick}-${index}`} className="animate-slide-up flex items-start gap-2">
+              <span className="text-slate-600 select-none">{line.kind === 'cmd' ? '$' : '›'}</span>
+              {tag ? (
+                <span className={`shrink-0 mt-[2px] px-1.5 rounded text-[9.5px] tracking-wider border border-white/10 ${KIND_STYLES[line.kind]}`}>{tag}</span>
+              ) : null}
+              <span className={KIND_STYLES[line.kind]}>{line.text}</span>
+            </div>
+          );
+        })}
+        {visibleCount < TERMINAL_LINES.length ? (
+          <span className="inline-block w-2 h-4 align-middle bg-emerald-300 animate-pulse" />
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export default function Landing() {
-  const findingsRef    = useScrollReveal();
-  const ctaRef         = useScrollReveal();
-  const heroLeftRef    = useRevealDir('left');
-  const heroRightRef   = useRevealDir('right');
+  const heroLeftRef      = useRevealDir('left');
+  const heroRightRef     = useRevealDir('right');
   const findingsLeftRef  = useRevealDir('left');
   const findingsRightRef = useRevealDir('scale');
-  const marqueeRef     = useRevealDir('up');
-  const parallaxRef    = useParallax(0.08);
+  const marqueeRef       = useRevealDir('up');
+  const howRef           = useRevealDir('up');
+  const featuresRef      = useRevealDir('up');
+  const ctaRef           = useRevealDir('scale');
+  const parallaxRef      = useParallax(0.08);
 
   const FINDINGS = [
     { label: 'Reflected XSS',           sev: 'Critical', sevClass: 'severity-row-critical', badge: 'bg-red-500/15 text-red-400 border border-red-500/25' },
@@ -216,67 +382,14 @@ export default function Landing() {
             </div>
           </div>
 
-          {/* Right: 3-step visual guide */}
-          <div ref={heroRightRef} className="relative">
-            {/* Outer ambient glow */}
-            <div className="absolute -inset-3 bg-gradient-to-br from-primary-500/20 via-violet-500/10 to-teal-500/15 rounded-3xl blur-2xl pointer-events-none" />
-
-            <div className="relative space-y-3">
-              {/* Section label */}
-              <p className="text-xs font-mono font-bold text-primary-400 tracking-widest uppercase mb-4">
-                How it works
+          {/* Right: live demo terminal */}
+          <div ref={heroRightRef} className="relative group">
+            <div className="absolute -inset-2 bg-gradient-to-br from-primary-500 via-violet-500 to-teal-500 rounded-3xl blur-xl opacity-20 group-hover:opacity-35 transition-opacity duration-700" />
+            <div className="relative">
+              <DemoTerminal />
+              <p className="mt-3 text-center text-xs text-gray-500 font-mono tracking-wide">
+                Live mock — actual scans stream into your dashboard
               </p>
-
-              {/* Step 1 */}
-              <div className="group relative rounded-2xl overflow-hidden border border-white/10 bg-zinc-950/80 shadow-xl hover:border-primary-500/30 transition-colors duration-300">
-                <div className="flex items-center gap-3 px-4 py-2.5 bg-zinc-900/80 border-b border-white/6">
-                  <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary-500/20 border border-primary-400/40 text-primary-400 font-mono font-bold text-[10px]">1</span>
-                  <span className="text-xs text-gray-400 font-medium tracking-wide">Start a new scan</span>
-                  <div className="ml-auto flex gap-1">
-                    <span className="w-2 h-2 rounded-full bg-red-500/60" />
-                    <span className="w-2 h-2 rounded-full bg-amber-500/60" />
-                    <span className="w-2 h-2 rounded-full bg-emerald-500/60" />
-                  </div>
-                </div>
-                <img
-                  src="/landing/step-1.png"
-                  alt="Step 1: New Scan"
-                  className="w-full object-cover group-hover:scale-[1.01] transition-transform duration-500"
-                />
-              </div>
-
-              {/* Step 2 */}
-              <div className="group relative rounded-2xl overflow-hidden border border-white/10 bg-zinc-950/80 shadow-xl hover:border-violet-500/30 transition-colors duration-300">
-                <div className="flex items-center gap-3 px-4 py-2.5 bg-zinc-900/80 border-b border-white/6">
-                  <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-violet-500/20 border border-violet-400/40 text-violet-400 font-mono font-bold text-[10px]">2</span>
-                  <span className="text-xs text-gray-400 font-medium tracking-wide">Live scan progress</span>
-                  <div className="ml-auto flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 status-pulse" />
-                    <span className="text-[10px] text-emerald-400 font-mono">Scanning…</span>
-                  </div>
-                </div>
-                <img
-                  src="/landing/step-2.png"
-                  alt="Step 2: Scan Progress"
-                  className="w-full object-cover group-hover:scale-[1.01] transition-transform duration-500"
-                />
-              </div>
-
-              {/* Step 3 */}
-              <div className="group relative rounded-2xl overflow-hidden border border-white/10 bg-zinc-950/80 shadow-xl hover:border-teal-500/30 transition-colors duration-300">
-                <div className="flex items-center gap-3 px-4 py-2.5 bg-zinc-900/80 border-b border-white/6">
-                  <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-teal-500/20 border border-teal-400/40 text-teal-400 font-mono font-bold text-[10px]">3</span>
-                  <span className="text-xs text-gray-400 font-medium tracking-wide">Vulnerability findings</span>
-                  <div className="ml-auto glass border border-red-500/20 rounded-lg px-2 py-0.5 text-[10px] text-red-400 font-mono font-semibold">
-                    Critical
-                  </div>
-                </div>
-                <img
-                  src="/landing/step-3.png"
-                  alt="Step 3: Vulnerability Findings"
-                  className="w-full object-cover group-hover:scale-[1.01] transition-transform duration-500"
-                />
-              </div>
             </div>
           </div>
 
@@ -299,6 +412,50 @@ export default function Landing() {
           ))}
         </div>
       </div>
+
+      {/* ── How it works ──────────────────────────────────────────────────── */}
+      <section ref={howRef} className="max-w-6xl mx-auto px-6 py-20">
+        <div className="text-center max-w-2xl mx-auto mb-12">
+          <span className="inline-block text-xs font-mono font-bold text-primary-400 tracking-widest uppercase mb-3">How it works</span>
+          <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white leading-tight">From URL to a fixable report.</h2>
+          <p className="mt-3 text-slate-600 dark:text-gray-400 text-base leading-relaxed">
+            Three steps. No agents to install. No SaaS to wire up.
+          </p>
+        </div>
+
+        <ol className="grid md:grid-cols-3 gap-6 reveal-stagger reveal-visible">
+          {HOW_IT_WORKS.map(({ step, title, body }) => (
+            <li key={step} className="relative card-hover rounded-2xl border border-white/8 glass p-6">
+              <div className="text-xs font-mono font-bold text-primary-400 tracking-widest">{step}</div>
+              <h3 className="mt-2 text-lg font-semibold text-slate-900 dark:text-white">{title}</h3>
+              <p className="mt-2 text-sm text-slate-600 dark:text-gray-400 leading-relaxed">{body}</p>
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      {/* ── Feature grid ──────────────────────────────────────────────────── */}
+      <section ref={featuresRef} className="max-w-6xl mx-auto px-6 pb-12">
+        <div className="text-center max-w-2xl mx-auto mb-12">
+          <span className="inline-block text-xs font-mono font-bold text-primary-400 tracking-widest uppercase mb-3">What's inside</span>
+          <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white leading-tight">A modular scanner with sensible defaults.</h2>
+          <p className="mt-3 text-slate-600 dark:text-gray-400 text-base leading-relaxed">
+            Every check is a small module. Toggle them on, scope crawl depth, forward auth, and let the engine do the work.
+          </p>
+        </div>
+
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5 reveal-stagger reveal-visible">
+          {FEATURES.map(({ title, body, icon }) => (
+            <article key={title} className="relative card-hover rounded-2xl border border-white/8 glass p-5">
+              <span className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-primary-500/10 text-primary-400 border border-primary-500/20">
+                {icon}
+              </span>
+              <h3 className="mt-4 text-base font-semibold text-slate-900 dark:text-white">{title}</h3>
+              <p className="mt-1.5 text-sm text-slate-600 dark:text-gray-400 leading-relaxed">{body}</p>
+            </article>
+          ))}
+        </div>
+      </section>
 
       {/* ── Clear findings ─────────────────────────────────────────────────── */}
       <section className="max-w-5xl mx-auto px-6 py-16">
@@ -366,7 +523,7 @@ export default function Landing() {
       </section>
 
       {/* ── CTA ────────────────────────────────────────────────────────────── */}
-      <section ref={ctaRef} className="reveal max-w-5xl mx-auto px-6 py-10 text-center">
+      <section ref={ctaRef} className="max-w-5xl mx-auto px-6 py-10 text-center">
         <div className="rounded-3xl overflow-hidden relative px-8 py-20" style={{ background: 'linear-gradient(135deg, rgba(29,78,216,0.9) 0%, rgba(9,9,11,0.95) 50%, rgba(13,148,136,0.3) 100%)' }}>
           <div className="absolute inset-0 pointer-events-none">
             <div className="absolute top-0 left-1/4 w-72 h-72 bg-primary-600/25 rounded-full blur-3xl" />

@@ -66,7 +66,7 @@ export const configureBull = () => {
   });
 
   scanQueue.process('start', async (job) => {
-    const { scanId, scanProfile, requestHeaders } = job.data;
+    const { scanId, scanProfile, requestHeaders, sourcePath } = job.data;
 
     await initResultSubscriber({
       pendingScans,
@@ -104,6 +104,7 @@ export const configureBull = () => {
         targetUrl: scan.targetUrl,
         scanProfile: scanProfile || scan.scanProfile || null,
         requestHeaders: requestHeaders || null,
+        sourcePath: sourcePath || null,
       }));
 
       waiter.start();

@@ -60,6 +60,39 @@ CSRF_TOKEN_NAMES = {
 
 ORIGIN_LEVEL_MODULES = {"tls", "exposure", "subdomain"}
 
+# ── Lightweight local SAST -----------------------------------------------------
+# These caps keep SAST scans bounded so a misconfigured run never tries to read
+# an entire repository's worth of vendored dependencies into memory.
+SAST_MAX_FILE_BYTES = env_int("LUMEN_SAST_MAX_FILE_BYTES", 1_000_000)        # 1 MB per file
+SAST_MAX_TOTAL_BYTES = env_int("LUMEN_SAST_MAX_TOTAL_BYTES", 50_000_000)     # 50 MB total
+SAST_MAX_FILES = env_int("LUMEN_SAST_MAX_FILES", 5_000)
+SAST_MAX_FINDINGS_PER_RULE = env_int("LUMEN_SAST_MAX_FINDINGS_PER_RULE", 20)
+
+# Directories that are never useful to scan and are skipped wholesale.
+SAST_SKIP_DIRS = {
+    ".git", ".hg", ".svn",
+    "node_modules", "bower_components", "vendor",
+    ".venv", "venv", "env", "ENV", "__pycache__",
+    "dist", "build", "out", "coverage", ".next", ".nuxt",
+    ".cache", ".parcel-cache", ".turbo",
+    ".idea", ".vscode",
+    "site-packages",
+}
+
+# Only file extensions in this set are inspected. Everything else is treated as
+# binary/uninteresting so the scanner stays predictable. ".env" is matched by
+# filename rather than extension elsewhere.
+SAST_TEXT_EXTENSIONS = {
+    ".py", ".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs",
+    ".java", ".kt", ".go", ".rb", ".php", ".cs", ".rs",
+    ".sh", ".bash", ".zsh",
+    ".yml", ".yaml", ".toml", ".ini", ".cfg", ".conf",
+    ".json", ".xml", ".env", ".properties",
+    ".html", ".vue", ".svelte",
+    ".sql",
+    ".md", ".txt",
+}
+
 API_PATH_RE = re.compile(
     r"""["'`](?P<path>/(?:api|rest|graphql|v1|v2|v3|auth|users|user|admin|account|profile|products|orders|cart|basket|search|login|logout|feedback|upload)[A-Za-z0-9_./?=&%:-]*)["'`]""",
     re.IGNORECASE,

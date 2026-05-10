@@ -6,6 +6,7 @@ from .templates import make_get_template, template_to_url
 from .findings import normalize_findings
 from .modules.access_control import check_broken_access_control
 from .modules.command_injection import check_command_injection_template
+from .modules.sast import check_sast_source
 from .modules.cookies import check_cookie_flags
 from .modules.cors import check_cors_policy
 from .modules.csrf import check_csrf_template
@@ -37,6 +38,7 @@ MODULES = [
     "error",
     "access_control",
     "rate_limit",
+    "sast",
 ]
 
 
@@ -50,6 +52,7 @@ def run_scan(
     template: Optional[Dict] = None,
     skip_modules: Optional[set] = None,
     progress_callback=None,
+    source_path: Optional[str] = None,
 ) -> List[Dict]:
     """Run selected scan modules and report progress."""
     issues: List[Dict] = []
@@ -116,9 +119,23 @@ def run_scan(
         elif module == "error":
             issues.extend(check_error_leakage(target_url, headers))
         elif module == "access_control":
-            issues.extend(check_broken_access_control(target_url, headers))
+            issues.extend(check_broken_access_control(request_template, headers))
         elif module == "rate_limit":
             issues.extend(check_rate_limiting(target_url, headers))
+        elif module == "sast":
+            if source_path:
+                issues.extend(check_sast_source(source_path))
+            else:
+                issues.append({
+                    "title": "SAST skipped: no source path supplied",
+                    "severity": "info",
+                    "category": "sast",
+                    "description": (
+                        "Lightweight SAST runs only when a sourcePath is provided. "
+                        "Pass sourcePath in the scan request to enable it."
+                    ),
+                    "evidence": "Module 'sast' selected without sourcePath",
+                })
 
         current_progress += progress_step
         if scan_id and progress_callback:

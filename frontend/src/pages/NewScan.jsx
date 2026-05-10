@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardHeader } from '../components/ui/Card.jsx';
+import { ButtonContent } from '../components/ui/Spinner.jsx';
 
 const SCAN_MODULES = [
   { id: 'headers',      name: 'Security Headers',  description: 'Check for missing security headers' },
@@ -19,6 +20,7 @@ const SCAN_MODULES = [
   { id: 'error',        name: 'Error Disclosure',   description: 'Check for verbose error messages' },
   { id: 'rate_limit',   name: 'Rate Limiting',      description: 'Check for rate limit protection' },
   { id: 'access_control', name: 'Access Control',  description: 'Test access control issues' },
+  { id: 'sast',         name: 'Lightweight SAST',  description: 'Local source scan for secrets, risky code, dependency hygiene' },
 ];
 
 const SCAN_PROFILES = {
@@ -46,6 +48,7 @@ export default function NewScan() {
   const [authEnabled, setAuthEnabled] = useState(false);
   const [cookieHeader, setCookieHeader] = useState('');
   const [authorizationHeader, setAuthorizationHeader] = useState('');
+  const [sourcePath, setSourcePath] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -81,6 +84,8 @@ export default function NewScan() {
       const cookie = cookieHeader.trim();
       const authorization = authorizationHeader.trim();
       if (authEnabled && (cookie || authorization)) payload.authHeaders = { cookie: cookie || undefined, authorization: authorization || undefined };
+      const trimmedSource = sourcePath.trim();
+      if (modules.includes('sast') && trimmedSource) payload.sourcePath = trimmedSource;
       const response = await axios.post('/api/scans', payload);
       navigate('/report/' + response.data._id);
     } catch (err) {
@@ -229,6 +234,28 @@ export default function NewScan() {
           </Card>
         )}
 
+        {/* SAST source path — only meaningful when 'sast' is selected */}
+        {selectedModules.includes('sast') && (
+          <Card className="p-6 animate-slide-up">
+            <CardHeader
+              title="SAST source path"
+              description="Local directory the worker will scan for secrets and risky patterns."
+            />
+            <div className="mt-5 space-y-3">
+              <input
+                type="text"
+                value={sourcePath}
+                onChange={(e) => setSourcePath(e.target.value)}
+                placeholder="/path/to/repo"
+                className="input input-plain font-mono"
+              />
+              <p className="text-xs text-gray-500">
+                Lumen reads files under this path on the worker host. Leave empty to skip the SAST module.
+              </p>
+            </div>
+          </Card>
+        )}
+
         {/* Schedule */}
         <Card className="p-6">
           <CardHeader
@@ -278,8 +305,18 @@ export default function NewScan() {
           <button type="button" onClick={() => navigate('/scans')} className="px-6 py-3 border border-slate-700 text-gray-400 rounded-full hover:bg-white/5 transition">
             Back
           </button>
-          <button type="submit" disabled={loading} className="flex-1 py-3 rounded-full btn-primary font-semibold transition disabled:opacity-50">
-            {loading ? 'Starting…' : scheduleEnabled ? 'Schedule scan' : 'Start scan'}
+          <button
+            type="submit"
+            disabled={loading}
+            aria-busy={loading}
+            className="flex-1 py-3 rounded-full btn-primary font-semibold transition disabled:opacity-50"
+          >
+            <ButtonContent
+              loading={loading}
+              loadingLabel={scheduleEnabled ? 'Scheduling…' : 'Starting…'}
+            >
+              {scheduleEnabled ? 'Schedule scan' : 'Start scan'}
+            </ButtonContent>
           </button>
         </div>
       </form>
