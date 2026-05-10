@@ -1,4 +1,5 @@
 import urllib.parse
+import json
 from typing import Dict, List, Optional
 
 
@@ -49,13 +50,26 @@ def browser_discover_templates(
         data = {}
         post_data = request.post_data or ""
         content_type = request.headers.get("content-type", "")
-        if method == "POST" and "application/x-www-form-urlencoded" in content_type:
-            data = {
-                key: values[0] if values else ""
-                for key, values in urllib.parse.parse_qs(post_data, keep_blank_values=True).items()
-            }
+        json_body = {}
+        if method == "POST":
+            if "application/x-www-form-urlencoded" in content_type:
+                data = {
+                    key: values[0] if values else ""
+                    for key, values in urllib.parse.parse_qs(post_data, keep_blank_values=True).items()
+                }
+            elif "application/json" in content_type and post_data:
+                try:
+                    parsed_json = json.loads(post_data)
+                    if isinstance(parsed_json, dict):
+                        json_body = {
+                            key: str(value) if value is not None else ""
+                            for key, value in parsed_json.items()
+                            if isinstance(value, (str, int, float, bool)) or value is None
+                        }
+                except Exception:
+                    json_body = {}
 
-        key = (method, clean_url, tuple(sorted(params.items())), tuple(sorted(data.items())))
+        key = (method, clean_url, tuple(sorted(params.items())), tuple(sorted(data.items())), tuple(sorted(json_body.items())))
         if key in seen:
             return
 
@@ -65,6 +79,7 @@ def browser_discover_templates(
             "url": clean_url,
             "params": params,
             "data": data,
+            "json": json_body,
             "headers": {},
             "source": "browser",
         })

@@ -65,6 +65,16 @@ def send_template(template: Dict, headers: Optional[Dict] = None) -> requests.Re
     url = template_to_url(template)
 
     if method == "POST":
+        json_body = template.get("json")
+        if isinstance(json_body, dict):
+            merged_headers.setdefault("Content-Type", "application/json")
+            return requests.post(
+                url,
+                json=json_body,
+                timeout=REQUEST_TIMEOUT,
+                headers=merged_headers or None,
+            )
+
         return requests.post(
             url,
             data=template.get("data") or {},
@@ -81,6 +91,7 @@ def template_key(template: Dict) -> Tuple:
         template.get("url", ""),
         tuple(sorted((template.get("params") or {}).items())),
         tuple(sorted((template.get("data") or {}).items())),
+        tuple(sorted((template.get("json") or {}).items())),
     )
 
 
@@ -90,6 +101,7 @@ def clone_template(template: Dict) -> Dict:
         "url": template.get("url", ""),
         "params": dict(template.get("params") or {}),
         "data": dict(template.get("data") or {}),
+        "json": dict(template.get("json") or {}),
         "headers": dict(template.get("headers") or {}),
         "source": template.get("source", ""),
     }
@@ -108,11 +120,16 @@ def iter_input_fields(template: Dict) -> List[Tuple[str, str]]:
     for key in (template.get("data") or {}).keys():
         if is_injectable_field(key):
             fields.append(("data", key))
+    for key in (template.get("json") or {}).keys():
+        if is_injectable_field(key):
+            fields.append(("json", key))
     return fields
 
 
 def set_input_field(template: Dict, location: str, key: str, value: str) -> None:
-    if location == "data":
+    if location == "json":
+        template.setdefault("json", {})[key] = value
+    elif location == "data":
         template.setdefault("data", {})[key] = value
     else:
         template.setdefault("params", {})[key] = value
