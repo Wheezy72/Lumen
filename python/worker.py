@@ -82,6 +82,21 @@ STATIC_EXTENSIONS = (
     ".mp4", ".mp3", ".avi", ".mov",
 )
 
+REDIRECT_PARAM_NAMES = {
+    "next", "url", "redirect", "redirect_url", "redirect_uri", "return",
+    "return_url", "returnurl", "continue", "dest", "destination", "callback",
+}
+
+COMMAND_PARAM_NAMES = {
+    "ip", "host", "hostname", "domain", "target", "cmd", "command", "ping",
+    "query", "url", "address",
+}
+
+CSRF_TOKEN_NAMES = {
+    "csrf", "_csrf", "csrf_token", "token", "nonce", "authenticity_token",
+    "__requestverificationtoken",
+}
+
 
 def normalize_url(url: str) -> str:
     """Remove fragments and normalize empty paths so crawl de-duplication works."""
@@ -100,6 +115,11 @@ def is_crawlable_url(url: str) -> bool:
     parsed = urllib.parse.urlparse(url)
     path = parsed.path.lower()
     return not path.endswith(STATIC_EXTENSIONS)
+
+
+def base_origin(url: str) -> str:
+    parsed = urllib.parse.urlparse(url)
+    return urllib.parse.urlunparse((parsed.scheme, parsed.netloc, "/", "", "", ""))
 
 
 def under_page_limit(count: int) -> bool:
@@ -184,16 +204,7 @@ def iter_input_fields(template: Dict) -> List[Tuple[str, str]]:
 
 def is_injectable_field(key: str) -> bool:
     name = key.lower()
-    return name not in {
-        "submit",
-        "csrf",
-        "_csrf",
-        "csrf_token",
-        "token",
-        "nonce",
-        "authenticity_token",
-        "__requestverificationtoken",
-    }
+    return name not in {"submit", *CSRF_TOKEN_NAMES}
 
 
 def set_input_field(template: Dict, location: str, key: str, value: str) -> None:
@@ -667,6 +678,266 @@ def check_directory_traversal(url: str, headers: Optional[Dict] = None) -> List[
     return check_directory_traversal_template(make_get_template(url, source="direct"), headers)
 
 
+EXPOSURE_CHECKS = [
+    ("/.env", "Environment file exposed", "high", ["DB_PASSWORD=", "APP_KEY=", "SECRET_KEY=", "DATABASE_URL=", "API_KEY="]),
+    ("/.git/config", "Git repository metadata exposed", "high", ["[core]", "repositoryformatversion"]),
+    ("/phpinfo.php", "PHP info page exposed", "medium", ["phpinfo()", "PHP Version"]),
+    ("/backup.zip", "Backup archive exposed", "medium", []),
+    ("/db.sql", "Database dump exposed", "high", ["CREATE TABLE", "INSERT INTO", "-- MySQL dump"]),
+]
+
+
+def check_sensitive_exposure(url: str, headers: Optional[Dict] = None) -> List[Dict]:
+    """Check a short list of high-signal sensitive files on the target origin."""
+    issues: List[Dict] = []
+    origin = base_origin(url).rstrip("/")
+
+    for path, title, severity, markers in EXPOSURE_CHECKS:
+        test_url = f"{origin}{path}"
+        try:
+            resp = requests.get(test_url, timeout=REQUEST_TIMEOUT, headers=headers)
+            if resp.status_code != 200:
+                continue
+
+            body = resp.text[:5000]
+            matched = next((marker for marker in markers if marker.lower() in body.lower()), None)
+
+            # Binary/archive-style paths can be valid findings without text markers,
+            # but only if the server returns a non-trivial body.
+            if not matched and markers:
+                continue
+            if not matched and len(resp.content or b"") < 128:
+                continue
+
+            issues.append({
+                "title": title,
+                "severity": severity,
+                "description": "A sensitive diagnostic, backup, repository, or configuration file is publicly reachable.",
+                "evidence": f"URL: {test_url} | Status: {resp.status_code} | Marker: {matched or 'non-empty file response'}",
+                "category": "exposure",
+                "url": test_url,
+                "method": "GET",
+                "confidence": "confirmed",
+            })
+        except Exception:
+            continue
+
+    return issues
+
+
+def check_cors_policy(url: str, headers: Optional[Dict] = None) -> List[Dict]:
+    """Check for risky CORS origin reflection with credentials."""
+    issues: List[Dict] = []
+    origin = "https://evil.lumen.invalid"
+    request_headers = {}
+    if headers:
+        request_headers.update(headers)
+    request_headers["Origin"] = origin
+
+    try:
+        resp = requests.get(url, timeout=REQUEST_TIMEOUT, headers=request_headers)
+        allow_origin = resp.headers.get("Access-Control-Allow-Origin", "")
+        allow_credentials = resp.headers.get("Access-Control-Allow-Credentials", "")
+        credentials_enabled = allow_credentials.lower() == "true"
+
+        if allow_origin == origin and credentials_enabled:
+            issues.append({
+                "title": "CORS origin reflection with credentials",
+                "severity": "high",
+                "description": (
+                    "The application reflects an arbitrary Origin header and allows credentials, "
+                    "which may let malicious sites read authenticated responses."
+                ),
+                "evidence": (
+                    f"Origin: {origin} | Access-Control-Allow-Origin: {allow_origin} | "
+                    f"Access-Control-Allow-Credentials: {allow_credentials}"
+                ),
+                "category": "cors",
+                "url": url,
+                "method": "GET",
+                "confidence": "confirmed",
+            })
+        elif allow_origin == "*" and credentials_enabled:
+            issues.append({
+                "title": "Wildcard CORS with credentials enabled",
+                "severity": "medium",
+                "description": "The response combines wildcard CORS with credential support, indicating an unsafe CORS policy.",
+                "evidence": (
+                    f"Origin: {origin} | Access-Control-Allow-Origin: {allow_origin} | "
+                    f"Access-Control-Allow-Credentials: {allow_credentials}"
+                ),
+                "category": "cors",
+                "url": url,
+                "method": "GET",
+                "confidence": "potential",
+            })
+    except Exception as e:
+        issues.append({
+            "title": "CORS scan error",
+            "severity": "low",
+            "description": str(e),
+            "category": "cors",
+        })
+
+    return issues
+
+
+def check_open_redirect_template(template: Dict, headers: Optional[Dict] = None) -> List[Dict]:
+    """Test likely redirect fields for external redirects."""
+    issues: List[Dict] = []
+    redirect_target = "https://evil.lumen.invalid/redirect-test"
+    fields = [
+        (location, key)
+        for location, key in iter_input_fields(template)
+        if key.lower() in REDIRECT_PARAM_NAMES
+    ]
+
+    for location, key in fields:
+        test_template = clone_template(template)
+        set_input_field(test_template, location, key, redirect_target)
+        method = str(test_template.get("method", "GET")).upper()
+        test_url = template_to_url(test_template)
+        merged_headers = {}
+        if headers:
+            merged_headers.update(headers)
+        merged_headers.update(test_template.get("headers") or {})
+
+        try:
+            if method == "POST":
+                resp = requests.post(
+                    test_url,
+                    data=test_template.get("data") or {},
+                    timeout=REQUEST_TIMEOUT,
+                    headers=merged_headers or None,
+                    allow_redirects=False,
+                )
+            else:
+                resp = requests.get(
+                    test_url,
+                    timeout=REQUEST_TIMEOUT,
+                    headers=merged_headers or None,
+                    allow_redirects=False,
+                )
+
+            location_header = resp.headers.get("Location", "")
+            redirect_host = urllib.parse.urlparse(urllib.parse.urljoin(test_url, location_header)).netloc
+            if 300 <= resp.status_code < 400 and redirect_host == "evil.lumen.invalid":
+                issues.append({
+                    "title": "Open redirect",
+                    "severity": "medium",
+                    "description": "A user-controlled redirect field sends users to an external domain.",
+                    "evidence": (
+                        f"Method: {method} | Field: {key} | Status: {resp.status_code} | "
+                        f"Location: {location_header}"
+                    ),
+                    "category": "redirect",
+                    "url": test_template.get("url"),
+                    "method": method,
+                    "parameter": key,
+                    "payload": redirect_target,
+                    "confidence": "confirmed",
+                })
+                return issues
+        except Exception:
+            continue
+
+    return issues
+
+
+COMMAND_PAYLOADS = [
+    "127.0.0.1; echo LUMEN_CMD_TEST",
+    "127.0.0.1 && echo LUMEN_CMD_TEST",
+    "127.0.0.1 | echo LUMEN_CMD_TEST",
+    "127.0.0.1 & echo LUMEN_CMD_TEST",
+]
+
+
+def check_command_injection_template(template: Dict, headers: Optional[Dict] = None) -> List[Dict]:
+    """Test likely command-style fields with harmless echo markers."""
+    issues: List[Dict] = []
+    fields = [
+        (location, key)
+        for location, key in iter_input_fields(template)
+        if key.lower() in COMMAND_PARAM_NAMES
+    ]
+
+    for location, key in fields:
+        for payload in COMMAND_PAYLOADS:
+            test_template = clone_template(template)
+            set_input_field(test_template, location, key, payload)
+            method = str(test_template.get("method", "GET")).upper()
+            test_url = template_to_url(test_template)
+
+            try:
+                resp = send_template(test_template, headers)
+                body = resp.text
+                # Avoid treating simple input reflection as command execution.
+                if "LUMEN_CMD_TEST" in body and payload not in body:
+                    issues.append({
+                        "title": "Command injection",
+                        "severity": "critical",
+                        "description": (
+                            f"Injecting a shell separator into field '{key}' caused command output "
+                            "to appear in the response."
+                        ),
+                        "evidence": f"Method: {method} | Field: {key} | Payload: {payload} | URL: {test_url}",
+                        "category": "command_injection",
+                        "url": test_template.get("url"),
+                        "method": method,
+                        "parameter": key,
+                        "payload": payload,
+                        "confidence": "confirmed",
+                    })
+                    return issues
+            except Exception:
+                continue
+
+    return issues
+
+
+def has_csrf_token(template: Dict) -> bool:
+    keys = set()
+    keys.update((template.get("params") or {}).keys())
+    keys.update((template.get("data") or {}).keys())
+    return any(key.lower() in CSRF_TOKEN_NAMES or "csrf" in key.lower() for key in keys)
+
+
+def is_state_changing_template(template: Dict) -> bool:
+    method = str(template.get("method", "GET")).upper()
+    if method != "POST":
+        return False
+
+    url = template.get("url", "").lower()
+    keys = " ".join((template.get("data") or {}).keys()).lower()
+    indicators = [
+        "delete", "update", "create", "change", "save", "edit", "profile",
+        "settings", "admin", "password", "email", "upload", "comment",
+        "message", "name",
+    ]
+    return any(indicator in url or indicator in keys for indicator in indicators) or bool(template.get("data"))
+
+
+def check_csrf_template(template: Dict) -> List[Dict]:
+    """Flag likely state-changing POST forms that do not include an anti-CSRF token."""
+    if not is_state_changing_template(template) or has_csrf_token(template):
+        return []
+
+    fields = sorted((template.get("data") or {}).keys())
+    return [{
+        "title": "Potential CSRF protection missing",
+        "severity": "medium",
+        "description": (
+            "A state-changing POST form does not include an obvious anti-CSRF token. "
+            "SameSite cookies or custom headers may still provide protection, so review this manually."
+        ),
+        "evidence": f"Method: POST | URL: {template.get('url')} | Fields: {', '.join(fields)}",
+        "category": "csrf",
+        "url": template.get("url"),
+        "method": "POST",
+        "confidence": "potential",
+    }]
+
+
 def discover_subdomains(hostname: str) -> List[Dict]:
     """Resolve a small set of common subdomains for the host. Skips IPs and localhost."""
     import ipaddress
@@ -892,9 +1163,14 @@ def run_scan(
     modules = [
         "tls",
         "headers",
+        "exposure",
+        "cors",
+        "redirect",
         "xss",
         "sqli",
         "traversal",
+        "command_injection",
+        "csrf",
         "subdomain",
         "cookies",
         "error",
@@ -922,12 +1198,22 @@ def run_scan(
                 issues.extend(check_tls(hostname))
         elif module == "headers":
             issues.extend(check_http_headers(target_url, headers))
+        elif module == "exposure":
+            issues.extend(check_sensitive_exposure(target_url, headers))
+        elif module == "cors":
+            issues.extend(check_cors_policy(target_url, headers))
+        elif module == "redirect":
+            issues.extend(check_open_redirect_template(request_template, headers))
         elif module == "xss":
             issues.extend(check_xss_template(request_template, headers))
         elif module == "sqli":
             issues.extend(check_sql_injection_template(request_template, headers))
         elif module == "traversal":
             issues.extend(check_directory_traversal_template(request_template, headers))
+        elif module == "command_injection":
+            issues.extend(check_command_injection_template(request_template, headers))
+        elif module == "csrf":
+            issues.extend(check_csrf_template(request_template))
         elif module == "subdomain":
             issues.extend(discover_subdomains(hostname))
         elif module == "cookies":

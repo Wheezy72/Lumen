@@ -7,9 +7,14 @@ const SCAN_MODULES = [
   { id: 'headers',      name: 'Security Headers',  description: 'Check for missing security headers' },
   { id: 'cookies',      name: 'Cookie Security',   description: 'Check cookie security flags' },
   { id: 'tls',          name: 'TLS/SSL',            description: 'Check certificate and protocol security' },
+  { id: 'exposure',     name: 'Sensitive Exposure', description: 'Check exposed config, backup, and debug files' },
+  { id: 'cors',         name: 'CORS Policy',        description: 'Check unsafe cross-origin access policies' },
+  { id: 'redirect',     name: 'Open Redirect',      description: 'Test redirect parameters for external redirects' },
   { id: 'xss',          name: 'XSS Detection',      description: 'Test for cross-site scripting' },
   { id: 'sqli',         name: 'SQL Injection',      description: 'Test for SQL injection vulnerabilities' },
   { id: 'traversal',    name: 'Path Traversal',     description: 'Test for directory traversal' },
+  { id: 'command_injection', name: 'Command Injection', description: 'Test command-like inputs with safe markers' },
+  { id: 'csrf',         name: 'CSRF Protection',    description: 'Check state-changing forms for CSRF tokens' },
   { id: 'subdomain',    name: 'Subdomain Scan',     description: 'Discover subdomains' },
   { id: 'error',        name: 'Error Disclosure',   description: 'Check for verbose error messages' },
   { id: 'rate_limit',   name: 'Rate Limiting',      description: 'Check for rate limit protection' },
@@ -17,8 +22,8 @@ const SCAN_MODULES = [
 ];
 
 const SCAN_PROFILES = {
-  quick:    { name: 'Quick scan',    description: 'Headers + cookies only (~10 seconds)', modules: ['headers', 'cookies'] },
-  standard: { name: 'Standard scan', description: 'Crawler + core injection checks (~1 minute)', modules: ['headers','cookies','tls','error','rate_limit','xss','sqli','traversal'] },
+  quick:    { name: 'Quick scan',    description: 'Fast configuration checks (~15 seconds)', modules: ['headers', 'cookies', 'exposure', 'cors'] },
+  standard: { name: 'Standard scan', description: 'Crawler + common app checks (~1 minute)', modules: ['headers','cookies','tls','exposure','cors','redirect','error','rate_limit','xss','sqli','traversal','command_injection','csrf'] },
   full:     { name: 'Full scan',     description: 'Recursive crawl and all checks (~2+ minutes)', modules: SCAN_MODULES.map((m) => m.id) },
   custom:   { name: 'Custom',        description: 'Choose checks manually', modules: [] },
 };
