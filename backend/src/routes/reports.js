@@ -1,13 +1,13 @@
 import express from 'express';
 import Joi from 'joi';
-import PDFDocument from 'pdfkit';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { createObjectCsvWriter } from 'csv-writer';
 import Scan from '../models/Scan.js';
-import { displayFindingTitle, getHeaderHintForTitle } from '../services/findingTitle.js';
+import { displayFindingTitle } from '../services/findingTitle.js';
 import { ensureReportDir } from '../utils/reportDir.js';
+import { makePdfFileName, writePdfReport } from '../utils/pdfReport.js';
 
 const router = express.Router();
 
