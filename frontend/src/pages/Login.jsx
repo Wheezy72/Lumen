@@ -116,9 +116,10 @@ export default function Login({ onLogin, message }) {
             <button
               type="submit"
               disabled={loading}
+              aria-busy={loading}
               className="w-full py-3 rounded-full btn-primary font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? "Authenticating…" : "Sign in"}
+              <ButtonContent loading={loading} loadingLabel="Authenticating…">Sign in</ButtonContent>
             </button>
           </form>
 
