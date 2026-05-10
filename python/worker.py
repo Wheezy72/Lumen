@@ -1,5 +1,6 @@
 import os
 import json
+import re
 import ssl
 import socket
 import threading
@@ -75,6 +76,7 @@ def env_int(name: str, default: int) -> int:
 MAX_CRAWL_PAGES = env_int("LUMEN_MAX_CRAWL_PAGES", 30)
 MAX_CRAWL_DEPTH = env_int("LUMEN_MAX_CRAWL_DEPTH", 2)
 REQUEST_TIMEOUT = env_int("LUMEN_REQUEST_TIMEOUT", 8)
+MAX_SCRIPT_FETCHES = env_int("LUMEN_MAX_SCRIPT_FETCHES", 8)
 
 STATIC_EXTENSIONS = (
     ".css", ".js", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico",
@@ -96,6 +98,13 @@ CSRF_TOKEN_NAMES = {
     "csrf", "_csrf", "csrf_token", "token", "nonce", "authenticity_token",
     "__requestverificationtoken",
 }
+
+ORIGIN_LEVEL_MODULES = {"tls", "exposure", "subdomain"}
+
+API_PATH_RE = re.compile(
+    r"""["'`](?P<path>/(?:api|rest|graphql|v1|v2|v3|auth|users|user|admin|account|profile|products|orders|cart|basket|search|login|logout|feedback|upload)[A-Za-z0-9_./?=&%:-]*)["'`]""",
+    re.IGNORECASE,
+)
 
 
 def normalize_url(url: str) -> str:
@@ -214,6 +223,15 @@ def set_input_field(template: Dict, location: str, key: str, value: str) -> None
         template.setdefault("params", {})[key] = value
 
 
+def add_template(templates: List[Dict], seen_templates: set, template: Dict) -> bool:
+    key = template_key(template)
+    if key in seen_templates:
+        return False
+    seen_templates.add(key)
+    templates.append(template)
+    return True
+
+
 def input_default_value(inp) -> str:
     inp_type = inp.get("type", "text").strip().lower()
 
@@ -286,6 +304,28 @@ def extract_form_template(form, page_url: str) -> Optional[Dict]:
     }
 
 
+def extract_api_templates_from_text(text: str, page_url: str, base_url: str) -> List[Dict]:
+    templates: List[Dict] = []
+    seen: set = set()
+
+    for match in API_PATH_RE.finditer(text or ""):
+        path = match.group("path")
+        if not path or path.startswith("//"):
+            continue
+
+        full = normalize_url(urllib.parse.urljoin(page_url, path))
+        if not is_same_origin(full, base_url) or not is_crawlable_url(full):
+            continue
+
+        template = make_get_template(full, source="script")
+        key = template_key(template)
+        if key not in seen:
+            seen.add(key)
+            templates.append(template)
+
+    return templates
+
+
 def crawl_site(base_url: str, headers: Optional[Dict] = None) -> Dict:
     """
     Recursively crawl same-origin HTML pages and build request templates.
@@ -300,6 +340,8 @@ def crawl_site(base_url: str, headers: Optional[Dict] = None) -> Dict:
     pages: List[str] = []
     templates: List[Dict] = []
     forms_discovered = 0
+    scripts_fetched = 0
+    api_templates_discovered = 0
 
     while queue and under_page_limit(len(seen_pages)):
         current_url, depth = queue.pop(0)
@@ -314,10 +356,7 @@ def crawl_site(base_url: str, headers: Optional[Dict] = None) -> Dict:
         pages.append(current_url)
 
         page_template = make_get_template(current_url, source="page")
-        key = template_key(page_template)
-        if key not in seen_templates:
-            seen_templates.add(key)
-            templates.append(page_template)
+        add_template(templates, seen_templates, page_template)
 
         try:
             resp = requests.get(current_url, timeout=REQUEST_TIMEOUT, headers=headers)
@@ -339,10 +378,33 @@ def crawl_site(base_url: str, headers: Optional[Dict] = None) -> Dict:
                 continue
 
             forms_discovered += 1
-            key = template_key(form_template)
-            if key not in seen_templates:
-                seen_templates.add(key)
-                templates.append(form_template)
+            add_template(templates, seen_templates, form_template)
+
+        for api_template in extract_api_templates_from_text(resp.text, current_url, start_url):
+            if add_template(templates, seen_templates, api_template):
+                api_templates_discovered += 1
+
+        for script in soup.find_all("script", src=True):
+            if scripts_fetched >= MAX_SCRIPT_FETCHES:
+                break
+
+            src = script["src"].strip()
+            if not src:
+                continue
+
+            script_url = normalize_url(urllib.parse.urljoin(current_url, src))
+            if not is_same_origin(script_url, start_url):
+                continue
+
+            try:
+                script_resp = requests.get(script_url, timeout=REQUEST_TIMEOUT, headers=headers)
+            except Exception:
+                continue
+
+            scripts_fetched += 1
+            for api_template in extract_api_templates_from_text(script_resp.text, script_url, start_url):
+                if add_template(templates, seen_templates, api_template):
+                    api_templates_discovered += 1
 
         if depth >= MAX_CRAWL_DEPTH:
             continue
@@ -359,10 +421,7 @@ def crawl_site(base_url: str, headers: Optional[Dict] = None) -> Dict:
                 continue
 
             link_template = make_get_template(full, source="link")
-            key = template_key(link_template)
-            if key not in seen_templates:
-                seen_templates.add(key)
-                templates.append(link_template)
+            add_template(templates, seen_templates, link_template)
 
             if MAX_CRAWL_PAGES <= 0 or len(seen_pages) + len(queue) < MAX_CRAWL_PAGES:
                 queue.append((full, depth + 1))
@@ -371,6 +430,8 @@ def crawl_site(base_url: str, headers: Optional[Dict] = None) -> Dict:
         "pages_crawled": len(pages),
         "forms_discovered": forms_discovered,
         "request_templates": len(templates),
+        "api_templates_discovered": api_templates_discovered,
+        "scripts_fetched": scripts_fetched,
         "input_fields": sum(len(iter_input_fields(template)) for template in templates),
         "max_pages": MAX_CRAWL_PAGES,
         "max_depth": MAX_CRAWL_DEPTH,
@@ -1138,6 +1199,7 @@ def run_scan(
     progress_start: int = 5,
     progress_end: int = 95,
     template: Optional[Dict] = None,
+    skip_modules: Optional[set] = None,
 ) -> List[Dict]:
     """Run selected scan modules and report progress."""
     issues: List[Dict] = []
@@ -1182,6 +1244,9 @@ def run_scan(
         enabled = modules
     else:
         enabled = [m for m in modules if m in profile]
+
+    if skip_modules:
+        enabled = [m for m in enabled if m not in skip_modules]
 
     if not enabled:
         return []
@@ -1272,6 +1337,8 @@ def build_coverage_summary(stats: Dict, request_headers: Optional[Dict], modules
         ),
         "evidence": (
             f"Auth headers supplied: {'yes' if auth_supplied else 'no'} | "
+            f"API templates: {stats.get('api_templates_discovered', 0)} | "
+            f"Scripts fetched: {stats.get('scripts_fetched', 0)} | "
             f"Max depth: {stats.get('max_depth', 0)} | "
             f"Max pages: {max_pages_label} | "
             f"Modules: {modules_run}"
@@ -1326,6 +1393,7 @@ def process_job(message: Dict) -> None:
 
         all_issues: List[Dict] = []
         n = len(templates)
+        completed_origin_modules: set = set()
 
         for i, template in enumerate(templates):
             # Divide the 10–95 progress range evenly across all templates
@@ -1333,6 +1401,7 @@ def process_job(message: Dict) -> None:
             p_end   = 10 + int(((i + 1) / n) * 85)
             method = str(template.get("method", "GET")).upper()
             print(f"  Scanning template {i + 1}/{n}: {method} {template_to_url(template)}")
+            skip_modules = set(completed_origin_modules)
             issues = run_scan(
                 template_to_url(template),
                 scan_profile,
@@ -1341,8 +1410,11 @@ def process_job(message: Dict) -> None:
                 progress_start=p_start,
                 progress_end=p_end,
                 template=template,
+                skip_modules=skip_modules,
             )
             all_issues.extend(issues)
+            if not skip_modules:
+                completed_origin_modules.update(ORIGIN_LEVEL_MODULES)
 
         all_issues.append(build_coverage_summary(stats, request_headers, scan_profile))
 
@@ -1373,6 +1445,8 @@ def process_job(message: Dict) -> None:
             "pages_crawled": 1,
             "forms_discovered": 0,
             "request_templates": 1,
+            "api_templates_discovered": 0,
+            "scripts_fetched": 0,
             "input_fields": len(iter_input_fields(direct_template)),
             "max_pages": 1,
             "max_depth": 0,
