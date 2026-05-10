@@ -72,7 +72,7 @@ Scanner modules:
 - `csrf` — state-changing POST forms without obvious CSRF tokens
 - `subdomain` — small common subdomain resolver
 - `error` — verbose errors/stack traces
-- `access_control` — simple numeric-ID access-control probe
+- `access_control` — ID-like field mutation, path-segment IDOR probes, and authenticated/unauthenticated differential when auth headers are supplied
 - `rate_limit` — missing throttling on auth-like endpoints
 
 Heartbeat (used by the backend to fail fast if the worker is offline):

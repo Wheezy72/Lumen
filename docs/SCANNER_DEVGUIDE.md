@@ -297,5 +297,6 @@ Recommended next implementation order:
 
 1. JSON API mutation and stable finding fingerprints.
 2. Bounded Playwright interactions.
-3. Deeper access-control differentials.
-4. Lightweight local SAST checks.
+3. Lightweight local SAST checks.
+
+`access_control` already mutates ID-like fields (`id`, `user_id`, `account_id`, etc.) across query, form, and JSON inputs, mutates numeric path segments, and runs an authenticated-vs-unauthenticated differential when `Cookie` or `Authorization` headers are supplied. Findings are reported with `confidence=potential` because response similarity alone is not proof of a real authorisation bug.

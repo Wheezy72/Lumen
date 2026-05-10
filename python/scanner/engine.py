@@ -116,7 +116,7 @@ def run_scan(
         elif module == "error":
             issues.extend(check_error_leakage(target_url, headers))
         elif module == "access_control":
-            issues.extend(check_broken_access_control(target_url, headers))
+            issues.extend(check_broken_access_control(request_template, headers))
         elif module == "rate_limit":
             issues.extend(check_rate_limiting(target_url, headers))
 
