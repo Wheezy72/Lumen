@@ -1,0 +1,5 @@
+$kind: http-request
+description: List all recurring schedules created via the public API.
+url: "{{baseUrl}}/api/publicApi/schedules"
+method: GET
+order: 2000

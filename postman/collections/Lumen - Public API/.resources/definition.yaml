@@ -1,0 +1,13 @@
+$kind: collection
+description: Test the Lumen public API. Set `baseUrl` and `publicApiKey` in your environment before running requests.
+variables:
+  baseUrl: http://localhost:4000
+  publicApiKey: E4A2B8C0D1E3F5A7B9C2D7D4E2A1B9C7D0F6
+  scanId: ""
+  scheduleId: ""
+auth:
+  - id: fde971d9-af19-4a06-a63d-677aabede5bd
+    type: bearer
+    name: bearer auth
+    credentials:
+      token: "{{publicApiKey}}"

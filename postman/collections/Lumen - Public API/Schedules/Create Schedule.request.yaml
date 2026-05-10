@@ -1,0 +1,17 @@
+$kind: http-request
+description: 'Create a recurring scan schedule using a cron expression. `cron: "0 9 * * 1"` = every Monday at 9am. Set `runNow: true` to also kick off an immediate scan.'
+url: "{{baseUrl}}/api/publicApi/schedules"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "target": "https://example.com",
+      "cron": "0 9 * * 1",
+      "timezone": "Africa/Nairobi",
+      "modules": ["headers", "xss", "sqli", "cookies", "ssl"],
+      "runNow": false
+    }
+order: 1000

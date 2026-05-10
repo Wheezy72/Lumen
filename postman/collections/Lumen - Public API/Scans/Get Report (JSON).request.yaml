@@ -1,0 +1,5 @@
+$kind: http-request
+description: Returns a JSON summary of the scan with all findings and download URLs for the PDF and CSV reports.
+url: "{{baseUrl}}/api/publicApi/scans/{{scanId}}/report"
+method: GET
+order: 4000

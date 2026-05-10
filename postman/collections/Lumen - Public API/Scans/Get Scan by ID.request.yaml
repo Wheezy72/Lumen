@@ -1,0 +1,5 @@
+$kind: http-request
+description: Get a single scan. Check `status` (queued → running → completed/failed) and `progress` (0–100).
+url: "{{baseUrl}}/api/publicApi/scans/{{scanId}}"
+method: GET
+order: 3000

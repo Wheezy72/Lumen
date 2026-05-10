@@ -1,0 +1,5 @@
+$kind: http-request
+description: Download the full security report as a PDF. Only works once the scan has completed.
+url: "{{baseUrl}}/api/publicApi/scans/{{scanId}}/report.pdf"
+method: GET
+order: 5000

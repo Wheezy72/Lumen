@@ -1,0 +1,5 @@
+$kind: http-request
+description: Remove a recurring schedule and cancel its queued jobs. Set `scheduleId` in the collection variables first.
+url: "{{baseUrl}}/api/publicApi/schedules/{{scheduleId}}"
+method: DELETE
+order: 3000
