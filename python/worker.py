@@ -77,6 +77,9 @@ MAX_CRAWL_PAGES = env_int("LUMEN_MAX_CRAWL_PAGES", 30)
 MAX_CRAWL_DEPTH = env_int("LUMEN_MAX_CRAWL_DEPTH", 2)
 REQUEST_TIMEOUT = env_int("LUMEN_REQUEST_TIMEOUT", 8)
 MAX_SCRIPT_FETCHES = env_int("LUMEN_MAX_SCRIPT_FETCHES", 8)
+BROWSER_DISCOVERY_ENABLED = os.getenv("LUMEN_BROWSER_DISCOVERY", "auto").lower()
+BROWSER_DISCOVERY_TIMEOUT_MS = env_int("LUMEN_BROWSER_DISCOVERY_TIMEOUT_MS", 12000)
+BROWSER_DISCOVERY_MAX_REQUESTS = env_int("LUMEN_BROWSER_DISCOVERY_MAX_REQUESTS", 40)
 
 STATIC_EXTENSIONS = (
     ".css", ".js", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico",
@@ -129,6 +132,14 @@ def is_crawlable_url(url: str) -> bool:
 def base_origin(url: str) -> str:
     parsed = urllib.parse.urlparse(url)
     return urllib.parse.urlunparse((parsed.scheme, parsed.netloc, "/", "", "", ""))
+
+
+def should_run_browser_discovery(page_count: int, form_count: int, script_count: int, api_count: int) -> bool:
+    if BROWSER_DISCOVERY_ENABLED in ("0", "false", "off", "no"):
+        return False
+    if BROWSER_DISCOVERY_ENABLED in ("1", "true", "on", "yes"):
+        return True
+    return script_count > 0 and api_count == 0 and (page_count <= 3 or form_count == 0)
 
 
 def under_page_limit(count: int) -> bool:
@@ -426,12 +437,33 @@ def crawl_site(base_url: str, headers: Optional[Dict] = None) -> Dict:
             if MAX_CRAWL_PAGES <= 0 or len(seen_pages) + len(queue) < MAX_CRAWL_PAGES:
                 queue.append((full, depth + 1))
 
+    browser_templates_discovered = 0
+    browser_discovery_error = None
+    if should_run_browser_discovery(len(pages), forms_discovered, scripts_fetched, api_templates_discovered):
+        try:
+            from browser_discovery import browser_discover_templates
+
+            browser_result = browser_discover_templates(
+                start_url,
+                headers=headers,
+                timeout_ms=BROWSER_DISCOVERY_TIMEOUT_MS,
+                max_requests=BROWSER_DISCOVERY_MAX_REQUESTS,
+            )
+            browser_discovery_error = browser_result.get("error")
+            for browser_template in browser_result.get("templates", []):
+                if add_template(templates, seen_templates, browser_template):
+                    browser_templates_discovered += 1
+        except Exception as e:
+            browser_discovery_error = str(e)
+
     stats = {
         "pages_crawled": len(pages),
         "forms_discovered": forms_discovered,
         "request_templates": len(templates),
         "api_templates_discovered": api_templates_discovered,
         "scripts_fetched": scripts_fetched,
+        "browser_templates_discovered": browser_templates_discovered,
+        "browser_discovery_error": browser_discovery_error,
         "input_fields": sum(len(iter_input_fields(template)) for template in templates),
         "max_pages": MAX_CRAWL_PAGES,
         "max_depth": MAX_CRAWL_DEPTH,
@@ -1339,6 +1371,7 @@ def build_coverage_summary(stats: Dict, request_headers: Optional[Dict], modules
             f"Auth headers supplied: {'yes' if auth_supplied else 'no'} | "
             f"API templates: {stats.get('api_templates_discovered', 0)} | "
             f"Scripts fetched: {stats.get('scripts_fetched', 0)} | "
+            f"Browser templates: {stats.get('browser_templates_discovered', 0)} | "
             f"Max depth: {stats.get('max_depth', 0)} | "
             f"Max pages: {max_pages_label} | "
             f"Modules: {modules_run}"
@@ -1447,6 +1480,8 @@ def process_job(message: Dict) -> None:
             "request_templates": 1,
             "api_templates_discovered": 0,
             "scripts_fetched": 0,
+            "browser_templates_discovered": 0,
+            "browser_discovery_error": None,
             "input_fields": len(iter_input_fields(direct_template)),
             "max_pages": 1,
             "max_depth": 0,

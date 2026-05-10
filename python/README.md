@@ -12,6 +12,13 @@ cd python
 python -m pip install -r requirements.txt
 ```
 
+Optional browser-based discovery for JavaScript-heavy apps uses Playwright.
+After installing Python requirements, install Chromium once:
+
+```bash
+python -m playwright install chromium
+```
+
 ## Run
 
 ```bash
@@ -22,6 +29,13 @@ python worker.py
 ## Configuration (environment variables)
 
 - `REDIS_URL` (default: `redis://127.0.0.1:6379`)
+- `LUMEN_MAX_CRAWL_PAGES` (default: `30`, set `0` for no page cap)
+- `LUMEN_MAX_CRAWL_DEPTH` (default: `2`)
+- `LUMEN_REQUEST_TIMEOUT` (default: `8`)
+- `LUMEN_MAX_SCRIPT_FETCHES` (default: `8`)
+- `LUMEN_BROWSER_DISCOVERY` (default: `auto`; use `on`/`off` to force/disable Playwright discovery)
+- `LUMEN_BROWSER_DISCOVERY_TIMEOUT_MS` (default: `12000`)
+- `LUMEN_BROWSER_DISCOVERY_MAX_REQUESTS` (default: `40`)
 
 Heartbeat (used by the backend to fail fast if the worker is offline):
 
