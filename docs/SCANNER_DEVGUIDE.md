@@ -40,6 +40,7 @@ python/
       error_leakage.py
       access_control.py
       rate_limit.py
+      sast.py
 ```
 
 ## Request templates
@@ -126,6 +127,7 @@ subdomain
 error
 access_control
 rate_limit
+sast
 ```
 
 These IDs must stay in sync across:
@@ -291,12 +293,18 @@ python -m playwright install chromium
 - Keep defaults bounded for large sites.
 - Make expensive behavior opt-in through config.
 
+## Lightweight SAST
+
+`scanner/modules/sast.py` provides a local source-code scan covering three areas:
+
+- secret patterns (AWS, GitHub, Slack, Google, Stripe, JWT-shaped tokens, private key blocks, hard-coded `KEY`/`TOKEN`/`PASSWORD` assignments)
+- risky code patterns (Python `eval`/`exec`, `pickle.load`, `yaml.load` without `Loader`, `subprocess(..., shell=True)`, `os.system`, Node `eval`/`new Function`/`child_process.exec`, raw SQL string concatenation, `Runtime.exec` in Java/Kotlin)
+- dependency hygiene signals (missing JS lockfile, wildcard `*`/`latest` versions, unpinned `requirements.txt` entries)
+
+It only runs when a scan request includes `sourcePath` and that path resolves to a directory the worker can read. Walks skip vendored or build directories (`node_modules`, `.git`, `.venv`, `dist`, etc.), reject binary files, and respect `LUMEN_SAST_MAX_FILE_BYTES`, `LUMEN_SAST_MAX_TOTAL_BYTES`, `LUMEN_SAST_MAX_FILES`, and `LUMEN_SAST_MAX_FINDINGS_PER_RULE` so even very large repositories stay bounded.
+
+Findings include the relative file path and line number in `evidence`, are categorised as `secrets`, `risky_code`, `dependency`, or `sast`, and are emitted with `confidence: potential` because pattern matching alone is not full taint analysis.
+
 ## Sprint roadmap
 
-Recommended next implementation order:
-
-1. JSON API mutation and stable finding fingerprints.
-2. Bounded Playwright interactions.
-3. Lightweight local SAST checks.
-
-`access_control` already mutates ID-like fields (`id`, `user_id`, `account_id`, etc.) across query, form, and JSON inputs, mutates numeric path segments, and runs an authenticated-vs-unauthenticated differential when `Cookie` or `Authorization` headers are supplied. Findings are reported with `confidence=potential` because response similarity alone is not proof of a real authorisation bug.
+The DAST and lightweight-SAST roadmap items are now in place. Future deepening (response normalisation, two-user authorisation differentials, schema-aware JSON fuzzing, dependency CVE intelligence) is intentionally out of scope and should be planned as additional sprints rather than retrofitted into existing modules.
