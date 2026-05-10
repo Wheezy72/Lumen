@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import axios from "axios";
 import { Link, useNavigate } from "react-router-dom";
 import AuthBackground from "../components/ui/AuthBackground.jsx";
+import { ButtonContent } from "../components/ui/Spinner.jsx";
 
 export default function ForgotPassword() {
   const navigate = useNavigate();
@@ -76,8 +77,13 @@ export default function ForgotPassword() {
                   <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="input" placeholder="you@example.com" required autoFocus />
                 </div>
               </div>
-              <button type="submit" disabled={loading} className="w-full py-3 rounded-full btn-primary font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed">
-                {loading ? "Sending…" : "Send reset code"}
+              <button
+                type="submit"
+                disabled={loading}
+                aria-busy={loading}
+                className="w-full py-3 rounded-full btn-primary font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ButtonContent loading={loading} loadingLabel="Sending…">Send reset code</ButtonContent>
               </button>
               <p className="text-center text-gray-400 text-sm">
                 <Link to="/login" className="text-primary-400 hover:text-primary-300 font-semibold link-underline">Back to sign in</Link>

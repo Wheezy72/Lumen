@@ -3,6 +3,7 @@ import axios from "axios";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import AuthBackground from "../components/ui/AuthBackground.jsx";
 import { EyeIcon, EyeOffIcon } from "../components/ui/Icons.jsx";
+import { ButtonContent } from "../components/ui/Spinner.jsx";
 
 export default function Login({ onLogin, message }) {
   const navigate = useNavigate();

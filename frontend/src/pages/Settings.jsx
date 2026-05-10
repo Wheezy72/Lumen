@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
+import { ButtonContent } from '../components/ui/Spinner.jsx';
 
 export default function Settings({ user, onUpdateUser }) {
   const [form, setForm] = useState({ username: '', email: '', emailAlertsEnabled: false });
@@ -140,9 +141,10 @@ export default function Settings({ user, onUpdateUser }) {
         <button
           type="submit"
           disabled={saving}
+          aria-busy={saving}
           className="btn btn-primary px-5 py-2.5 disabled:opacity-50"
         >
-          {saving ? 'Saving…' : 'Save changes'}
+          <ButtonContent loading={saving} loadingLabel="Saving…">Save changes</ButtonContent>
         </button>
       </form>
     </div>

@@ -3,6 +3,7 @@ import axios from "axios";
 import { Link, useNavigate } from "react-router-dom";
 import AuthBackground from "../components/ui/AuthBackground.jsx";
 import { EyeIcon, EyeOffIcon } from "../components/ui/Icons.jsx";
+import { ButtonContent } from "../components/ui/Spinner.jsx";
 
 export default function Register({ onRegister }) {
   const navigate = useNavigate();
@@ -135,8 +136,13 @@ export default function Register({ onRegister }) {
               </div>
             </div>
 
-            <button type="submit" disabled={loading} className="w-full py-3 rounded-full btn-primary font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed mt-2">
-              {loading ? "Creating…" : "Create Account"}
+            <button
+              type="submit"
+              disabled={loading}
+              aria-busy={loading}
+              className="w-full py-3 rounded-full btn-primary font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed mt-2"
+            >
+              <ButtonContent loading={loading} loadingLabel="Creating…">Create Account</ButtonContent>
             </button>
           </form>
 

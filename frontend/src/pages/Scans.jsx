@@ -5,6 +5,7 @@ import AnimatedProgressBar from '../components/ui/AnimatedProgressBar.jsx';
 import EmptyState from '../components/ui/EmptyState.jsx';
 import SeverityMiniBar from '../components/ui/SeverityMiniBar.jsx';
 import Modal from '../components/ui/Modal.jsx';
+import Spinner from '../components/ui/Spinner.jsx';
 import { useToast } from '../components/ui/Toast.jsx';
 import { formatLocalDateTime, timeAgo } from '../utils/dates.js';
 import { targetLabel } from '../utils/targetLabel.js';
@@ -215,12 +216,26 @@ function ScanCard({ scan, onDownload, isDownloading, onDelete, isDeleting }) {
           {status === 'completed' ? (
             <>
               <Link to={`/report/${_id}`} className="font-semibold text-primary-400 hover:text-primary-300 transition link-underline">View</Link>
-              <button type="button" onClick={() => onDownload(_id, 'pdf')} disabled={isDownloading(_id, 'pdf')} className="text-gray-500 hover:text-white transition disabled:opacity-40 font-mono">
-                {isDownloading(_id, 'pdf') ? 'PDF…' : 'PDF'}
+              <button
+                type="button"
+                onClick={() => onDownload(_id, 'pdf')}
+                disabled={isDownloading(_id, 'pdf')}
+                aria-busy={isDownloading(_id, 'pdf')}
+                className="text-gray-500 hover:text-white transition disabled:opacity-40 font-mono inline-flex items-center gap-1.5"
+              >
+                {isDownloading(_id, 'pdf') ? <Spinner size="xs" className="text-current" /> : null}
+                <span>PDF</span>
               </button>
               <span className="text-white/20">·</span>
-              <button type="button" onClick={() => onDownload(_id, 'csv')} disabled={isDownloading(_id, 'csv')} className="text-gray-500 hover:text-white transition disabled:opacity-40 font-mono">
-                {isDownloading(_id, 'csv') ? 'CSV…' : 'CSV'}
+              <button
+                type="button"
+                onClick={() => onDownload(_id, 'csv')}
+                disabled={isDownloading(_id, 'csv')}
+                aria-busy={isDownloading(_id, 'csv')}
+                className="text-gray-500 hover:text-white transition disabled:opacity-40 font-mono inline-flex items-center gap-1.5"
+              >
+                {isDownloading(_id, 'csv') ? <Spinner size="xs" className="text-current" /> : null}
+                <span>CSV</span>
               </button>
             </>
           ) : status === 'running' ? (

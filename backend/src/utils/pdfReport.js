@@ -97,10 +97,16 @@ function highestSeverity(counts) {
   return ['critical', 'high', 'medium', 'low', 'info'].find((severity) => counts[severity] > 0) || 'info';
 }
 
+const PAGE_TOP_Y = HEADER_H + 20;
+const PAGE_BOTTOM_Y = PAGE_H - FOOTER_H - 28;
+
 function addPageIfNeeded(doc, needed = 120) {
-  if (doc.y + needed > PAGE_H - FOOTER_H - 28) {
+  // If we already sit at the top of a freshly added page, never insert another
+  // empty page just because the next block's "needed" estimate is large.
+  if (doc.y <= PAGE_TOP_Y + 1) return;
+  if (doc.y + needed > PAGE_BOTTOM_Y) {
     doc.addPage();
-    doc.y = HEADER_H + 20;
+    doc.y = PAGE_TOP_Y;
   }
 }
 
@@ -121,11 +127,42 @@ function drawLogoOrWordmark(doc, x, y) {
   return x + 42;
 }
 
+function trimTrailingEmptyPages(doc) {
+  // Some content blocks reserve vertical space and may leave the cursor at the
+  // top of a freshly added page even though nothing else gets drawn on it.
+  // PDFKit still emits that page, so the resulting PDF ends with a blank
+  // sheet that only carries the stamped header/footer. Walk back from the
+  // last buffered page and remove the empty ones before stamping.
+  while (true) {
+    const range = doc.bufferedPageRange();
+    if (range.count <= 1) return;
+
+    const lastIndex = range.start + range.count - 1;
+    doc.switchToPage(lastIndex);
+    if (doc.y > PAGE_TOP_Y + 1) return;
+
+    if (typeof doc.removePage === 'function') {
+      doc.removePage(lastIndex);
+    } else if (Array.isArray(doc._pageBuffer)) {
+      doc._pageBuffer.pop();
+      doc._pageBufferStart = doc._pageBufferStart || 0;
+    } else {
+      return;
+    }
+  }
+}
+
 function stampHeaderFooter(doc, scan) {
+  trimTrailingEmptyPages(doc);
   const range = doc.bufferedPageRange();
   const total = range.count;
   const host = getHost(scan);
   const generated = formatDate(new Date());
+
+  // Pin text() options that prevent PDFKit's LineWrapper from triggering
+  // continueOnNewPage when we draw header/footer overlays. height: 0 with
+  // ellipsis stops the wrapper before it can spill onto a new page.
+  const stampOpts = (extra = {}) => ({ lineBreak: false, height: 0, ellipsis: true, ...extra });
 
   for (let i = 0; i < total; i++) {
     doc.switchToPage(range.start + i);
@@ -134,14 +171,14 @@ function stampHeaderFooter(doc, scan) {
     const textX = drawLogoOrWordmark(doc, MARGIN, 16);
 
     doc.fillColor('#F8FAFC').font('Helvetica-Bold').fontSize(16)
-      .text('Lumen', textX, 17, { lineBreak: false });
+      .text('Lumen', textX, 17, stampOpts());
     doc.fillColor('#CBD5E1').font('Helvetica').fontSize(9)
-      .text('Security scan report', textX, 38, { lineBreak: false });
+      .text('Security scan report', textX, 38, stampOpts());
 
     doc.fillColor('#CBD5E1').font('Helvetica-Bold').fontSize(8)
-      .text(host, MARGIN, 20, { width: INNER_W, align: 'right', lineBreak: false });
+      .text(host, MARGIN, 20, stampOpts({ width: INNER_W, align: 'right' }));
     doc.fillColor('#94A3B8').font('Helvetica').fontSize(7.5)
-      .text(`Generated ${generated}`, MARGIN, 34, { width: INNER_W, align: 'right', lineBreak: false });
+      .text(`Generated ${generated}`, MARGIN, 34, stampOpts({ width: INNER_W, align: 'right' }));
 
     doc.save().moveTo(MARGIN, HEADER_H + 6).lineTo(PAGE_W - MARGIN, HEADER_H + 6)
       .strokeColor('#E2E8F0').lineWidth(0.6).stroke().restore();
@@ -151,9 +188,9 @@ function stampHeaderFooter(doc, scan) {
       .strokeColor('#E2E8F0').lineWidth(0.6).stroke().restore();
     doc.fillColor(COLORS.muted).font('Helvetica').fontSize(7.5)
       .text('Lumen Vulnerability Scanner — confidential, authorised use only',
-        MARGIN, PAGE_H - 21, { lineBreak: false });
+        MARGIN, PAGE_H - 21, stampOpts());
     doc.fillColor(COLORS.muted).font('Helvetica').fontSize(7.5)
-      .text(`Page ${i + 1} of ${total}`, MARGIN, PAGE_H - 21, { width: INNER_W, align: 'right', lineBreak: false });
+      .text(`Page ${i + 1} of ${total}`, MARGIN, PAGE_H - 21, stampOpts({ width: INNER_W, align: 'right' }));
   }
 }
 
@@ -384,7 +421,7 @@ export async function writePdfReport(scan, filePath) {
   const coverage = coverageFinding(results);
   const counts = countSeverities(findings);
 
-  doc.y = HEADER_H + 22;
+  doc.y = PAGE_TOP_Y;
   drawExecutiveSummary(doc, scan, findings, counts);
   drawCoverage(doc, coverage);
 
