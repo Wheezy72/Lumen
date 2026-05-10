@@ -4,7 +4,7 @@ import ssl
 import socket
 import threading
 import urllib.parse
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 
 import dns.resolver
 import redis
@@ -61,104 +61,274 @@ def heartbeat_loop(stop_event: threading.Event) -> None:
         stop_event.wait(HEARTBEAT_INTERVAL_SECONDS)
 
 
-# --- Auto-crawler --------------------------------------------------------------
+# --- Request templates + auto-crawler -----------------------------------------
+
+
+MAX_CRAWL_PAGES = 30
+MAX_CRAWL_DEPTH = 2
+REQUEST_TIMEOUT = 8
+
+STATIC_EXTENSIONS = (
+    ".css", ".js", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico",
+    ".woff", ".woff2", ".ttf", ".eot", ".pdf", ".zip", ".tar", ".gz",
+    ".mp4", ".mp3", ".avi", ".mov",
+)
+
+
+def normalize_url(url: str) -> str:
+    """Remove fragments and normalize empty paths so crawl de-duplication works."""
+    parsed = urllib.parse.urlparse(url)
+    path = parsed.path or "/"
+    return urllib.parse.urlunparse(parsed._replace(path=path, fragment=""))
+
+
+def is_same_origin(url: str, base_url: str) -> bool:
+    parsed = urllib.parse.urlparse(url)
+    parsed_base = urllib.parse.urlparse(base_url)
+    return parsed.scheme in ("http", "https") and parsed.netloc == parsed_base.netloc
+
+
+def is_crawlable_url(url: str) -> bool:
+    parsed = urllib.parse.urlparse(url)
+    path = parsed.path.lower()
+    return not path.endswith(STATIC_EXTENSIONS)
+
+
+def _single_value_params(params: Dict[str, List[str]]) -> Dict[str, str]:
+    return {key: values[0] if values else "" for key, values in params.items()}
+
+
+def make_get_template(url: str, source: str = "link") -> Dict:
+    parsed = urllib.parse.urlparse(normalize_url(url))
+    params = _single_value_params(urllib.parse.parse_qs(parsed.query, keep_blank_values=True))
+    clean_url = urllib.parse.urlunparse(parsed._replace(query=""))
+    return {
+        "method": "GET",
+        "url": clean_url,
+        "params": params,
+        "data": {},
+        "headers": {},
+        "source": source,
+    }
+
+
+def template_to_url(template: Dict) -> str:
+    parsed = urllib.parse.urlparse(template["url"])
+    params = template.get("params") or {}
+    query = urllib.parse.urlencode(params, doseq=True)
+    return urllib.parse.urlunparse(parsed._replace(query=query))
+
+
+def send_template(template: Dict, headers: Optional[Dict] = None) -> requests.Response:
+    merged_headers = {}
+    if headers:
+        merged_headers.update(headers)
+    merged_headers.update(template.get("headers") or {})
+
+    method = str(template.get("method", "GET")).upper()
+    url = template_to_url(template)
+
+    if method == "POST":
+        return requests.post(
+            url,
+            data=template.get("data") or {},
+            timeout=REQUEST_TIMEOUT,
+            headers=merged_headers or None,
+        )
+
+    return requests.get(url, timeout=REQUEST_TIMEOUT, headers=merged_headers or None)
+
+
+def template_key(template: Dict) -> Tuple:
+    return (
+        str(template.get("method", "GET")).upper(),
+        template.get("url", ""),
+        tuple(sorted((template.get("params") or {}).items())),
+        tuple(sorted((template.get("data") or {}).items())),
+    )
+
+
+def input_default_value(inp) -> str:
+    inp_type = inp.get("type", "text").strip().lower()
+
+    if inp_type == "submit":
+        return inp.get("value", "Submit")
+    if inp_type == "password":
+        return inp.get("value", "Password123!")
+    if inp_type in ("number", "range"):
+        return inp.get("value", "1")
+    if inp_type in ("email",):
+        return inp.get("value", "test@example.com")
+    if inp_type in ("url",):
+        return inp.get("value", "https://example.com")
+    return inp.get("value", "test")
+
+
+def extract_form_template(form, page_url: str) -> Optional[Dict]:
+    action = form.get("action", "").strip()
+    method = form.get("method", "get").strip().upper()
+    if method not in ("GET", "POST"):
+        method = "GET"
+
+    form_url = normalize_url(urllib.parse.urljoin(page_url, action) if action else page_url)
+    parsed = urllib.parse.urlparse(form_url)
+    base_url = urllib.parse.urlunparse(parsed._replace(query=""))
+    params = _single_value_params(urllib.parse.parse_qs(parsed.query, keep_blank_values=True))
+    data: Dict[str, str] = {}
+
+    for inp in form.find_all(["input", "textarea", "select"]):
+        name = inp.get("name", "").strip()
+        if not name:
+            continue
+
+        tag_name = inp.name.lower()
+        inp_type = inp.get("type", "text").strip().lower()
+
+        if inp_type in ("radio", "checkbox") and inp.get("checked") is None:
+            continue
+
+        if tag_name == "textarea":
+            value = inp.get_text(strip=True) or "test"
+        elif tag_name == "select":
+            selected = inp.find("option", selected=True) or inp.find("option")
+            value = selected.get("value", selected.get_text(strip=True)) if selected else "test"
+        else:
+            value = input_default_value(inp)
+
+        data[name] = value
+
+    for btn in form.find_all("button"):
+        btn_type = btn.get("type", "submit").strip().lower()
+        name = btn.get("name", "").strip()
+        if btn_type == "submit" and name:
+            data[name] = btn.get("value", btn.get_text(strip=True) or "Submit")
+
+    if not data:
+        return None
+
+    if method == "GET":
+        params.update(data)
+        data = {}
+
+    return {
+        "method": method,
+        "url": base_url,
+        "params": params,
+        "data": data,
+        "headers": {},
+        "source": "form",
+    }
+
+
+def crawl_site(base_url: str, headers: Optional[Dict] = None) -> Dict:
+    """
+    Recursively crawl same-origin HTML pages and build request templates.
+
+    The crawler stays deliberately bounded so normal scans remain fast and
+    predictable while still discovering deeper authenticated pages and forms.
+    """
+    start_url = normalize_url(base_url)
+    queue: List[Tuple[str, int]] = [(start_url, 0)]
+    seen_pages: set = set()
+    seen_templates: set = set()
+    pages: List[str] = []
+    templates: List[Dict] = []
+    forms_discovered = 0
+
+    while queue and len(seen_pages) < MAX_CRAWL_PAGES:
+        current_url, depth = queue.pop(0)
+        current_url = normalize_url(current_url)
+
+        if current_url in seen_pages:
+            continue
+        if not is_same_origin(current_url, start_url) or not is_crawlable_url(current_url):
+            continue
+
+        seen_pages.add(current_url)
+        pages.append(current_url)
+
+        page_template = make_get_template(current_url, source="page")
+        key = template_key(page_template)
+        if key not in seen_templates:
+            seen_templates.add(key)
+            templates.append(page_template)
+
+        try:
+            resp = requests.get(current_url, timeout=REQUEST_TIMEOUT, headers=headers)
+        except Exception as e:
+            print(f"Auto-crawl request error for {current_url}: {e}")
+            continue
+
+        content_type = resp.headers.get("Content-Type", "").lower()
+        if "html" not in content_type and "<html" not in resp.text[:500].lower():
+            continue
+
+        soup = BeautifulSoup(resp.text, "lxml")
+
+        for form in soup.find_all("form"):
+            form_template = extract_form_template(form, current_url)
+            if not form_template:
+                continue
+            if not is_same_origin(form_template["url"], start_url):
+                continue
+
+            forms_discovered += 1
+            key = template_key(form_template)
+            if key not in seen_templates:
+                seen_templates.add(key)
+                templates.append(form_template)
+
+        if depth >= MAX_CRAWL_DEPTH:
+            continue
+
+        for tag in soup.find_all("a", href=True):
+            href = tag["href"].strip()
+            if not href or href.startswith("#") or href.startswith(("javascript:", "mailto:", "tel:")):
+                continue
+
+            full = normalize_url(urllib.parse.urljoin(current_url, href))
+            if full in seen_pages:
+                continue
+            if not is_same_origin(full, start_url) or not is_crawlable_url(full):
+                continue
+
+            link_template = make_get_template(full, source="link")
+            key = template_key(link_template)
+            if key not in seen_templates:
+                seen_templates.add(key)
+                templates.append(link_template)
+
+            if len(seen_pages) + len(queue) < MAX_CRAWL_PAGES:
+                queue.append((full, depth + 1))
+
+    stats = {
+        "pages_crawled": len(pages),
+        "forms_discovered": forms_discovered,
+        "request_templates": len(templates),
+        "max_pages": MAX_CRAWL_PAGES,
+        "max_depth": MAX_CRAWL_DEPTH,
+    }
+
+    return {"pages": pages, "templates": templates, "stats": stats}
 
 
 def auto_crawl_targets(base_url: str, headers: Optional[Dict] = None) -> List[str]:
     """
-    Crawl the given URL for <a href> links and <form> inputs.
+    Compatibility wrapper for URL-based modules.
 
-    Returns a list of parameterised URLs discovered on the page so that
-    active checks (XSS, SQLi, traversal …) can be run against real
-    parameter names rather than a blind injection into the base URL.
+    New code should use crawl_site() and request templates directly.
     """
-    targets: List[str] = [base_url]
-    seen: set = {base_url}
-
-    try:
-        resp = requests.get(base_url, timeout=10, headers=headers)
-        soup = BeautifulSoup(resp.text, "lxml")
-        parsed_base = urllib.parse.urlparse(base_url)
-
-        # ── <a href> links ──────────────────────────────────────────────────
-        for tag in soup.find_all("a", href=True):
-            href = tag["href"].strip()
-            if not href or href.startswith("#") or href.startswith("javascript:"):
-                continue
-
-            full = urllib.parse.urljoin(base_url, href)
-            parsed = urllib.parse.urlparse(full)
-
-            # Stay on the same host
-            if parsed.netloc != parsed_base.netloc:
-                continue
-
-            if "?" in full and full not in seen:
-                seen.add(full)
-                targets.append(full)
-
-        # ── <form> inputs ───────────────────────────────────────────────────
-        for form in soup.find_all("form"):
-            action = form.get("action", "").strip()
-            method = form.get("method", "get").strip().lower()
-
-            form_url = urllib.parse.urljoin(base_url, action) if action else base_url
-            parsed_form = urllib.parse.urlparse(form_url)
-
-            # Stay on same host and only bother with GET-style forms for now
-            if parsed_form.netloc and parsed_form.netloc != parsed_base.netloc:
-                continue
-
-            params: Dict[str, str] = {}
-            for inp in form.find_all(["input", "select", "textarea"]):
-                inp_type = inp.get("type", "text").strip().lower()
-                name = inp.get("name", "").strip()
-                if not name:
-                    continue
-
-                # ── Include submit buttons (name + value) ──────────────────
-                # Critical for apps like DVWA where the submit button's
-                # name/value (e.g. Submit=Submit) must be present in the
-                # query string to trigger the back-end handler.
-                if inp_type == "submit":
-                    value = inp.get("value", "Submit")
-                    params[name] = value
-                elif inp_type in ("hidden", "text", "number", "email",
-                                  "search", "tel", "url", "password"):
-                    value = inp.get("value", "test")
-                    params[name] = value
-                # radio / checkbox: include only checked ones
-                elif inp_type in ("radio", "checkbox"):
-                    if inp.get("checked") is not None:
-                        value = inp.get("value", "on")
-                        params[name] = value
-                else:
-                    # select, textarea, unknown — grab whatever value is set
-                    value = inp.get("value", "test")
-                    params[name] = value
-
-            # Also pick up <button type="submit"> elements
-            for btn in form.find_all("button"):
-                btn_type = btn.get("type", "submit").strip().lower()
-                if btn_type == "submit":
-                    name = btn.get("name", "").strip()
-                    if name:
-                        params[name] = btn.get("value", btn.get_text(strip=True) or "Submit")
-
-            if not params:
-                continue
-
-            qs = urllib.parse.urlencode(params)
-            target = urllib.parse.urlunparse(parsed_form._replace(query=qs))
-
-            if target not in seen:
-                seen.add(target)
-                targets.append(target)
-
-    except Exception as e:
-        print(f"Auto-crawl error for {base_url}: {e}")
-
-    return targets
+    crawl = crawl_site(base_url, headers)
+    targets = []
+    seen = set()
+    for template in crawl["templates"]:
+        if str(template.get("method", "GET")).upper() != "GET":
+            continue
+        target = template_to_url(template)
+        if target not in seen:
+            seen.add(target)
+            targets.append(target)
+    return targets or [base_url]
 
 
 # --- Individual scan functions -------------------------------------------------
@@ -719,6 +889,27 @@ def parse_job_payload(message: Dict) -> Dict:
     }
 
 
+def build_coverage_summary(stats: Dict, request_headers: Optional[Dict], modules: Optional[List[str]]) -> Dict:
+    auth_supplied = bool(request_headers)
+    modules_run = ", ".join(modules) if modules else "default"
+    return {
+        "title": "Scan coverage summary",
+        "severity": "info",
+        "description": (
+            f"Crawled {stats.get('pages_crawled', 0)} page(s), discovered "
+            f"{stats.get('forms_discovered', 0)} form(s), and built "
+            f"{stats.get('request_templates', 0)} request template(s)."
+        ),
+        "evidence": (
+            f"Auth headers supplied: {'yes' if auth_supplied else 'no'} | "
+            f"Max depth: {stats.get('max_depth', 0)} | "
+            f"Max pages: {stats.get('max_pages', 0)} | "
+            f"Modules: {modules_run}"
+        ),
+        "category": "coverage",
+    }
+
+
 def process_job(message: Dict) -> None:
     job = parse_job_payload(message)
 
@@ -737,15 +928,39 @@ def process_job(message: Dict) -> None:
     if scan_id:
         send_progress(scan_id, 5)
 
-    # ── Auto-crawl: if the URL has no query string, discover parameterised
-    #    targets from the page's links and forms, then scan each one.
+    # ── Auto-crawl: if the URL has no query string, discover same-origin pages
+    #    and forms, then scan the GET-compatible templates with the current
+    #    URL-based modules. POST templates are collected for coverage now and
+    #    will be used by the next module upgrade pass.
     parsed = urllib.parse.urlparse(target_url)
     has_params = bool(parsed.query)
 
     if not has_params:
-        print(f"  Auto-crawling {target_url} for parameterised targets…")
-        targets = auto_crawl_targets(target_url, request_headers)
-        print(f"  Discovered {len(targets)} target(s) to scan.")
+        print(f"  Auto-crawling {target_url} for request templates…")
+        crawl = crawl_site(target_url, request_headers)
+        templates = crawl["templates"]
+        stats = crawl["stats"]
+
+        targets: List[str] = []
+        seen_targets: set = set()
+        for template in templates:
+            if str(template.get("method", "GET")).upper() != "GET":
+                continue
+            target = template_to_url(template)
+            if target not in seen_targets:
+                seen_targets.add(target)
+                targets.append(target)
+
+        if not targets:
+            targets = [target_url]
+
+        print(
+            "  Crawl complete: "
+            f"{stats['pages_crawled']} page(s), "
+            f"{stats['forms_discovered']} form(s), "
+            f"{stats['request_templates']} request template(s)."
+        )
+        print(f"  Scanning {len(targets)} GET-compatible target(s).")
 
         if scan_id:
             send_progress(scan_id, 10)
@@ -762,6 +977,8 @@ def process_job(message: Dict) -> None:
                               progress_start=p_start, progress_end=p_end)
             all_issues.extend(issues)
 
+        all_issues.append(build_coverage_summary(stats, request_headers, scan_profile))
+
         # De-duplicate by (title, category, evidence) to avoid noise from
         # scanning many similar URLs.
         seen_keys: set = set()
@@ -777,6 +994,14 @@ def process_job(message: Dict) -> None:
         # URL already has parameters — scan it directly.
         issues = run_scan(target_url, scan_profile, scan_id, request_headers,
                           progress_start=10, progress_end=95)
+        direct_stats = {
+            "pages_crawled": 1,
+            "forms_discovered": 0,
+            "request_templates": 1,
+            "max_pages": 1,
+            "max_depth": 0,
+        }
+        issues.append(build_coverage_summary(direct_stats, request_headers, scan_profile))
         send_results(scan_id, issues)
 
 
