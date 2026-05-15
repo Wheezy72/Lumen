@@ -1,4 +1,3 @@
-console.log("Current Email User:", process.env.SMTP_USER);
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -31,6 +30,8 @@ import { authMiddleware } from './middleware/auth.js';
 import { apiKeyAuthMiddleware } from './middleware/apiKeyAuth.js';
 import { errorHandler } from './middleware/error.js';
 import { configureBull, setJobQueueApp, syncRecurringSchedules } from './queue/index.js';
+import { validateSecurityConfiguration } from './utils/securityConfig.js';
+import { createRateLimiter } from './middleware/rateLimit.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -45,6 +46,7 @@ const {
 } = process.env;
 
 logger.level = LOG_LEVEL;
+validateSecurityConfiguration();
 
 const reportsPath = path.join(__dirname, '..', REPORTS_DIR);
 if (!fs.existsSync(reportsPath)) {
@@ -52,6 +54,14 @@ if (!fs.existsSync(reportsPath)) {
 }
 
 const app = express();
+app.set('trust proxy', 1);
+
+const authRateLimitMax = Number.parseInt(process.env.AUTH_RATE_LIMIT_MAX || '120', 10) || 120;
+const authRateLimiter = createRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: authRateLimitMax,
+  keyPrefix: 'auth',
+});
 
 app.use(helmet({
   contentSecurityPolicy: {
@@ -118,7 +128,7 @@ setJobQueueApp(app);
 sseInit(app);
 
 // Routes
-app.use('/api/auth', authRouter);
+app.use('/api/auth', authRateLimiter, authRouter);
 app.use('/api/users', authMiddleware, userRouter);
 app.use('/api/scans', authMiddleware, scanRouter);
 app.use('/api/reports', authMiddleware, reportRouter);

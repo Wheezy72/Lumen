@@ -39,11 +39,21 @@ The most important values:
 - `REDIS_URL`
 - `JWT_SECRET`
 - `CORS_ORIGINS`
+- `PUBLIC_API_KEY` (if using `/api/publicApi`)
+- `PUBLIC_API_KEY_ID` (required when `PUBLIC_API_KEY` is set)
 
 Cookie/session behaviour:
 
 - `COOKIE_SECURE=true` when served behind HTTPS
 - `COOKIE_DOMAIN` should be a real domain in production (leave as `localhost` in local dev)
+
+Security controls:
+
+- Startup now enforces strong secrets (`JWT_SECRET`, and `PUBLIC_API_KEY` when set).
+- Auth and Public API routes are rate limited per IP.
+- Target URLs and webhook URLs are validated against private-network and host policy rules.
+- Public API scans/schedules are isolated per API key identity.
+- Sensitive actions are written to a tamper-evident audit log chain (`logs/audit.log`).
 
 ## Routes (high level)
 

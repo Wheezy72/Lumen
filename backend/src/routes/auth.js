@@ -5,6 +5,7 @@ import crypto from 'node:crypto';
 import User from '../models/User.js';
 import { signToken, setAuthCookie, clearAuthCookie, authMiddleware } from '../middleware/auth.js';
 import { sendPasswordResetCodeEmail } from '../services/email.js';
+import { writeAuditEvent } from '../utils/audit.js';
 
 const router = express.Router();
 
@@ -46,6 +47,14 @@ router.post('/register', async (req, res, next) => {
 
     const existingUser = await User.findOne({ $or: [{ username }, { email: normalizedEmail }] });
     if (existingUser) {
+      await writeAuditEvent({
+        action: 'auth_register_rejected',
+        actorType: 'anonymous',
+        username,
+        email: normalizedEmail,
+        status: 'rejected',
+        ip: req.ip,
+      });
       return res.status(409).json({ error: 'Username or email is already registered.' });
     }
 
@@ -59,6 +68,14 @@ router.post('/register', async (req, res, next) => {
 
     const token = signToken({ id: user._id, username: user.username });
     setAuthCookie(res, token);
+    await writeAuditEvent({
+      action: 'auth_register_success',
+      actorType: 'user',
+      actorId: String(user._id),
+      username: user.username,
+      status: 'success',
+      ip: req.ip,
+    });
     res.json({
       id: user._id,
       username: user.username,
@@ -75,13 +92,40 @@ router.post('/login', async (req, res, next) => {
   try {
     const { username, password } = await loginSchema.validateAsync(req.body, { stripUnknown: true });
     const user = await User.findOne({ username });
-    if (!user) return res.status(401).json({ error: 'Invalid username or password.' });
+    if (!user) {
+      await writeAuditEvent({
+        action: 'auth_login_failed',
+        actorType: 'anonymous',
+        username,
+        status: 'failed',
+        ip: req.ip,
+      });
+      return res.status(401).json({ error: 'Invalid username or password.' });
+    }
 
     const ok = await bcrypt.compare(password, user.passwordHash);
-    if (!ok) return res.status(401).json({ error: 'Invalid username or password.' });
+    if (!ok) {
+      await writeAuditEvent({
+        action: 'auth_login_failed',
+        actorType: 'user',
+        actorId: String(user._id),
+        username,
+        status: 'failed',
+        ip: req.ip,
+      });
+      return res.status(401).json({ error: 'Invalid username or password.' });
+    }
 
     const token = signToken({ id: user._id, username: user.username });
     setAuthCookie(res, token);
+    await writeAuditEvent({
+      action: 'auth_login_success',
+      actorType: 'user',
+      actorId: String(user._id),
+      username: user.username,
+      status: 'success',
+      ip: req.ip,
+    });
     res.json({
       id: user._id,
       username: user.username,
@@ -136,6 +180,14 @@ router.post('/forgot-password', async (req, res, next) => {
         username: user.username,
         code,
       });
+      await writeAuditEvent({
+        action: 'auth_password_reset_requested',
+        actorType: 'user',
+        actorId: String(user._id),
+        email: user.email,
+        status: 'success',
+        ip: req.ip,
+      });
     }
 
     res.json({ ok: true });
@@ -172,6 +224,14 @@ router.post('/reset-password', async (req, res, next) => {
     user.passwordResetExpiresAt = undefined;
     await user.save();
 
+    await writeAuditEvent({
+      action: 'auth_password_reset_completed',
+      actorType: 'user',
+      actorId: String(user._id),
+      email: user.email,
+      status: 'success',
+      ip: req.ip,
+    });
     res.json({ ok: true });
   } catch (e) {
     next(e);
