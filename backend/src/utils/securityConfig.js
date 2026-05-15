@@ -1,6 +1,6 @@
 const hasWeakPlaceholder = (value) => {
   const v = String(value || '').toLowerCase();
-  return v.includes('replace_with') || v.includes('changeme') || v.includes('example') || v.includes('default');
+  return v.includes('replace_with') || v.includes('changeme') || v.includes('example');
 };
 
 const isStrongSecret = (value, minLength = 32) => {

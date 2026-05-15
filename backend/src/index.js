@@ -56,10 +56,10 @@ if (!fs.existsSync(reportsPath)) {
 const app = express();
 app.set('trust proxy', 1);
 
-const authRateLimitMax = Number.parseInt(process.env.AUTH_RATE_LIMIT_MAX || '120', 10);
+const authRateLimitMax = Number.parseInt(process.env.AUTH_RATE_LIMIT_MAX || '120', 10) || 120;
 const authRateLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000,
-  max: Number.isNaN(authRateLimitMax) ? 120 : authRateLimitMax,
+  max: authRateLimitMax,
   keyPrefix: 'auth',
 });
 

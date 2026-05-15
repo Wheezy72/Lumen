@@ -31,7 +31,11 @@ export const apiKeyAuthMiddleware = (req, res, next) => {
     return res.status(401).json({ error: 'API key is not valid.' });
   }
 
-  const keyIdSecret = process.env.API_KEY_ID_SECRET || process.env.JWT_SECRET || 'lumen-api-key-id';
-  req.apiKeyId = createHmac('sha256', keyIdSecret).update(String(key)).digest('hex').slice(0, 24);
+  const keyIdSecret = process.env.API_KEY_ID_SECRET || process.env.JWT_SECRET;
+  if (!keyIdSecret) {
+    return res.status(503).json({ error: 'API key identity secret is not configured.' });
+  }
+
+  req.apiKeyId = createHmac('sha256', keyIdSecret).update(String(expected)).digest('hex').slice(0, 24);
   next();
 };

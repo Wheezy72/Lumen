@@ -25,11 +25,17 @@ const publicApiRateLimiter = createRateLimiter({
   max: Number.parseInt(process.env.PUBLIC_API_RATE_LIMIT_MAX || '240', 10) || 240,
   keyPrefix: 'public-api-route',
 });
-router.use(publicApiRateLimiter);
 
 // ─── Shared query for public (unauthenticated) scans ────────────────────────
 
-const publicOwnerQuery = (req) => ({ userId: null, apiKeyId: req.apiKeyId });
+const publicOwnerQuery = (req) => {
+  if (!req.apiKeyId) {
+    const err = new Error('API key identity is missing.');
+    err.status = 401;
+    throw err;
+  }
+  return { userId: null, apiKeyId: req.apiKeyId };
+};
 
 // ─── CSV helper ──────────────────────────────────────────────────────────────
 
@@ -55,7 +61,7 @@ async function ensureRecurringJob(recurring) {
 
 // ─── POST /api/publicApi/scans ───────────────────────────────────────────────
 
-router.post('/scans', async (req, res, next) => {
+router.post('/scans', publicApiRateLimiter, async (req, res, next) => {
   try {
     const data = await startScanSchema.validateAsync(req.body, { stripUnknown: true });
     const normalizedTargetUrl = await validateScanTargetUrl(data.target);
@@ -107,7 +113,7 @@ router.post('/scans', async (req, res, next) => {
 
 // ─── GET /api/publicApi/scans ────────────────────────────────────────────────
 
-router.get('/scans', async (req, res, next) => {
+router.get('/scans', publicApiRateLimiter, async (req, res, next) => {
   try {
     const limit = Math.min(parseInt(req.query.limit || '50', 10) || 50, 200);
     const scans = await Scan.find(publicOwnerQuery(req)).sort({ createdAt: -1 }).limit(limit);
@@ -119,7 +125,7 @@ router.get('/scans', async (req, res, next) => {
 
 // ─── GET /api/publicApi/scans/:id ───────────────────────────────────────────
 
-router.get('/scans/:id', async (req, res, next) => {
+router.get('/scans/:id', publicApiRateLimiter, async (req, res, next) => {
   try {
     const scan = await Scan.findOne({ _id: req.params.id, ...publicOwnerQuery(req) });
     if (!scan) return res.status(404).json({ error: 'Scan not found' });
@@ -131,7 +137,7 @@ router.get('/scans/:id', async (req, res, next) => {
 
 // ─── POST /api/publicApi/scans/:id/chat ─────────────────────────────────────
 
-router.post('/scans/:id/chat', async (req, res, next) => {
+router.post('/scans/:id/chat', publicApiRateLimiter, async (req, res, next) => {
   try {
     const { findingIndex, messages } = await publicChatSchema.validateAsync(req.body, { stripUnknown: true });
     const scan = await Scan.findOne({ _id: req.params.id, ...publicOwnerQuery(req) });
@@ -147,7 +153,7 @@ router.post('/scans/:id/chat', async (req, res, next) => {
 
 // ─── GET /api/publicApi/scans/:id/report (JSON summary) ─────────────────────
 
-router.get('/scans/:id/report', async (req, res, next) => {
+router.get('/scans/:id/report', publicApiRateLimiter, async (req, res, next) => {
   try {
     const scan = await Scan.findOne({ _id: req.params.id, ...publicOwnerQuery(req) });
     if (!scan) return res.status(404).json({ error: 'Scan not found' });
@@ -170,7 +176,7 @@ router.get('/scans/:id/report', async (req, res, next) => {
 
 // ─── GET /api/publicApi/scans/:id/report.pdf ────────────────────────────────
 
-router.get('/scans/:id/report.pdf', async (req, res, next) => {
+router.get('/scans/:id/report.pdf', publicApiRateLimiter, async (req, res, next) => {
   try {
     const scan = await Scan.findOne({ _id: req.params.id, ...publicOwnerQuery(req) });
     if (!scan) return res.status(404).json({ error: 'Scan not found' });
@@ -191,7 +197,7 @@ router.get('/scans/:id/report.pdf', async (req, res, next) => {
 
 // ─── GET /api/publicApi/scans/:id/report.csv ────────────────────────────────
 
-router.get('/scans/:id/report.csv', async (req, res, next) => {
+router.get('/scans/:id/report.csv', publicApiRateLimiter, async (req, res, next) => {
   try {
     const scan = await Scan.findOne({ _id: req.params.id, ...publicOwnerQuery(req) });
     if (!scan) return res.status(404).json({ error: 'Scan not found' });
@@ -223,7 +229,7 @@ router.get('/scans/:id/report.csv', async (req, res, next) => {
 
 // ─── POST /api/publicApi/schedules ──────────────────────────────────────────
 
-router.post('/schedules', async (req, res, next) => {
+router.post('/schedules', publicApiRateLimiter, async (req, res, next) => {
   try {
     const data = await scheduleSchema.validateAsync(req.body, { stripUnknown: true });
     const normalizedTargetUrl = await validateScanTargetUrl(data.target);
@@ -309,7 +315,7 @@ router.post('/schedules', async (req, res, next) => {
 
 // ─── GET /api/publicApi/schedules ───────────────────────────────────────────
 
-router.get('/schedules', async (req, res, next) => {
+router.get('/schedules', publicApiRateLimiter, async (req, res, next) => {
   try {
     const items = await RecurringScan.find(publicOwnerQuery(req)).sort({ createdAt: -1 }).limit(200);
     res.json(items);
@@ -320,7 +326,7 @@ router.get('/schedules', async (req, res, next) => {
 
 // ─── DELETE /api/publicApi/schedules/:id ────────────────────────────────────
 
-router.delete('/schedules/:id', async (req, res, next) => {
+router.delete('/schedules/:id', publicApiRateLimiter, async (req, res, next) => {
   try {
     const schedule = await RecurringScan.findOne({ _id: req.params.id, ...publicOwnerQuery(req) });
     if (!schedule) return res.status(404).json({ error: 'Schedule not found' });

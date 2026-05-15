@@ -7,6 +7,7 @@ const AUDIT_LOG_SECRET = process.env.AUDIT_LOG_SECRET || '';
 
 let currentHash = 'GENESIS';
 let initialized = false;
+let writeChain = Promise.resolve();
 
 const stableStringify = (value) => {
   if (value === null || typeof value !== 'object') return JSON.stringify(value);
@@ -47,18 +48,23 @@ const computeHash = (prevHash, payload) => {
 };
 
 export const writeAuditEvent = async (event) => {
-  ensureInitialized();
+  const writeOne = async () => {
+    ensureInitialized();
 
-  const absPath = path.resolve(process.cwd(), AUDIT_LOG_FILE);
-  const payload = {
-    ts: new Date().toISOString(),
-    ...event,
+    const absPath = path.resolve(process.cwd(), AUDIT_LOG_FILE);
+    const payload = {
+      ts: new Date().toISOString(),
+      ...event,
+    };
+
+    const canonical = stableStringify(payload);
+    const hash = computeHash(currentHash, canonical);
+    const record = { ...payload, prevHash: currentHash, hash };
+
+    await fs.promises.appendFile(absPath, `${JSON.stringify(record)}\n`, { encoding: 'utf8' });
+    currentHash = hash;
   };
 
-  const canonical = stableStringify(payload);
-  const hash = computeHash(currentHash, canonical);
-  const record = { ...payload, prevHash: currentHash, hash };
-
-  await fs.promises.appendFile(absPath, `${JSON.stringify(record)}\n`, { encoding: 'utf8' });
-  currentHash = hash;
+  writeChain = writeChain.then(writeOne, writeOne);
+  return writeChain;
 };
