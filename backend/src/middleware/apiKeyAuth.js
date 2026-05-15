@@ -32,7 +32,7 @@ export const apiKeyAuthMiddleware = (req, res, next) => {
 
   const apiKeyId = String(process.env.PUBLIC_API_KEY_ID || '').trim();
   if (!apiKeyId) {
-    return res.status(503).json({ error: 'Public API key identity is not configured.' });
+    return res.status(500).json({ error: 'Public API key identity is not configured.' });
   }
 
   req.apiKeyId = apiKeyId;
