@@ -40,6 +40,7 @@ The most important values:
 - `JWT_SECRET`
 - `CORS_ORIGINS`
 - `PUBLIC_API_KEY` (if using `/api/publicApi`)
+- `PUBLIC_API_KEY_ID` (required when `PUBLIC_API_KEY` is set)
 
 Cookie/session behaviour:
 

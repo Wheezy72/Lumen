@@ -1,5 +1,4 @@
 import { timingSafeEqual } from 'crypto';
-import { createHmac } from 'crypto';
 
 const safeCompare = (a, b) => {
   const ba = Buffer.from(String(a || ''));
@@ -31,11 +30,11 @@ export const apiKeyAuthMiddleware = (req, res, next) => {
     return res.status(401).json({ error: 'API key is not valid.' });
   }
 
-  const keyIdSecret = process.env.API_KEY_ID_SECRET || process.env.JWT_SECRET;
-  if (!keyIdSecret) {
-    return res.status(503).json({ error: 'API key identity secret is not configured.' });
+  const apiKeyId = String(process.env.PUBLIC_API_KEY_ID || '').trim();
+  if (!apiKeyId) {
+    return res.status(503).json({ error: 'Public API key identity is not configured.' });
   }
 
-  req.apiKeyId = createHmac('sha256', keyIdSecret).update(String(expected)).digest('hex').slice(0, 24);
+  req.apiKeyId = apiKeyId;
   next();
 };

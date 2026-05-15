@@ -20,6 +20,10 @@ export const validateSecurityConfiguration = () => {
     issues.push('PUBLIC_API_KEY must be at least 32 characters when configured.');
   }
 
+  if (process.env.PUBLIC_API_KEY && !String(process.env.PUBLIC_API_KEY_ID || '').trim()) {
+    issues.push('PUBLIC_API_KEY_ID must be set when PUBLIC_API_KEY is configured.');
+  }
+
   if (env === 'production') {
     if (String(process.env.COOKIE_SECURE || '').toLowerCase() !== 'true') {
       issues.push('COOKIE_SECURE must be true in production.');
