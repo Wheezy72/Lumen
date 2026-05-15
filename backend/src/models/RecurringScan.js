@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 
 const recurringScanSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
+  apiKeyId: { type: String, index: true },
 
   targetUrl: { type: String, required: true },
   targetHost: { type: String, index: true },
@@ -19,5 +20,6 @@ const recurringScanSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 recurringScanSchema.index({ userId: 1, createdAt: -1 });
+recurringScanSchema.index({ apiKeyId: 1, createdAt: -1 });
 
 export default mongoose.model('RecurringScan', recurringScanSchema);

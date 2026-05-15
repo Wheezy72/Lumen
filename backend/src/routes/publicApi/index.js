@@ -5,7 +5,6 @@
  */
 
 import express from 'express';
-import net from 'node:net';
 import path from 'path';
 import fs from 'fs';
 import { ensureReportDir } from '../../utils/reportDir.js';
@@ -16,31 +15,14 @@ import { assistantChat } from '../../services/assistant.js';
 import { displayFindingTitle } from '../../services/findingTitle.js';
 import { startScanSchema, scheduleSchema, publicChatSchema } from './schemas.js';
 import { writePdfReport, makePdfFileName, makeCsvFileName } from './pdfReport.js';
+import { extractTargetHost, validateScanTargetUrl, validateWebhookUrl } from '../../utils/networkPolicy.js';
+import { writeAuditEvent } from '../../utils/audit.js';
 
 const router = express.Router();
 
-// ─── Private-network block list ──────────────────────────────────────────────
-
-const BLOCKED_IP_PREFIXES = [
-  '0.', '10.', '127.', '169.254.',
-  '172.16.', '172.17.', '172.18.', '172.19.', '172.20.', '172.21.', '172.22.', '172.23.',
-  '172.24.', '172.25.', '172.26.', '172.27.', '172.28.', '172.29.', '172.30.', '172.31.',
-  '192.168.',
-];
-
-function isBlockedHost(host) {
-  if (!host) return true;
-  const h = String(host).toLowerCase();
-  if (h === 'localhost' || h.endsWith('.local')) return true;
-  const ipType = net.isIP(h);
-  if (ipType === 4) return BLOCKED_IP_PREFIXES.some(p => h.startsWith(p));
-  if (ipType === 6 && h === '::1') return true;
-  return false;
-}
-
 // ─── Shared query for public (unauthenticated) scans ────────────────────────
 
-const publicOwnerQuery = { $or: [{ userId: { $exists: false } }, { userId: null }] };
+const publicOwnerQuery = (req) => ({ userId: null, apiKeyId: req.apiKeyId });
 
 // ─── CSV helper ──────────────────────────────────────────────────────────────
 
@@ -69,33 +51,20 @@ async function ensureRecurringJob(recurring) {
 router.post('/scans', async (req, res, next) => {
   try {
     const data = await startScanSchema.validateAsync(req.body, { stripUnknown: true });
-
-    let hostname, targetHost;
-    try {
-      const parsed = new URL(data.target);
-      hostname   = parsed.hostname?.toLowerCase();
-      targetHost = parsed.host?.toLowerCase();
-    } catch {
-      hostname = null;
-      targetHost = null;
-    }
-
-    const allowPrivate = process.env.ALLOW_PRIVATE_TARGETS === 'true';
-    if (!allowPrivate && isBlockedHost(hostname)) {
-      return res.status(400).json({
-        error: 'This target is not allowed. For safety, localhost/private network targets are blocked.',
-      });
-    }
+    const normalizedTargetUrl = await validateScanTargetUrl(data.target);
+    const targetHost = extractTargetHost(normalizedTargetUrl);
+    const webhookUrl = data.webhookUrl ? await validateWebhookUrl(data.webhookUrl) : undefined;
 
     const scan = await Scan.create({
       userId:     null,
-      targetUrl:  data.target,
+      apiKeyId:   req.apiKeyId,
+      targetUrl:  normalizedTargetUrl,
       targetHost: targetHost || undefined,
       scanProfile: data.modules || [],
       status:     'queued',
       progress:   0,
       scheduled:  false,
-      webhookUrl: data.webhookUrl || undefined,
+      webhookUrl,
       policy:     { status: 'unknown' },
     });
 
@@ -104,7 +73,7 @@ router.post('/scans', async (req, res, next) => {
       {
         scanId:         scan._id.toString(),
         scanProfile:    data.modules || [],
-        webhookUrl:     data.webhookUrl || undefined,
+        webhookUrl,
         // Auth cookies/headers forwarded to the Python crawler so it can
         // bypass login screens (e.g. PHPSESSID for DVWA).
         requestHeaders: data.requestHeaders || null,
@@ -112,6 +81,16 @@ router.post('/scans', async (req, res, next) => {
       },
       { attempts: 3, backoff: { type: 'exponential', delay: 5000 } },
     );
+
+    await writeAuditEvent({
+      action: 'public_scan_created',
+      actorType: 'api_key',
+      actorId: req.apiKeyId,
+      scanId: String(scan._id),
+      targetHost,
+      status: 'success',
+      ip: req.ip,
+    });
 
     res.status(201).json({ id: scan._id, status: scan.status, message: 'Scan queued' });
   } catch (err) {
@@ -124,7 +103,7 @@ router.post('/scans', async (req, res, next) => {
 router.get('/scans', async (req, res, next) => {
   try {
     const limit = Math.min(parseInt(req.query.limit || '50', 10) || 50, 200);
-    const scans = await Scan.find(publicOwnerQuery).sort({ createdAt: -1 }).limit(limit);
+    const scans = await Scan.find(publicOwnerQuery(req)).sort({ createdAt: -1 }).limit(limit);
     res.json(scans);
   } catch (err) {
     next(err);
@@ -135,7 +114,7 @@ router.get('/scans', async (req, res, next) => {
 
 router.get('/scans/:id', async (req, res, next) => {
   try {
-    const scan = await Scan.findOne({ _id: req.params.id, ...publicOwnerQuery });
+    const scan = await Scan.findOne({ _id: req.params.id, ...publicOwnerQuery(req) });
     if (!scan) return res.status(404).json({ error: 'Scan not found' });
     res.json(scan);
   } catch (err) {
@@ -148,7 +127,7 @@ router.get('/scans/:id', async (req, res, next) => {
 router.post('/scans/:id/chat', async (req, res, next) => {
   try {
     const { findingIndex, messages } = await publicChatSchema.validateAsync(req.body, { stripUnknown: true });
-    const scan = await Scan.findOne({ _id: req.params.id, ...publicOwnerQuery });
+    const scan = await Scan.findOne({ _id: req.params.id, ...publicOwnerQuery(req) });
     if (!scan) return res.status(404).json({ error: 'Scan not found' });
     const finding = (scan.results || [])[findingIndex];
     if (!finding) return res.status(404).json({ error: 'Finding not found' });
@@ -163,7 +142,7 @@ router.post('/scans/:id/chat', async (req, res, next) => {
 
 router.get('/scans/:id/report', async (req, res, next) => {
   try {
-    const scan = await Scan.findOne({ _id: req.params.id, ...publicOwnerQuery });
+    const scan = await Scan.findOne({ _id: req.params.id, ...publicOwnerQuery(req) });
     if (!scan) return res.status(404).json({ error: 'Scan not found' });
     res.json({
       id:           scan._id,
@@ -186,7 +165,7 @@ router.get('/scans/:id/report', async (req, res, next) => {
 
 router.get('/scans/:id/report.pdf', async (req, res, next) => {
   try {
-    const scan = await Scan.findOne({ _id: req.params.id, ...publicOwnerQuery });
+    const scan = await Scan.findOne({ _id: req.params.id, ...publicOwnerQuery(req) });
     if (!scan) return res.status(404).json({ error: 'Scan not found' });
 
     const dir      = ensureReportDir();
@@ -207,7 +186,7 @@ router.get('/scans/:id/report.pdf', async (req, res, next) => {
 
 router.get('/scans/:id/report.csv', async (req, res, next) => {
   try {
-    const scan = await Scan.findOne({ _id: req.params.id, ...publicOwnerQuery });
+    const scan = await Scan.findOne({ _id: req.params.id, ...publicOwnerQuery(req) });
     if (!scan) return res.status(404).json({ error: 'Scan not found' });
 
     const fileName = makeCsvFileName(scan);
@@ -240,26 +219,20 @@ router.get('/scans/:id/report.csv', async (req, res, next) => {
 router.post('/schedules', async (req, res, next) => {
   try {
     const data = await scheduleSchema.validateAsync(req.body, { stripUnknown: true });
-
-    let host;
-    try { host = new URL(data.target).hostname?.toLowerCase(); } catch { host = null; }
-
-    const allowPrivate = process.env.ALLOW_PRIVATE_TARGETS === 'true';
-    if (!allowPrivate && isBlockedHost(host)) {
-      return res.status(400).json({
-        error: 'This target is not allowed. For safety, localhost/private network targets are blocked.',
-      });
-    }
+    const normalizedTargetUrl = await validateScanTargetUrl(data.target);
+    const host = extractTargetHost(normalizedTargetUrl);
+    const webhookUrl = data.webhookUrl ? await validateWebhookUrl(data.webhookUrl) : undefined;
 
     const schedule = await RecurringScan.create({
       userId:     null,
-      targetUrl:  data.target,
+      apiKeyId:   req.apiKeyId,
+      targetUrl:  normalizedTargetUrl,
       targetHost: host || undefined,
       scanProfile: data.modules || [],
       cron:       data.cron,
       timezone:   data.timezone || undefined,
       enabled:    true,
-      webhookUrl: data.webhookUrl || undefined,
+      webhookUrl,
     });
 
     try {
@@ -271,28 +244,29 @@ router.post('/schedules', async (req, res, next) => {
 
     if (data.runNow) {
       const scan = await Scan.create({
-        userId:          null,
-        targetUrl:       data.target,
-        targetHost:      host || undefined,
-        scanProfile:     data.modules || [],
-        status:          'queued',
+          userId:          null,
+          apiKeyId:        req.apiKeyId,
+          targetUrl:       normalizedTargetUrl,
+          targetHost:      host || undefined,
+          scanProfile:     data.modules || [],
+          status:          'queued',
         progress:        0,
         scheduled:       true,
         scheduledFor:    new Date(),
-        webhookUrl:      data.webhookUrl || undefined,
-        policy:          { status: 'unknown' },
-        recurringScanId: schedule._id,
-      });
+          webhookUrl,
+          policy:          { status: 'unknown' },
+          recurringScanId: schedule._id,
+        });
 
       await scanQueue.add(
         'start',
         {
-          scanId:      scan._id.toString(),
-          scanProfile: data.modules || [],
-          webhookUrl:  data.webhookUrl || undefined,
-        },
-        { attempts: 3, backoff: { type: 'exponential', delay: 5000 } },
-      );
+            scanId:      scan._id.toString(),
+            scanProfile: data.modules || [],
+            webhookUrl,
+          },
+          { attempts: 3, backoff: { type: 'exponential', delay: 5000 } },
+        );
 
       return res.status(201).json({
         id:           schedule._id,
@@ -303,6 +277,16 @@ router.post('/schedules', async (req, res, next) => {
         startedScanId: scan._id,
       });
     }
+
+    await writeAuditEvent({
+      action: 'public_schedule_created',
+      actorType: 'api_key',
+      actorId: req.apiKeyId,
+      scheduleId: String(schedule._id),
+      targetHost: host,
+      status: 'success',
+      ip: req.ip,
+    });
 
     res.status(201).json({
       id:       schedule._id,
@@ -320,7 +304,7 @@ router.post('/schedules', async (req, res, next) => {
 
 router.get('/schedules', async (req, res, next) => {
   try {
-    const items = await RecurringScan.find(publicOwnerQuery).sort({ createdAt: -1 }).limit(200);
+    const items = await RecurringScan.find(publicOwnerQuery(req)).sort({ createdAt: -1 }).limit(200);
     res.json(items);
   } catch (err) {
     next(err);
@@ -331,7 +315,7 @@ router.get('/schedules', async (req, res, next) => {
 
 router.delete('/schedules/:id', async (req, res, next) => {
   try {
-    const schedule = await RecurringScan.findOne({ _id: req.params.id, ...publicOwnerQuery });
+    const schedule = await RecurringScan.findOne({ _id: req.params.id, ...publicOwnerQuery(req) });
     if (!schedule) return res.status(404).json({ error: 'Schedule not found' });
 
     const jobId = `recurring:${schedule._id.toString()}`;
@@ -343,6 +327,14 @@ router.delete('/schedules/:id', async (req, res, next) => {
     );
 
     await schedule.deleteOne();
+    await writeAuditEvent({
+      action: 'public_schedule_deleted',
+      actorType: 'api_key',
+      actorId: req.apiKeyId,
+      scheduleId: String(req.params.id),
+      status: 'success',
+      ip: req.ip,
+    });
     res.json({ success: true });
   } catch (err) {
     next(err);

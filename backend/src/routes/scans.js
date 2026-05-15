@@ -1,41 +1,13 @@
 import express from 'express';
 import Joi from 'joi';
-import net from 'node:net';
 import Scan from '../models/Scan.js';
 import RecurringScan from '../models/RecurringScan.js';
 import { computeScanDiff } from '../services/scanDiff.js';
 import { scanQueue } from '../queue/index.js';
+import { extractTargetHost, validateScanTargetUrl, validateWebhookUrl } from '../utils/networkPolicy.js';
+import { writeAuditEvent } from '../utils/audit.js';
 
 const router = express.Router();
-
-const BLOCKED_IP_PREFIXES = [
-  '0.',
-  '10.',
-  '127.',
-  '169.254.',
-  '172.16.', '172.17.', '172.18.', '172.19.', '172.20.', '172.21.', '172.22.', '172.23.',
-  '172.24.', '172.25.', '172.26.', '172.27.', '172.28.', '172.29.', '172.30.', '172.31.',
-  '192.168.',
-];
-
-const isBlockedHost = (host) => {
-  if (!host) return true;
-
-  const h = String(host).toLowerCase();
-  if (h === 'localhost' || h.endsWith('.local')) return true;
-
-  const ipType = net.isIP(h);
-  if (ipType === 4) {
-    return BLOCKED_IP_PREFIXES.some((p) => h.startsWith(p));
-  }
-
-  // Keep IPv6 simple: block localhost; allow public domains.
-  if (ipType === 6) {
-    if (h === '::1') return true;
-  }
-
-  return false;
-};
 
 // Validation schema
 const scanSchema = Joi.object({
@@ -141,34 +113,19 @@ router.get('/recurring', async (req, res, next) => {
 router.post('/recurring', async (req, res, next) => {
   try {
     const data = await recurringScanSchema.validateAsync(req.body, { stripUnknown: true });
-
-    let hostname;
-    let targetHost;
-    try {
-      const parsed = new URL(data.targetUrl);
-      hostname = parsed.hostname?.toLowerCase();
-      targetHost = parsed.host?.toLowerCase();
-    } catch {
-      hostname = null;
-      targetHost = null;
-    }
-
-    const allowPrivate = process.env.ALLOW_PRIVATE_TARGETS === 'true';
-    if (!allowPrivate && isBlockedHost(hostname)) {
-      return res.status(400).json({
-        error: 'This target is not allowed. For safety, localhost/private network targets are blocked in this deployment.',
-      });
-    }
+    const normalizedTargetUrl = await validateScanTargetUrl(data.targetUrl);
+    const targetHost = extractTargetHost(normalizedTargetUrl);
+    const webhookUrl = data.webhookUrl ? await validateWebhookUrl(data.webhookUrl) : undefined;
 
     const recurring = await RecurringScan.create({
       userId: req.user.id,
-      targetUrl: data.targetUrl,
+      targetUrl: normalizedTargetUrl,
       targetHost: targetHost || undefined,
       scanProfile: data.scanProfile,
       cron: data.cron,
       timezone: data.timezone || undefined,
       enabled: data.enabled,
-      webhookUrl: data.webhookUrl || undefined,
+      webhookUrl,
     });
 
     if (recurring.enabled) {
@@ -190,20 +147,29 @@ router.post('/recurring', async (req, res, next) => {
         scheduled: true,
         scheduledFor: new Date(),
         progress: 0,
-        webhookUrl: data.webhookUrl || undefined,
+        webhookUrl,
         policy: { status: 'unknown' },
         recurringScanId: recurring._id,
       });
 
       await scanQueue.add(
         'start',
-        { scanId: scan._id.toString(), scanProfile: data.scanProfile, webhookUrl: data.webhookUrl || undefined },
+        { scanId: scan._id.toString(), scanProfile: data.scanProfile, webhookUrl },
         { attempts: 3, backoff: { type: 'exponential', delay: 5000 } },
       );
 
       return res.status(201).json({ recurring, startedScanId: scan._id.toString() });
     }
 
+    await writeAuditEvent({
+      action: 'recurring_schedule_created',
+      actorType: 'user',
+      actorId: String(req.user.id),
+      scheduleId: String(recurring._id),
+      targetHost,
+      status: 'success',
+      ip: req.ip,
+    });
     res.status(201).json({ recurring });
   } catch (err) {
     next(err);
@@ -223,32 +189,18 @@ router.patch('/recurring/:id', async (req, res, next) => {
     const prevTz = recurring.timezone;
 
     if (data.targetUrl) {
-      let hostname;
-      let targetHost;
-      try {
-        const parsed = new URL(data.targetUrl);
-        hostname = parsed.hostname?.toLowerCase();
-        targetHost = parsed.host?.toLowerCase();
-      } catch {
-        hostname = null;
-        targetHost = null;
-      }
+      const normalizedTargetUrl = await validateScanTargetUrl(data.targetUrl);
+      recurring.targetUrl = normalizedTargetUrl;
+      recurring.targetHost = extractTargetHost(normalizedTargetUrl) || undefined;
+    }
 
-      const allowPrivate = process.env.ALLOW_PRIVATE_TARGETS === 'true';
-      if (!allowPrivate && isBlockedHost(hostname)) {
-        return res.status(400).json({
-          error: 'This target is not allowed. For safety, localhost/private network targets are blocked in this deployment.',
-        });
-      }
-
-      recurring.targetUrl = data.targetUrl;
-      recurring.targetHost = targetHost || undefined;
+    if (typeof data.webhookUrl !== 'undefined') {
+      recurring.webhookUrl = data.webhookUrl ? await validateWebhookUrl(data.webhookUrl) : undefined;
     }
 
     if (data.scanProfile) recurring.scanProfile = data.scanProfile;
     if (typeof data.cron === 'string') recurring.cron = data.cron;
     if (typeof data.timezone !== 'undefined') recurring.timezone = data.timezone || undefined;
-    if (typeof data.webhookUrl !== 'undefined') recurring.webhookUrl = data.webhookUrl || undefined;
     if (typeof data.enabled === 'boolean') recurring.enabled = data.enabled;
 
     await recurring.save();
@@ -271,6 +223,14 @@ router.patch('/recurring/:id', async (req, res, next) => {
       }
     }
 
+    await writeAuditEvent({
+      action: 'recurring_schedule_updated',
+      actorType: 'user',
+      actorId: String(req.user.id),
+      scheduleId: String(recurring._id),
+      status: 'success',
+      ip: req.ip,
+    });
     res.json({ recurring });
   } catch (err) {
     next(err);
@@ -318,6 +278,14 @@ router.delete('/recurring/:id', async (req, res, next) => {
     await removeRecurringJob(recurring);
     await recurring.deleteOne();
 
+    await writeAuditEvent({
+      action: 'recurring_schedule_deleted',
+      actorType: 'user',
+      actorId: String(req.user.id),
+      scheduleId: String(req.params.id),
+      status: 'success',
+      ip: req.ip,
+    });
     res.json({ success: true });
   } catch (err) {
     next(err);
@@ -333,36 +301,20 @@ router.post('/', async (req, res, next) => {
     const scheduledTime = data.scheduledFor ? new Date(data.scheduledFor) : null;
     const isScheduled = scheduledTime && scheduledTime > new Date();
 
-    let hostname;
-    let targetHost;
-    try {
-      const parsed = new URL(data.targetUrl);
-      hostname = parsed.hostname?.toLowerCase();
-      // Use host (hostname:port) as the stable identity key so that
-      // localhost:3000 and localhost:4000 are treated as distinct targets.
-      targetHost = parsed.host?.toLowerCase();
-    } catch {
-      hostname = null;
-      targetHost = null;
-    }
-
-    const allowPrivate = process.env.ALLOW_PRIVATE_TARGETS === 'true';
-    if (!allowPrivate && isBlockedHost(hostname)) {
-      return res.status(400).json({
-        error: 'This target is not allowed. For safety, localhost/private network targets are blocked in this deployment.',
-      });
-    }
+    const normalizedTargetUrl = await validateScanTargetUrl(data.targetUrl);
+    const targetHost = extractTargetHost(normalizedTargetUrl);
+    const webhookUrl = data.webhookUrl ? await validateWebhookUrl(data.webhookUrl) : undefined;
 
     const scan = await Scan.create({
       targetHost: targetHost || undefined,
-      targetUrl: data.targetUrl,
+      targetUrl: normalizedTargetUrl,
       scanProfile: data.scanProfile || [],
       scheduledFor: scheduledTime,
       userId: req.user.id,
       status: isScheduled ? 'scheduled' : 'queued',
       scheduled: isScheduled,
       progress: 0,
-      webhookUrl: data.webhookUrl || undefined,
+      webhookUrl,
       policy: { status: 'unknown' },
     });
 
@@ -387,12 +339,23 @@ router.post('/', async (req, res, next) => {
       {
         scanId: scan._id.toString(),
         scanProfile: data.scanProfile,
-        webhookUrl: data.webhookUrl || undefined,
+        webhookUrl,
         requestHeaders: Object.keys(requestHeaders).length ? requestHeaders : undefined,
         sourcePath: data.sourcePath || undefined,
       },
       jobOptions,
     );
+
+    await writeAuditEvent({
+      action: 'scan_created',
+      actorType: 'user',
+      actorId: String(req.user.id),
+      scanId: String(scan._id),
+      targetHost,
+      scheduled: Boolean(isScheduled),
+      status: 'success',
+      ip: req.ip,
+    });
 
     res.status(201).json(scan);
   } catch (err) {
@@ -471,6 +434,15 @@ router.delete('/:id', async (req, res, next) => {
     if (!scan) {
       return res.status(404).json({ error: 'Scan not found' });
     }
+
+    await writeAuditEvent({
+      action: 'scan_deleted',
+      actorType: 'user',
+      actorId: String(req.user.id),
+      scanId: String(req.params.id),
+      status: 'success',
+      ip: req.ip,
+    });
 
     res.json({ success: true });
   } catch (err) {

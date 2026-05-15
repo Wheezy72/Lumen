@@ -5,6 +5,7 @@ import RecurringScan from '../models/RecurringScan.js';
 import { logger } from '../utils/logger.js';
 import { publishScanUpdate } from '../routes/sse.js';
 import { sendScanSummaryEmail, sendScanFailureEmail } from '../services/email.js';
+import { validateWebhookUrl } from '../utils/networkPolicy.js';
 
 import { scanQueue } from './scanQueue.js';
 import { syncRecurringSchedules } from './recurringSchedules.js';
@@ -36,6 +37,7 @@ export const configureBull = () => {
 
     const scan = await Scan.create({
       userId: recurring.userId || null,
+      apiKeyId: recurring.apiKeyId || undefined,
       targetUrl: recurring.targetUrl,
       targetHost: recurring.targetHost || undefined,
       scanProfile: recurring.scanProfile || [],
@@ -131,7 +133,8 @@ export const configureBull = () => {
 
     if (webhookUrl) {
       try {
-        await fetch(webhookUrl, {
+        const safeWebhookUrl = await validateWebhookUrl(webhookUrl);
+        await fetch(safeWebhookUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -178,7 +181,8 @@ export const configureBull = () => {
 
       if (webhookUrl) {
         try {
-          await fetch(webhookUrl, {
+          const safeWebhookUrl = await validateWebhookUrl(webhookUrl);
+          await fetch(safeWebhookUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ type: 'failed', scanId, error: err.message }),

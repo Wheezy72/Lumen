@@ -1,4 +1,5 @@
 import { timingSafeEqual } from 'crypto';
+import { createHash } from 'crypto';
 
 const safeCompare = (a, b) => {
   const ba = Buffer.from(String(a || ''));
@@ -30,5 +31,6 @@ export const apiKeyAuthMiddleware = (req, res, next) => {
     return res.status(401).json({ error: 'API key is not valid.' });
   }
 
+  req.apiKeyId = createHash('sha256').update(String(key)).digest('hex').slice(0, 24);
   next();
 };
