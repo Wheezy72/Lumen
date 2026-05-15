@@ -1,5 +1,5 @@
 import { timingSafeEqual } from 'crypto';
-import { createHash } from 'crypto';
+import { createHmac } from 'crypto';
 
 const safeCompare = (a, b) => {
   const ba = Buffer.from(String(a || ''));
@@ -31,6 +31,7 @@ export const apiKeyAuthMiddleware = (req, res, next) => {
     return res.status(401).json({ error: 'API key is not valid.' });
   }
 
-  req.apiKeyId = createHash('sha256').update(String(key)).digest('hex').slice(0, 24);
+  const keyIdSecret = process.env.API_KEY_ID_SECRET || process.env.JWT_SECRET || 'lumen-api-key-id';
+  req.apiKeyId = createHmac('sha256', keyIdSecret).update(String(key)).digest('hex').slice(0, 24);
   next();
 };

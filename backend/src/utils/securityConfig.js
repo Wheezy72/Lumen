@@ -28,6 +28,10 @@ export const validateSecurityConfiguration = () => {
     if (String(process.env.CORS_ORIGINS || '').includes('*')) {
       issues.push('CORS_ORIGINS cannot include "*" in production.');
     }
+
+    if (!isStrongSecret(process.env.AUDIT_LOG_SECRET, 32)) {
+      issues.push('AUDIT_LOG_SECRET must be set to a strong secret with at least 32 characters in production.');
+    }
   }
 
   if (issues.length) {

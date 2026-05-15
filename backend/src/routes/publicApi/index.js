@@ -17,8 +17,15 @@ import { startScanSchema, scheduleSchema, publicChatSchema } from './schemas.js'
 import { writePdfReport, makePdfFileName, makeCsvFileName } from './pdfReport.js';
 import { extractTargetHost, validateScanTargetUrl, validateWebhookUrl } from '../../utils/networkPolicy.js';
 import { writeAuditEvent } from '../../utils/audit.js';
+import { createRateLimiter } from '../../middleware/rateLimit.js';
 
 const router = express.Router();
+const publicApiRateLimiter = createRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: Number.parseInt(process.env.PUBLIC_API_RATE_LIMIT_MAX || '240', 10) || 240,
+  keyPrefix: 'public-api-route',
+});
+router.use(publicApiRateLimiter);
 
 // ─── Shared query for public (unauthenticated) scans ────────────────────────
 
@@ -244,29 +251,29 @@ router.post('/schedules', async (req, res, next) => {
 
     if (data.runNow) {
       const scan = await Scan.create({
-          userId:          null,
-          apiKeyId:        req.apiKeyId,
-          targetUrl:       normalizedTargetUrl,
-          targetHost:      host || undefined,
-          scanProfile:     data.modules || [],
-          status:          'queued',
-        progress:        0,
-        scheduled:       true,
-        scheduledFor:    new Date(),
-          webhookUrl,
-          policy:          { status: 'unknown' },
-          recurringScanId: schedule._id,
-        });
+        userId: null,
+        apiKeyId: req.apiKeyId,
+        targetUrl: normalizedTargetUrl,
+        targetHost: host || undefined,
+        scanProfile: data.modules || [],
+        status: 'queued',
+        progress: 0,
+        scheduled: true,
+        scheduledFor: new Date(),
+        webhookUrl,
+        policy: { status: 'unknown' },
+        recurringScanId: schedule._id,
+      });
 
       await scanQueue.add(
         'start',
         {
-            scanId:      scan._id.toString(),
-            scanProfile: data.modules || [],
-            webhookUrl,
-          },
-          { attempts: 3, backoff: { type: 'exponential', delay: 5000 } },
-        );
+          scanId: scan._id.toString(),
+          scanProfile: data.modules || [],
+          webhookUrl,
+        },
+        { attempts: 3, backoff: { type: 'exponential', delay: 5000 } },
+      );
 
       return res.status(201).json({
         id:           schedule._id,

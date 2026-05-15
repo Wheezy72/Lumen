@@ -57,16 +57,10 @@ const app = express();
 app.set('trust proxy', 1);
 
 const authRateLimitMax = Number.parseInt(process.env.AUTH_RATE_LIMIT_MAX || '120', 10);
-const publicApiRateLimitMax = Number.parseInt(process.env.PUBLIC_API_RATE_LIMIT_MAX || '240', 10);
 const authRateLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000,
   max: Number.isNaN(authRateLimitMax) ? 120 : authRateLimitMax,
   keyPrefix: 'auth',
-});
-const publicApiRateLimiter = createRateLimiter({
-  windowMs: 15 * 60 * 1000,
-  max: Number.isNaN(publicApiRateLimitMax) ? 240 : publicApiRateLimitMax,
-  keyPrefix: 'public-api',
 });
 
 app.use(helmet({
@@ -139,7 +133,7 @@ app.use('/api/users', authMiddleware, userRouter);
 app.use('/api/scans', authMiddleware, scanRouter);
 app.use('/api/reports', authMiddleware, reportRouter);
 app.use('/api/ai', authMiddleware, aiRouter);
-app.use('/api/publicApi', publicApiRateLimiter, apiKeyAuthMiddleware, publicApiRouter);
+app.use('/api/publicApi', apiKeyAuthMiddleware, publicApiRouter);
 app.use('/api/sse', sseRouter);
 
 app.get('/health', (req, res) => {
